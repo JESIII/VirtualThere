@@ -18,7 +18,7 @@ contains no third-party product's code (`LEGAL.md`).
 | CLI | `vht.exe` | Operator surface for the server: `serve`, `status`, `list`, `kick`, `ignore`, `nickname`, `password`, service install/start/stop |
 | Tray / manager UI | `vht-tray.exe` | One WPF executable, two modes (`--mode server`, `--mode client`): tray icon plus device/peer management windows, driving the services over a local named pipe |
 
-Status: **v0.1.0.** It builds clean, 361 automated tests pass, and the server, CLI, client and tray
+Status: **v0.1.0.** It builds clean, every suite the solution covers passes, and the server, CLI, client and tray
 run for real on Windows 11 with .NET 10 - but it has not yet been through real hardware attach. One
 command (`./build.ps1 release`) produces an MSI installer and a no-install portable folder; both are
 **unsigned**, and neither has been exercised on a clean machine here. Read
@@ -83,7 +83,7 @@ been run on a clean machine yet - the packaging document says exactly what was a
 git clone https://github.com/JESIII/VirtualThere.git
 cd VirtualThere
 dotnet build VirtualThere.slnx -c Release
-dotnet test  VirtualThere.slnx -c Release     # expect 361 passed, 0 failed
+dotnet test  VirtualThere.slnx -c Release     # expect 0 failed, every suite in the solution
 ```
 
 Executables land in `src/Vht.Cli/bin/Release/net10.0-windows/vht.exe`,
@@ -185,7 +185,7 @@ Stated plainly - these are the honest boundaries of v0.1.0:
    own. Do not expose a server to an untrusted network: use a trusted LAN, a VPN, or an SSH tunnel.
    `vht --password` is documented as TLS-listener-only for the same reason (it is refused, never
    silently ignored, on the plaintext listener).
-4. **No real-hardware attach has been verified yet.** The 361 passing tests cover the codec, the
+4. **No real-hardware attach has been verified yet.** The passing tests cover the codec, the
    client's attach logic against a fake USB/IP peer, the transport, the config model, the control
    plane and the UI harness - not a physical device enumerating on a second machine. Hardware
    validation is in progress; until it lands, treat "attaches a real device" as unproven.

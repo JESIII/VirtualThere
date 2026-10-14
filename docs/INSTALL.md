@@ -61,8 +61,9 @@ dotnet test  VirtualThere.slnx -c Release
 ```
 
 Expected: build succeeds with **0 warnings, 0 errors** (projects set `TreatWarningsAsErrors=true`),
-and the test run reports **348 passed, 0 failed** across `Vht.Core.Tests` (155), `Vht.Config.Tests`
-(77), `Vht.Transport.Tests` (67) and `Vht.Client.Tests` (49).
+and the test run reports **0 failed** across every suite in the solution - `Vht.Core.Tests`,
+`Vht.Config.Tests`, `Vht.Transport.Tests`, `Vht.Client.Tests` and `Vht.Acceptance.Tests` (372 tests
+when this was written; the count grows with every card, the zero does not move).
 
 Executables:
 

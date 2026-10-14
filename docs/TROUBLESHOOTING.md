@@ -119,7 +119,10 @@ connection ends.
 * Use the SDK the project targets: `dotnet --version` must be `10.0.x`.
 * `TreatWarningsAsErrors=true` means a warning fails the build - that is intentional.
 * Whole solution: `dotnet build VirtualThere.slnx -c Release` then
-  `dotnet test VirtualThere.slnx -c Release`. Expected: 0 warnings, 0 errors, 18 projects built
-  and 361 tests passing in 5 suites. A project file missing from `VirtualThere.slnx` is not built
-  or tested at all; `SolutionFileTests` fails on that instead of letting the run go green.
+  `dotnet test VirtualThere.slnx -c Release`. Expected: 0 warnings, 0 errors, 18 projects built,
+  and 0 failed across all 5 test suites. A project file that exists on disk but is missing from
+  `VirtualThere.slnx` is not built and not tested at all; `SolutionFileTests` fails on that
+  instead of letting the run go green.
+* Rebuilding while the acceptance rig (`vht-accept`) is running fails with `MSB3026`/`MSB3027`: the
+  running rig holds its own output directory open. Wait for it to exit, then rebuild.
 * The UI harness projects (`src/Vht.Ui/harness/**`) are test-only drivers, not shipped components.

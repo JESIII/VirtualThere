@@ -1,44 +1,46 @@
+$ dotnet test VirtualThere.slnx -c Release --logger "trx;LogFileName=results.trx"
   Determining projects to restore...
   All projects are up-to-date for restore.
-  Vht.Core -> G:\Repos\VirtualThere\src\Vht.Core\bin\Release\net10.0\Vht.Core.dll
-  Vht.Interop -> G:\Repos\VirtualThere\src\Vht.Interop\bin\Release\net10.0-windows\Vht.Interop.dll
-  Vht.Config -> G:\Repos\VirtualThere\src\Vht.Config\bin\Release\net10.0\Vht.Config.dll
   Vht.Transport -> G:\Repos\VirtualThere\src\Vht.Transport\bin\Release\net10.0\Vht.Transport.dll
+  Vht.Config -> G:\Repos\VirtualThere\src\Vht.Config\bin\Release\net10.0\Vht.Config.dll
+  Vht.Core -> G:\Repos\VirtualThere\src\Vht.Core\bin\Release\net10.0\Vht.Core.dll
   Vht.Client -> G:\Repos\VirtualThere\src\Vht.Client\bin\Release\net10.0-windows\vht-client.dll
+  Vht.Interop -> G:\Repos\VirtualThere\src\Vht.Interop\bin\Release\net10.0-windows\Vht.Interop.dll
+  Vht.Transport.Tests -> G:\Repos\VirtualThere\tests\Vht.Transport.Tests\bin\Release\net10.0\Vht.Transport.Tests.dll
+Test run for G:\Repos\VirtualThere\tests\Vht.Transport.Tests\bin\Release\net10.0\Vht.Transport.Tests.dll (.NETCoreApp,Version=v10.0)
   Vht.Server -> G:\Repos\VirtualThere\src\Vht.Server\bin\Release\net10.0-windows\vht-server.dll
   Vht.Config.Tests -> G:\Repos\VirtualThere\tests\Vht.Config.Tests\bin\Release\net10.0\Vht.Config.Tests.dll
-  Vht.Transport.Tests -> G:\Repos\VirtualThere\tests\Vht.Transport.Tests\bin\Release\net10.0\Vht.Transport.Tests.dll
 Test run for G:\Repos\VirtualThere\tests\Vht.Config.Tests\bin\Release\net10.0\Vht.Config.Tests.dll (.NETCoreApp,Version=v10.0)
-Test run for G:\Repos\VirtualThere\tests\Vht.Transport.Tests\bin\Release\net10.0\Vht.Transport.Tests.dll (.NETCoreApp,Version=v10.0)
-A total of 1 test files matched the specified pattern.
-A total of 1 test files matched the specified pattern.
   Vht.Core.Tests -> G:\Repos\VirtualThere\tests\Vht.Core.Tests\bin\Release\net10.0\Vht.Core.Tests.dll
 Test run for G:\Repos\VirtualThere\tests\Vht.Core.Tests\bin\Release\net10.0\Vht.Core.Tests.dll (.NETCoreApp,Version=v10.0)
-  Vht.Client.Tests -> G:\Repos\VirtualThere\src\Vht.Client\Tests\bin\Release\net10.0-windows\Vht.Client.Tests.dll
-Test run for G:\Repos\VirtualThere\src\Vht.Client\Tests\bin\Release\net10.0-windows\Vht.Client.Tests.dll (.NETCoreApp,Version=v10.0)
-  Vht.Acceptance -> G:\Repos\VirtualThere\tests\Vht.Acceptance\bin\Release\net10.0-windows\vht-accept.dll
 A total of 1 test files matched the specified pattern.
+A total of 1 test files matched the specified pattern.
+A total of 1 test files matched the specified pattern.
+  Vht.Acceptance -> G:\Repos\VirtualThere\tests\Vht.Acceptance\bin\Release\net10.0-windows\vht-accept.dll
+  Vht.Acceptance.Tests -> G:\Repos\VirtualThere\tests\Vht.Acceptance.Tests\bin\Release\net10.0-windows\Vht.Acceptance.Tests.dll
+Test run for G:\Repos\VirtualThere\tests\Vht.Acceptance.Tests\bin\Release\net10.0-windows\Vht.Acceptance.Tests.dll (.NETCoreApp,Version=v10.0)
 A total of 1 test files matched the specified pattern.
 WARNING: Overwriting results file: G:\Repos\VirtualThere\tests\Vht.Config.Tests\TestResults\results.trx
 Results File: G:\Repos\VirtualThere\tests\Vht.Config.Tests\TestResults\results.trx
 
-Passed!  - Failed:     0, Passed:    77, Skipped:     0, Total:    77, Duration: 538 ms - Vht.Config.Tests.dll (net10.0)
-  Vht.Acceptance.Tests -> G:\Repos\VirtualThere\tests\Vht.Acceptance.Tests\bin\Release\net10.0-windows\Vht.Acceptance.Tests.dll
-Test run for G:\Repos\VirtualThere\tests\Vht.Acceptance.Tests\bin\Release\net10.0-windows\Vht.Acceptance.Tests.dll (.NETCoreApp,Version=v10.0)
-A total of 1 test files matched the specified pattern.
+Passed!  - Failed:     0, Passed:    77, Skipped:     0, Total:    77, Duration: 271 ms - Vht.Config.Tests.dll (net10.0)
 WARNING: Overwriting results file: G:\Repos\VirtualThere\tests\Vht.Transport.Tests\TestResults\results.trx
 Results File: G:\Repos\VirtualThere\tests\Vht.Transport.Tests\TestResults\results.trx
 
 Passed!  - Failed:     0, Passed:    69, Skipped:     0, Total:    69, Duration: 1 s - Vht.Transport.Tests.dll (net10.0)
+  Vht.Client.Tests -> G:\Repos\VirtualThere\src\Vht.Client\Tests\bin\Release\net10.0-windows\Vht.Client.Tests.dll
+Test run for G:\Repos\VirtualThere\src\Vht.Client\Tests\bin\Release\net10.0-windows\Vht.Client.Tests.dll (.NETCoreApp,Version=v10.0)
 WARNING: Overwriting results file: G:\Repos\VirtualThere\tests\Vht.Core.Tests\TestResults\results.trx
 Results File: G:\Repos\VirtualThere\tests\Vht.Core.Tests\TestResults\results.trx
 
-Passed!  - Failed:     0, Passed:   159, Skipped:     0, Total:   159, Duration: 686 ms - Vht.Core.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:   159, Skipped:     0, Total:   159, Duration: 1 s - Vht.Core.Tests.dll (net10.0)
+A total of 1 test files matched the specified pattern.
 WARNING: Overwriting results file: G:\Repos\VirtualThere\tests\Vht.Acceptance.Tests\TestResults\results.trx
 Results File: G:\Repos\VirtualThere\tests\Vht.Acceptance.Tests\TestResults\results.trx
 
-Passed!  - Failed:     0, Passed:    18, Skipped:     0, Total:    18, Duration: 348 ms - Vht.Acceptance.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:    18, Skipped:     0, Total:    18, Duration: 575 ms - Vht.Acceptance.Tests.dll (net10.0)
 WARNING: Overwriting results file: G:\Repos\VirtualThere\src\Vht.Client\Tests\TestResults\results.trx
 Results File: G:\Repos\VirtualThere\src\Vht.Client\Tests\TestResults\results.trx
 
 Passed!  - Failed:     0, Passed:    49, Skipped:     0, Total:    49, Duration: 2 s - Vht.Client.Tests.dll (net10.0)
+exit=$?
