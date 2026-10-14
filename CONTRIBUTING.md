@@ -46,16 +46,24 @@ Run a single suite while iterating:
 dotnet test tests/Vht.Core.Tests/Vht.Core.Tests.csproj
 ```
 
-### The acceptance harness is not (yet) part of that command
+### The acceptance harness is part of that command
 
 `tests/Vht.Acceptance` (the `vht-accept` rig) and `tests/Vht.Acceptance.Tests` (the parity suite) are
-**not listed in `VirtualThere.slnx`**, so `dotnet test VirtualThere.slnx` neither builds nor runs
-them. That is a known gap, tracked as follow-up work: wiring them into the solution and the CI
-`parity` job is the next step, and until it lands a green `dotnet test VirtualThere.slnx` says
-nothing about the parity suite. Run them directly when you touch them:
+listed in `VirtualThere.slnx`, so the solution-wide build compiles the rig and the solution-wide test
+run runs the parity suite along with every other suite. The same is true of `tools/Xtask`, the build
+tool behind `build.ps1`.
+
+A project file that exists on disk but is **not** listed in `VirtualThere.slnx` is not built and not
+tested, and `dotnet build`/`dotnet test` report success anyway - that is how the acceptance projects
+went uncovered. `Vht.Core.Tests.SolutionFileTests` closes that hole: it enumerates every `*.csproj`
+in the repository and fails by name when one is missing from the solution file (or when the solution
+lists a file that no longer exists). Adding a project file means adding it to `VirtualThere.slnx`;
+there is no silent third option.
+
+The rig's own verbs still run directly, because they take time, ports or hardware:
 
 ```bash
-dotnet test tests/Vht.Acceptance.Tests/Vht.Acceptance.Tests.csproj -c Release
+dotnet run  --project tests/Vht.Acceptance -c Release -- all            # the full harness
 dotnet run  --project tests/Vht.Acceptance -c Release -- multi --devices 6 --seconds 3
 dotnet run  --project tests/Vht.Acceptance -c Release -- licence      # no-licence-gate negative test
 ```
@@ -91,6 +99,7 @@ Conventions:
 
 * [ ] `dotnet build VirtualThere.slnx -c Release` - 0 warnings, 0 errors
 * [ ] `dotnet test VirtualThere.slnx -c Release` - all green, output pasted in the description
+* [ ] New project files are listed in `VirtualThere.slnx` (the `SolutionFileTests` guard enforces it)
 * [ ] No vendor string added to code/UI/build output (the CI grep passes)
 * [ ] No licence/cap vocabulary added anywhere
 * [ ] New dependency: added to `third_party/notices/allowed-packages.txt` **and**

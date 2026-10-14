@@ -51,6 +51,17 @@ public sealed class UsbIpSession
     private readonly ILogger _log;
 
     private readonly SemaphoreSlim _writeLock = new(1, 1);
+
+    /// <summary>
+    /// The transfers this connection has running, so teardown can wait for them
+    /// (<see cref="TeardownAsync"/>) instead of cutting a transfer off mid-flight.
+    /// </summary>
+    /// <remarks>
+    /// It holds only transfers that have not finished: <see cref="Track"/> drops completed ones
+    /// before adding. Keeping finished transfers is what made this list the one structure that grew
+    /// with the number of URBs ever served (one state machine plus its 64 KiB transfer buffer per
+    /// URB), which is exactly the retained growth the acceptance soak measures.
+    /// </remarks>
     private readonly List<Task> _pendingTransfers = new();
     private readonly object _pendingGate = new();
 
@@ -193,7 +204,7 @@ public sealed class UsbIpSession
             // The version field only exists on operations: an URB packet's first four bytes
             // are <c>usbip_header_basic.command</c> (1 or 2), so reading a version out of one
             // would be meaningless. Which packet this is, is decided by the code.
-            if (header.Code is UsbIp.OpReqDevlist or UsbIp.OpReqImport)
+            if (header.Code is UsbIp.OpReqDevlist or UsbIp.OpReqImport or UsbIp.OpReqVhtDevInfo)
             {
                 if (header.Version != UsbIp.ProtocolVersion)
                 {
@@ -205,6 +216,12 @@ public sealed class UsbIpSession
                 {
                     await SendDevlistAsync(ct).ConfigureAwait(false);
                     _outcome = With(_outcome, listed: true);
+                    continue;
+                }
+
+                if (header.Code == UsbIp.OpReqVhtDevInfo)
+                {
+                    await HandleVhtDeviceInfoAsync(ct).ConfigureAwait(false);
                     continue;
                 }
 
@@ -255,6 +272,46 @@ public sealed class UsbIpSession
             await HandleSubmitAsync(basic, submit, payload, iso, ct).ConfigureAwait(false);
             _outcome = With(_outcome, submits: _outcome.SubmitsReceived + 1);
         }
+    }
+
+    /// <summary>
+    /// Answers VirtualThere's own <c>OP_REQ_VHT_DEVINFO</c> (docs/SERVER.md §8): the bus id and
+    /// the operator's nickname for every device this connection may see.
+    /// </summary>
+    /// <remarks>
+    /// The set of devices named here is exactly <see cref="ExportTable.Advertisable"/> for this
+    /// connection's transport — the same set <c>OP_REP_DEVLIST</c> sends — so a
+    /// password-protected device is not named here either, and a client can never learn a name
+    /// for a device it was not offered. The stock device record is untouched: this is a separate
+    /// op that a stock client neither sends nor receives.
+    /// </remarks>
+    private async Task HandleVhtDeviceInfoAsync(CancellationToken ct)
+    {
+        byte[] magicBytes = await TransportIo.ReadExactlyAsync(_transport, 4, ct).ConfigureAwait(false);
+        uint magic = BigEndian.ReadU32(magicBytes, 0);
+        if (magic != UsbIp.VhtDevInfoMagic)
+        {
+            throw new UsbIpProtocolException(
+                $"OP_REQ_VHT_DEVINFO carried magic 0x{magic:x8}, expected 0x{UsbIp.VhtDevInfoMagic:x8}");
+        }
+
+        List<UsbIpCodec.VhtDeviceInfo> entries = _state.Exports
+            .Advertisable(_connection.Kind)
+            .Select(e => new UsbIpCodec.VhtDeviceInfo(e.Device.BusId, e.Device.Nickname))
+            .ToList();
+
+        await SendAsync(UsbIpCodec.EncodeVhtDeviceInfoReply(entries), ct).ConfigureAwait(false);
+
+        _log.Write(LogLevel.Detail, LogEvent.DeviceEnumerated,
+            $"device info (nicknames) sent to connection {_connection.Id}: " +
+            $"{entries.Count(e => !string.IsNullOrEmpty(e.Nickname))} named of {entries.Count} device(s)",
+            new Dictionary<string, object?>
+            {
+                ["connection_id"] = _connection.Id.Value,
+                ["count"] = entries.Count,
+                ["named"] = entries.Count(e => !string.IsNullOrEmpty(e.Nickname)),
+                ["transport"] = _connection.Kind.ToString(),
+            });
     }
 
     private async Task SendDevlistAsync(CancellationToken ct)
@@ -800,7 +857,18 @@ public sealed class UsbIpSession
 
     private void Track(Task task)
     {
-        lock (_pendingGate) _pendingTransfers.Add(task);
+        lock (_pendingGate)
+        {
+            // The list exists so teardown can wait for the transfers that are still running - it is
+            // a barrier, not a history. Dropping the finished ones before each add keeps it at the
+            // in-flight count (never more than FallbackMaxInFlight transfers), so a long run cannot
+            // retain one async state machine - and the transfer buffer it owns - per URB ever
+            // served. RemoveAll on a list of that size is a handful of pointer comparisons and
+            // allocates nothing, which matters at tens of thousands of submits per second.
+            _pendingTransfers.RemoveAll(static t => t.IsCompleted);
+            _pendingTransfers.Add(task);
+            _connection.PendingTransfers = _pendingTransfers.Count;
+        }
     }
 
     private void RecordProtocolError(string message)

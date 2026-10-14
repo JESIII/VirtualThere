@@ -90,8 +90,8 @@ public static class ConfigSchema
             "PEM or PFX path for the server certificate. Empty means generate/use the per-machine self-signed certificate."),
         new("transport.tls.lz4_enabled", ConfigKeyType.Boolean, "true", false,
             "The reference product's CompressionLimit switch: negotiate LZ4 on the TLS listener."),
-        new("transport.tls.lz4_threshold_bytes", ConfigKeyType.Integer, "1024", false,
-            "The reference product's CompressionLimit: payloads smaller than this are never compressed."),
+        new("transport.tls.lz4_threshold_bytes", ConfigKeyType.Integer, "65536", false,
+            "The reference product's CompressionLimit: payloads smaller than this are never compressed. 64 KiB is the smallest payload size at which LZ4 was measured to beat plain TLS on compressible data on this host (tests/Vht.Transport.Bench sweep mode; artifacts/transport/sweep.txt)."),
 
         // ---- security -----------------------------------------------------------------------
         new("security.plaintext_password_protected_devices", ConfigKeyType.Boolean, "false", true,

@@ -248,6 +248,145 @@ public static class UsbIpCodec
     }
 
     // =====================================================================================
+    // VirtualThere's op-phase extension: export metadata (device nicknames)
+    // =====================================================================================
+
+    /// <summary>
+    /// One entry of an <c>OP_REP_VHT_DEVINFO</c>: a device the server exports and the
+    /// operator's nickname for it (<see langword="null"/> when none is configured).
+    /// </summary>
+    public readonly record struct VhtDeviceInfo(string BusId, string? Nickname);
+
+    /// <summary>Fixed part of one reply entry: 32-byte busid plus the 1-byte name length.</summary>
+    public const int VhtDeviceInfoEntryHeaderSize = UsbIp.BusIdLength + 1;
+
+    /// <summary>Upper bound on entries in one extension reply (a parse bound, not a limit).</summary>
+    public const int MaxVhtDeviceInfoEntries = 4096;
+
+    /// <summary>
+    /// The <c>OP_REQ_VHT_DEVINFO</c> request: <c>op_common</c> + the extension magic.
+    /// 12 bytes, no length field, nothing for a peer to be confused by.
+    /// </summary>
+    public static byte[] EncodeVhtDeviceInfoRequest()
+    {
+        var buffer = new byte[OpHeaderSize + 4];
+        WriteOpHeader(buffer, UsbIp.OpReqVhtDevInfo);
+        BigEndian.WriteU32(buffer, OpHeaderSize, UsbIp.VhtDevInfoMagic);
+        return buffer;
+    }
+
+    /// <summary>
+    /// Builds a complete <c>OP_REP_VHT_DEVINFO</c> reply.
+    /// Layout: <c>op_common</c>, u32 magic, u32 count, then per entry a 32-byte NUL-padded
+    /// ASCII busid, a u8 name length and that many UTF-8 name bytes.
+    /// </summary>
+    public static byte[] EncodeVhtDeviceInfoReply(IReadOnlyList<VhtDeviceInfo> entries, uint status = 0)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+
+        long total = OpHeaderSize + 8L;
+        var names = new byte[entries.Count][];
+        for (int i = 0; i < entries.Count; i++)
+        {
+            names[i] = EncodeNickname(entries[i].Nickname);
+            total += VhtDeviceInfoEntryHeaderSize + names[i].Length;
+        }
+
+        if (total > int.MaxValue)
+            throw new UsbIpProtocolException($"device info reply too large ({total} bytes)");
+
+        var buffer = new byte[(int)total];
+        var span = buffer.AsSpan();
+
+        WriteOpHeader(span, UsbIp.OpRepVhtDevInfo, status);
+        BigEndian.WriteU32(span, OpHeaderSize, UsbIp.VhtDevInfoMagic);
+        BigEndian.WriteU32(span, OpHeaderSize + 4, (uint)entries.Count);
+
+        int offset = OpHeaderSize + 8;
+        for (int i = 0; i < entries.Count; i++)
+        {
+            BigEndian.WriteFixedString(span, offset, UsbIp.BusIdLength, entries[i].BusId);
+            BigEndian.WriteU8(span, offset + UsbIp.BusIdLength, (byte)names[i].Length);
+            names[i].CopyTo(span[(offset + VhtDeviceInfoEntryHeaderSize)..]);
+            offset += VhtDeviceInfoEntryHeaderSize + names[i].Length;
+        }
+
+        return buffer;
+    }
+
+    /// <summary>
+    /// Parses a complete <c>OP_REP_VHT_DEVINFO</c> reply. Every length is validated against
+    /// the frame before anything is read, and a name length above
+    /// <see cref="UsbIp.VhtNicknameMaxBytes"/> is a protocol error rather than a big read.
+    /// </summary>
+    public static IReadOnlyList<VhtDeviceInfo> DecodeVhtDeviceInfoReply(ReadOnlySpan<byte> buffer)
+    {
+        OpHeader header = ReadOpHeader(buffer);
+        ValidateVersion(header);
+
+        if (header.Code != UsbIp.OpRepVhtDevInfo)
+            throw new UsbIpProtocolException($"expected OP_REP_VHT_DEVINFO, got 0x{header.Code:x4}");
+        if (header.Status != 0)
+            return Array.Empty<VhtDeviceInfo>();
+
+        if (BigEndian.ReadU32(buffer, OpHeaderSize) != UsbIp.VhtDevInfoMagic)
+            throw new UsbIpProtocolException("device info reply is not a VHT1 magic frame");
+
+        uint count = BigEndian.ReadU32(buffer, OpHeaderSize + 4);
+        if (count > MaxVhtDeviceInfoEntries)
+            throw new UsbIpProtocolException($"implausible device info count {count} in reply");
+
+        var entries = new List<VhtDeviceInfo>((int)count);
+        int offset = OpHeaderSize + 8;
+
+        for (uint i = 0; i < count; i++)
+        {
+            if (offset + VhtDeviceInfoEntryHeaderSize > buffer.Length)
+                throw new UsbIpProtocolException("device info reply truncated inside an entry header");
+
+            string busId = BigEndian.ReadFixedString(buffer, offset, UsbIp.BusIdLength);
+            int nameLength = BigEndian.ReadU8(buffer, offset + UsbIp.BusIdLength);
+            if (nameLength > UsbIp.VhtNicknameMaxBytes)
+                throw new UsbIpProtocolException(
+                    $"device info name length {nameLength} exceeds the {UsbIp.VhtNicknameMaxBytes}-byte maximum");
+            offset += VhtDeviceInfoEntryHeaderSize;
+
+            if (offset + nameLength > buffer.Length)
+                throw new UsbIpProtocolException("device info reply truncated inside a name");
+
+            string? nickname = nameLength == 0
+                ? null
+                : System.Text.Encoding.UTF8.GetString(buffer.Slice(offset, nameLength));
+            offset += nameLength;
+
+            entries.Add(new VhtDeviceInfo(busId, nickname));
+        }
+
+        return entries;
+    }
+
+    /// <summary>
+    /// UTF-8 encodes a nickname, truncated to <see cref="UsbIp.VhtNicknameMaxBytes"/> without
+    /// splitting a codepoint. An empty or absent nickname encodes as zero bytes.
+    /// </summary>
+    public static byte[] EncodeNickname(string? nickname)
+    {
+        if (string.IsNullOrEmpty(nickname))
+            return Array.Empty<byte>();
+
+        byte[] utf8 = System.Text.Encoding.UTF8.GetBytes(nickname);
+        if (utf8.Length <= UsbIp.VhtNicknameMaxBytes)
+            return utf8;
+
+        // 0b10xxxxxx is a UTF-8 continuation byte: back up to the start of the char it belongs to
+        // so the truncated name is still valid UTF-8 on the far side.
+        int end = UsbIp.VhtNicknameMaxBytes;
+        while (end > 0 && (utf8[end] & 0xC0) == 0x80)
+            end--;
+        return utf8[..end];
+    }
+
+    // =====================================================================================
     // URB phase
     // =====================================================================================
 

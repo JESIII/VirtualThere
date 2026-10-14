@@ -204,6 +204,10 @@ internal sealed class ClientControlServer : IAsyncDisposable
             pid = $"0x{e.Device.ProductId:x4}",
             deviceClass = $"0x{e.Device.DeviceClass:x2}",
             className = e.Device.ClassName,
+            // The operator's nickname, when the peer implements VirtualThere's device-info
+            // extension (docs/SERVER.md §8). Absent for a stock usbipd peer, which has no field
+            // to carry one — the UI then falls back to the vendor/product pair.
+            nickname = e.Nickname,
             speed = e.Device.Speed.ToString(),
             attached = _attachments.AttachedDevices.ContainsKey(e.DeviceKey),
             autoAttach = _policy.Evaluate(e).ShouldAutoAttach,

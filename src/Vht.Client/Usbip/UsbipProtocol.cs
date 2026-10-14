@@ -32,6 +32,19 @@ internal static class UsbipProtocol
     internal const ushort OpReqImport = 0x8003;
     internal const ushort OpRepImport = 0x0003;
 
+    // VirtualThere's own op-phase extension (docs/SERVER.md §8): the nickname of each exported
+    // device, which the stock 312-byte device record has no field for. A stock peer has never
+    // heard of these codes and every stock USB/IP implementation closes the connection on an
+    // unknown op, so the probe is made on a connection of its own — a stock peer costs one
+    // socket and nothing else. Vht.Core declares the same two codes and the same encoder.
+    internal const ushort OpReqVhtDevInfo = 0x8f01;
+    internal const ushort OpRepVhtDevInfo = 0x0f01;
+    internal const uint VhtDevInfoMagic = 0x56485431;
+    internal const int VhtNicknameMaxBytes = 96;
+    internal const int VhtDeviceInfoRequestSize = OpCommonSize + sizeof(uint);        // 12
+    internal const int VhtDeviceInfoEntryHeaderSize = BusIdSize + 1;                  // 33
+    internal const uint MaxVhtDeviceInfoEntries = 4096;
+
     /// <summary>value of op_common.code that is not an op-code (i.e. a URB stream started).</summary>
     internal const ushort OpReqBit = 0x8000;
 

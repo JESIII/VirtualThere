@@ -1,0 +1,27 @@
+Test run for G:\Repos\VirtualThere\tests\Vht.Core.Tests\bin\Release\net10.0\Vht.Core.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:00.18]     Vht.Core.Tests.SolutionFileTests.TheAcceptanceHarnessAndTheBuildToolAreInTheSolution(project: "tests/Vht.Acceptance/Vht.Acceptance.csproj") [FAIL]
+[xUnit.net 00:00:00.20]     Vht.Core.Tests.SolutionFileTests.EveryProjectOnDiskIsListedInTheSolution [FAIL]
+  Failed Vht.Core.Tests.SolutionFileTests.TheAcceptanceHarnessAndTheBuildToolAreInTheSolution(project: "tests/Vht.Acceptance/Vht.Acceptance.csproj") [3 ms]
+  Error Message:
+   Assert.Contains() Failure: Item not found in collection
+Collection: ["src/Vht.Cli/Vht.Cli.csproj", "src/Vht.Client/Tests/Vht.Client.Tests.csproj", "src/Vht.Client/Vht.Client.csproj", "src/Vht.Config/Vht.Config.csproj", "src/Vht.Core/Vht.Core.csproj", ···]
+Not found:  "tests/Vht.Acceptance/Vht.Acceptance.csproj"
+  Stack Trace:
+     at Vht.Core.Tests.SolutionFileTests.TheAcceptanceHarnessAndTheBuildToolAreInTheSolution(String project) in G:\Repos\VirtualThere\tests\Vht.Core.Tests\SolutionFileTests.cs:line 83
+   at InvokeStub_SolutionFileTests.TheAcceptanceHarnessAndTheBuildToolAreInTheSolution(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed Vht.Core.Tests.SolutionFileTests.EveryProjectOnDiskIsListedInTheSolution [23 ms]
+  Error Message:
+   VirtualThere.slnx does not match the projects on disk under G:\Repos\VirtualThere.
+projects on disk: 18; projects listed in the solution: 17.
+
+NOT IN THE SOLUTION - `dotnet build/test VirtualThere.slnx` skips these silently:
+  - tests/Vht.Acceptance/Vht.Acceptance.csproj
+
+  Stack Trace:
+     at Vht.Core.Tests.SolutionFileTests.EveryProjectOnDiskIsListedInTheSolution() in G:\Repos\VirtualThere\tests\Vht.Core.Tests\SolutionFileTests.cs:line 63
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+Failed!  - Failed:     2, Passed:     2, Skipped:     0, Total:     4, Duration: 49 ms - Vht.Core.Tests.dll (net10.0)

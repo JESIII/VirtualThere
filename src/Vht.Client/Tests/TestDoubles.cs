@@ -58,6 +58,29 @@ internal sealed class FakeUsbipServer : IAsyncDisposable
     /// <summary>Busids requested via OP_REQ_IMPORT, in arrival order.</summary>
     internal ConcurrentQueue<string> RequestedBusIds { get; } = new();
 
+    /// <summary>
+    /// Nicknames to answer on VirtualThere's device-info extension (docs/SERVER.md §8). Empty
+    /// means the peer has none configured; the extension still answers.
+    /// </summary>
+    internal Dictionary<string, string> Nicknames { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// When false the extension op is not answered at all and the connection is dropped instead,
+    /// which is what a stock usbipd does with an op code it does not know. On by default, because
+    /// VirtualThere's own server is the normal peer for this client.
+    /// </summary>
+    internal bool AnswersDeviceInfoOp { get; set; } = true;
+
+    /// <summary>How many times the extension op has been asked for, so a test can prove it was sent.</summary>
+    internal int DeviceInfoRequests;
+
+    /// <summary>Sets a nickname the peer will report for one of its exported devices.</summary>
+    internal FakeUsbipServer SetNickname(string busId, string nickname)
+    {
+        Nicknames[busId] = nickname;
+        return this;
+    }
+
     /// <summary>Connections accepted since start — the multi-device test asserts one per device.</summary>
     internal int AcceptedConnections => _clients.Count;
 
@@ -213,6 +236,54 @@ internal sealed class FakeUsbipServer : IAsyncDisposable
                 await EchoAsync(stream, ct).ConfigureAwait(false);
             }
         }
+        else if (code == UsbipProtocol.OpReqVhtDevInfo && AnswersDeviceInfoOp)
+        {
+            Interlocked.Increment(ref DeviceInfoRequests);
+            var magicField = new byte[sizeof(uint)];
+            if (!await ReadExactlyAsync(stream, magicField, ct).ConfigureAwait(false))
+            {
+                return;
+            }
+
+            await stream.WriteAsync(BuildDeviceInfoReply(Nicknames), ct).ConfigureAwait(false);
+        }
+
+        // Any other code — including the extension on a peer that models a stock usbipd — falls out
+        // of this method and the connection is disposed, which is what usbipd does with an unknown op.
+    }
+
+    /// <summary>
+    /// Builds an OP_REP_VHT_DEVINFO reply straight from the documented layout, so the client's own
+    /// reader is exercised against an independent writer rather than against itself.
+    /// </summary>
+    private static byte[] BuildDeviceInfoReply(IReadOnlyDictionary<string, string> nicknames)
+    {
+        List<(string BusId, byte[] Name)> named = nicknames
+            .Where(kv => !string.IsNullOrEmpty(kv.Value))
+            .Select(kv => (kv.Key, System.Text.Encoding.UTF8.GetBytes(kv.Value)))
+            .ToList();
+
+        var frame = new List<byte>(UsbipProtocol.OpCommonSize + 8 + named.Count * 33);
+        var header = new byte[UsbipProtocol.OpCommonSize + 8];
+        WriteU16(header, 0, UsbipProtocol.Version);
+        WriteU16(header, 2, UsbipProtocol.OpRepVhtDevInfo);
+        WriteU32(header, 4, 0);
+        WriteU32(header, UsbipProtocol.OpCommonSize, UsbipProtocol.VhtDevInfoMagic);
+        WriteU32(header, UsbipProtocol.OpCommonSize + 4, (uint)named.Count);
+        frame.AddRange(header);
+
+        foreach ((string busId, byte[] name) in named)
+        {
+            var entry = new byte[UsbipProtocol.VhtDeviceInfoEntryHeaderSize];
+            var busIdField = new byte[UsbipProtocol.BusIdSize];
+            System.Text.Encoding.ASCII.GetBytes(busId, busIdField);
+            Array.Copy(busIdField, entry, UsbipProtocol.BusIdSize);
+            entry[UsbipProtocol.BusIdSize] = (byte)name.Length;
+            frame.AddRange(entry);
+            frame.AddRange(name);
+        }
+
+        return frame.ToArray();
     }
 
     private static async Task EchoAsync(NetworkStream stream, CancellationToken ct)

@@ -25,7 +25,9 @@ param(
 )
 
 Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Stop'
+# See the note in Install-Driver.ps1: native tools report ordinary conditions on stderr, and
+# PowerShell 5.1 turns redirected native stderr into a terminating error under 'Stop'.
+$ErrorActionPreference = 'Continue'
 
 $null = New-Item -ItemType Directory -Force -Path $LogDirectory
 $LogFile = Join-Path $LogDirectory 'client-task.log'

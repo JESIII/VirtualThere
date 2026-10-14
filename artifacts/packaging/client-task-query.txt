@@ -1,0 +1,17 @@
+﻿VirtualThere packaging evidence
+captured-utc: 2026-10-14T23:46:45Z
+host:         ZUAN  user: zirjo  elevated: False
+repository:   G:\Repos\VirtualThere
+portable:     C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run  (copied from G:\Repos\VirtualThere\dist\portable â€” not %ProgramFiles%, not an SCM service)
+NOTE: this shell is NOT elevated.
+
+schtasks.exe : ERROR: The system cannot find the file specified.
+At C:\Users\zirjo\AppData\Local\hermes\cache\scratch\capture-packaging.ps1:103 char:34
++ ... s /query' { & schtasks.exe /query /tn 'VirtualThere Client' /fo list  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ERROR: The syst...file specified.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+
+[exit=1]

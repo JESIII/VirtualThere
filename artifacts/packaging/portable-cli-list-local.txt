@@ -1,0 +1,23 @@
+﻿VirtualThere packaging evidence
+captured-utc: 2026-10-14T23:46:45Z
+host:         ZUAN  user: zirjo  elevated: False
+repository:   G:\Repos\VirtualThere
+portable:     C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run  (copied from G:\Repos\VirtualThere\dist\portable â€” not %ProgramFiles%, not an SCM service)
+NOTE: this shell is NOT elevated.
+
+1-c830978b [0fd9:0063] "0fd9:0063" speed=unknown class=per-interface state=CaptureUnsupported reason=driver_holds_device detail="no WinUSB handle (win32 31); the function driver holds this device ΓÇö set capture.rebind.enabled to offer the P2 rebind path"
+1-10-89f3e0c6 [1050:0120] "1050:0120" speed=unknown class=per-interface state=CaptureUnsupported reason=driver_holds_device detail="no WinUSB handle (win32 31); the function driver holds this device ΓÇö set capture.rebind.enabled to offer the P2 rebind path"
+1-86dfe340 [5448:1521] "5448:1521" speed=unknown class=per-interface state=CaptureUnsupported reason=driver_holds_device detail="no WinUSB handle (win32 8); the function driver holds this device ΓÇö set capture.rebind.enabled to offer the P2 rebind path"
+1-4-7e513ebc [2972:0062] "2972:0062" speed=unknown class=per-interface state=CaptureUnsupported reason=driver_holds_device detail="no WinUSB handle (win32 8); the function driver holds this device ΓÇö set capture.rebind.enabled to offer the P2 rebind path"
+1-3-252f868a [3151:5029] "3151:5029" speed=unknown class=per-interface state=CaptureUnsupported reason=driver_holds_device detail="no WinUSB handle (win32 8); the function driver holds this device ΓÇö set capture.rebind.enabled to offer the P2 rebind path"
+1-5db7f21a [0489:e0e2] "0489:e0e2" speed=unknown class=per-interface state=CaptureUnsupported reason=driver_holds_device detail="no WinUSB handle (win32 8); the function driver holds this device ΓÇö set capture.rebind.enabled to offer the P2 rebind path"
+1-d4346721 [3710:3526] "3710:3526" speed=unknown class=per-interface state=CaptureUnsupported reason=driver_holds_device detail="no WinUSB handle (win32 8); the function driver holds this device ΓÇö set capture.rebind.enabled to offer the P2 rebind path"
+1-9663ea78 [0b05:19af] "0b05:19af" speed=unknown class=per-interface state=CaptureUnsupported reason=driver_holds_device detail="no WinUSB handle (win32 8); the function driver holds this device ΓÇö set capture.rebind.enabled to offer the P2 rebind path"
+1-db603f4e [046d:0aaa] "046d:0aaa" speed=unknown class=per-interface state=CaptureUnsupported reason=driver_holds_device detail="no WinUSB handle (win32 8); the function driver holds this device ΓÇö set capture.rebind.enabled to offer the P2 rebind path"
+1-5fe7a04f [174c:55aa] "174c:55aa" speed=unknown class=per-interface state=CaptureUnsupported reason=driver_holds_device detail="no WinUSB handle (win32 50); the function driver holds this device ΓÇö set capture.rebind.enabled to offer the P2 rebind path"
+1-2-e4f43922 [1d57:fa60] "1d57:fa60" speed=unknown class=per-interface state=CaptureUnsupported reason=driver_holds_device detail="no WinUSB handle (win32 8); the function driver holds this device ΓÇö set capture.rebind.enabled to offer the P2 rebind path"
+1-fdce0515 [8087:1024] "8087:1024" speed=unknown class=per-interface state=CaptureUnsupported reason=driver_holds_device detail="no WinUSB handle (win32 8); the function driver holds this device ΓÇö set capture.rebind.enabled to offer the P2 rebind path"
+1-4-895378ae [03f0:078b] "03f0:078b" speed=unknown class=per-interface state=CaptureUnsupported reason=driver_holds_device detail="no WinUSB handle (win32 8); the function driver holds this device ΓÇö set capture.rebind.enabled to offer the P2 rebind path"
+(13 device(s) present; no device limit)
+
+[exit=0]

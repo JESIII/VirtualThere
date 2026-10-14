@@ -39,6 +39,16 @@ public sealed class Connection
     /// <summary>Total URBs this connection has submitted, for diagnostics.</summary>
     public long SubmitsTotal;
 
+    /// <summary>
+    /// Transfers this connection has started but not yet finished, for diagnostics. It is a
+    /// concurrency counter, not a limit: it is bounded by how many transfers one connection may
+    /// have running at once (see <see cref="ConnectionResources.MaxInFlightUrbs"/>), and it is the
+    /// number the session's teardown barrier waits on. A value that grows with the number of URBs
+    /// ever served — rather than staying at the in-flight count — is a retention bug, which is why
+    /// the acceptance soak prints it.
+    /// </summary>
+    public int PendingTransfers;
+
     public override string ToString() =>
         $"conn {Id} ({RemoteAddress}, {Kind}, devices={Attached.Count})";
 }

@@ -340,4 +340,6 @@ public static class ProcessMetrics
 
     public static string Describe() =>
         $"managed={ManagedBytes / (1024.0 * 1024.0):0.0} MiB, " +
-        $"working_set={Work
+        $"working_set={WorkingSetBytes / (1024.0 * 1024.0):0.0} MiB, " +
+        $"private={PrivateBytes / (1024.0 * 1024.0):0.0} MiB, threads={Threads}";
+}

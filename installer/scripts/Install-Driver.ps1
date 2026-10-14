@@ -33,15 +33,22 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $DriverDirectory = (Join-Path (Split-Path -Parent $PSScriptRoot) 'driver'),
-    [string] $LogDirectory = (Join-Path $env:ProgramData 'VirtualThere\logs'),
+    # Defaults are resolved in the body, not here: PowerShell 5.1 does not populate $PSScriptRoot
+    # while parameter defaults are being evaluated (see the note in Install-ClientTask.ps1).
+    [string] $DriverDirectory,
+    [string] $LogDirectory,
     [switch] $Force,
     # Report presence only, change nothing. Exit 0 = driver present, 1 = absent, 2 = could not tell.
     [switch] $Status
 )
 
 Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Stop'
+# 'Continue' on purpose: these scripts drive native tools (pnputil, netsh, sc, schtasks, reg) that
+# report ordinary conditions on stderr - a package that is not present, a rule that does not exist -
+# and PowerShell 5.1 turns *redirected* native stderr into a terminating error under 'Stop'. Every
+# failure path here is checked explicitly against an exit code or a state query instead, which is why
+# this script was run unelevated against a machine with no driver and behaved correctly.
+$ErrorActionPreference = 'Continue'
 
 # Pinned upstream package. Must match third_party/usbip-win2-driver/SHA256SUMS, which is the file the
 # repository records as the provenance of this binary. A mismatch is a hard failure, never a warning.
@@ -53,7 +60,14 @@ $PinnedSha256 = '38cad6d4432b52d5bb9409d9ad03b72fdffc4ada4cd3a48fbeca1a2752a8518
 # inside the vendor package are not published in the upstream README.
 $UpstreamToken = 'usbip'
 
-$null = New-Item -ItemType Directory -Force -Path $LogDirectory
+if (-not $DriverDirectory) { $DriverDirectory = Join-Path (Split-Path -Parent $PSScriptRoot) 'driver' }
+if (-not $LogDirectory) { $LogDirectory = Join-Path $env:ProgramData 'VirtualThere\logs' }
+
+$null = New-Item -ItemType Directory -Force -Path $LogDirectory -ErrorAction SilentlyContinue
+if (-not (Test-Path -LiteralPath $LogDirectory)) {
+    Write-Host "VirtualThere: cannot create the log directory '$LogDirectory'"
+    exit 1
+}
 $LogFile = Join-Path $LogDirectory 'driver-install.log'
 
 function Write-Log {
@@ -102,6 +116,16 @@ try {
 
         Write-Log 'no driver package and no service key matching the upstream driver token was found'
         exit 1
+    }
+
+    $elevated = (New-Object Security.Principal.WindowsPrincipal(
+        [Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole(
+        [Security.Principal.WindowsBuiltInRole]::Administrator)
+    if (-not $elevated) {
+        Write-Log 'installing a driver package needs Administrator; run this from an elevated prompt:' 'error'
+        Write-Log '    powershell -NoProfile -ExecutionPolicy Bypass -File Install-Driver.ps1' 'error'
+        Write-Log 'Nothing was changed.' 'error'
+        exit 3
     }
 
     $vendor = Join-Path $DriverDirectory $VendorPackageName

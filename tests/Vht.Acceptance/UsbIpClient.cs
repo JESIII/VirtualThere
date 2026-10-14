@@ -89,6 +89,13 @@ public sealed class UsbIpClient : IAsyncDisposable
     // Operation phase
     // -------------------------------------------------------------------------------------
 
+    /// <summary>
+    /// The raw bytes of the last <c>OP_REP_DEVLIST</c> reply as they came off the wire, op header
+    /// included. Exists so a test can compare the server's device record against an independently
+    /// hand-built stock layout byte for byte instead of trusting a parser.
+    /// </summary>
+    public ReadOnlyMemory<byte> LastDevlistFrame { get; private set; } = ReadOnlyMemory<byte>.Empty;
+
     /// <summary><c>OP_REQ_DEVLIST</c> → every device the server is willing to advertise.</summary>
     public async Task<IReadOnlyList<UsbIpDevice>> ListDevicesAsync(CancellationToken ct)
     {
@@ -104,6 +111,10 @@ public sealed class UsbIpClient : IAsyncDisposable
 
         byte[] countBytes = await ReadExactlyAsync(4, ct).ConfigureAwait(false);
         uint count = BigEndian.ReadU32(countBytes, 0);
+
+        var frame = new List<byte>(UsbIpCodec.OpHeaderSize + 4 + (int)count * UsbIpDevice.WireSize);
+        frame.AddRange(header);
+        frame.AddRange(countBytes);
 
         var devices = new List<UsbIpDevice>((int)Math.Min(count, 4096));
         for (uint i = 0; i < count; i++)
@@ -123,10 +134,72 @@ public sealed class UsbIpClient : IAsyncDisposable
                 trailing.CopyTo(group, record.Length);
             }
 
+            frame.AddRange(group);
+
             int offset = 0;
             devices.Add(UsbIpCodec.ReadDeviceRecord(group, ref offset));
         }
+
+        LastDevlistFrame = frame.ToArray();
         return devices;
+    }
+
+    /// <summary>
+    /// <c>OP_REQ_VHT_DEVINFO</c> → the operator's nickname for each exported device
+    /// (docs/SERVER.md §8). This is VirtualThere's own op, not stock USB/IP: the stock 312-byte
+    /// device record has no string field, so the nickname travels beside it.
+    /// </summary>
+    /// <remarks>
+    /// The reply is parsed here from the documented layout with explicit offsets rather than with
+    /// the project's own decoder, so this is an independent read of the bytes the server put on the
+    /// wire. Devices with no nickname are absent from the result.
+    /// </remarks>
+    public async Task<IReadOnlyDictionary<string, string>> ListNicknamesAsync(CancellationToken ct)
+    {
+        byte[] request = new byte[UsbIpCodec.OpHeaderSize + 4];
+        UsbIpCodec.WriteOpHeader(request, UsbIp.OpReqVhtDevInfo);
+        BinaryPrimitives.WriteUInt32BigEndian(
+            request.AsSpan(UsbIpCodec.OpHeaderSize), UsbIp.VhtDevInfoMagic);
+        await WriteAsync(request, ct).ConfigureAwait(false);
+
+        byte[] head = await ReadExactlyAsync(UsbIpCodec.OpHeaderSize + 8, ct).ConfigureAwait(false);
+        ushort version = BinaryPrimitives.ReadUInt16BigEndian(head);
+        ushort code = BinaryPrimitives.ReadUInt16BigEndian(head.AsSpan(2));
+        uint status = BinaryPrimitives.ReadUInt32BigEndian(head.AsSpan(4));
+        if (version != UsbIp.ProtocolVersion || code != UsbIp.OpRepVhtDevInfo)
+        {
+            throw new InvalidOperationException(
+                $"expected version 0x{UsbIp.ProtocolVersion:x4} / OP_REP_VHT_DEVINFO, " +
+                $"got 0x{version:x4} / 0x{code:x4}");
+        }
+        if (status != 0)
+            throw new InvalidOperationException($"OP_REP_VHT_DEVINFO refused with status {status}");
+
+        uint magic = BinaryPrimitives.ReadUInt32BigEndian(head.AsSpan(UsbIpCodec.OpHeaderSize));
+        if (magic != UsbIp.VhtDevInfoMagic)
+            throw new InvalidOperationException($"device info frame magic 0x{magic:x8}, expected VHT1");
+
+        uint count = BinaryPrimitives.ReadUInt32BigEndian(head.AsSpan(UsbIpCodec.OpHeaderSize + 4));
+        if (count > 4096)
+            throw new InvalidOperationException($"implausible device info count {count}");
+
+        var nicknames = new Dictionary<string, string>(StringComparer.Ordinal);
+        for (uint i = 0; i < count; i++)
+        {
+            byte[] entry = await ReadExactlyAsync(UsbIp.BusIdLength + 1, ct).ConfigureAwait(false);
+            int end = Array.IndexOf(entry, (byte)0);
+            string busId = System.Text.Encoding.ASCII.GetString(entry, 0, end < 0 ? UsbIp.BusIdLength : end);
+            int nameLength = entry[UsbIp.BusIdLength];
+            if (nameLength > UsbIp.VhtNicknameMaxBytes)
+                throw new InvalidOperationException($"{busId}: name length {nameLength} out of range");
+            if (nameLength == 0)
+                continue;
+
+            byte[] name = await ReadExactlyAsync(nameLength, ct).ConfigureAwait(false);
+            nicknames[busId] = System.Text.Encoding.UTF8.GetString(name);
+        }
+
+        return nicknames;
     }
 
     /// <summary><c>OP_REQ_IMPORT</c>. A refusal is returned, never thrown.</summary>
@@ -314,8 +387,13 @@ public sealed class UsbIpClient : IAsyncDisposable
     }
 
     /// <summary>Measures bulk-IN throughput for <paramref name="seconds"/>, returning MB/s.</summary>
+    /// <param name="live">
+    /// When supplied, is updated as each URB completes so a caller can sample progress mid-run
+    /// (the soak transcript prints a row every 5 s instead of one number at the end).
+    /// </param>
     public async Task<ThroughputSample> MeasureBulkInAsync(
-        uint devId, byte endpoint, int urbBytes, TimeSpan duration, CancellationToken ct)
+        uint devId, byte endpoint, int urbBytes, TimeSpan duration, CancellationToken ct,
+        ThroughputCounter? live = null)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(duration);
@@ -345,10 +423,12 @@ public sealed class UsbIpClient : IAsyncDisposable
                             {
                                 Interlocked.Add(ref total, completion.ActualLength);
                                 Interlocked.Increment(ref urbs);
+                                live?.Record(completion.ActualLength);
                             }
                             else
                             {
                                 Interlocked.Increment(ref failures);
+                                live?.RecordFailure();
                             }
                         }
                         catch (OperationCanceledException) { }
@@ -485,4 +565,34 @@ public sealed record ThroughputSample(
     public override string ToString() =>
         $"{MegabytesPerSecond:0.0} MB/s ({Bytes / (1024.0 * 1024.0):0.0} MiB in {Seconds:0.00}s, " +
         $"{Urbs} URBs of {UrbBytes} B, {Failures} failed)";
+}
+
+/// <summary>
+/// A running byte/URB/failure tally a measurement updates as it goes, so a long soak can be sampled
+/// while it is still running instead of only knowing the answer at the end.
+/// </summary>
+public sealed class ThroughputCounter
+{
+    private long _bytes;
+    private int _urbs;
+    private int _failures;
+
+    /// <summary>Bytes transferred so far.</summary>
+    public long Bytes => Interlocked.Read(ref _bytes);
+
+    /// <summary>URBs completed so far.</summary>
+    public int Urbs => Volatile.Read(ref _urbs);
+
+    /// <summary>URBs that completed with a non-zero status so far.</summary>
+    public int Failures => Volatile.Read(ref _failures);
+
+    /// <summary>Records one successful completion.</summary>
+    public void Record(long bytes)
+    {
+        Interlocked.Add(ref _bytes, bytes);
+        Interlocked.Increment(ref _urbs);
+    }
+
+    /// <summary>Records one failed completion.</summary>
+    public void RecordFailure() => Interlocked.Increment(ref _failures);
 }

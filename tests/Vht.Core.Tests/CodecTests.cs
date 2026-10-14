@@ -448,4 +448,79 @@ public sealed class CodecTests
         Assert.Equal(0x0111, UsbIp.ProtocolVersion);
         Assert.Equal(VhtVersion.UsbIpProtocolVersion, UsbIp.ProtocolVersion);
     }
+
+    // ---------------------------------------------------------------------------------------
+    // VirtualThere's own device-info extension (docs/SERVER.md §8)
+    // ---------------------------------------------------------------------------------------
+
+    [Fact]
+    public void TheDeviceInfoExtensionRoundTripsNamesAndOmissions()
+    {
+        byte[] reply = UsbIpCodec.EncodeVhtDeviceInfoReply(new[]
+        {
+            new UsbIpCodec.VhtDeviceInfo("1-1", "Label printer"),
+            new UsbIpCodec.VhtDeviceInfo("1-2", null),
+            new UsbIpCodec.VhtDeviceInfo("2-3", "Büro-Stick ★"),
+        });
+
+        // op_common + magic + count, then 33 bytes of busid/length per entry plus the names.
+        Assert.Equal(UsbIp.OpRepVhtDevInfo, BigEndian.ReadU16(reply, 2));
+        Assert.Equal(UsbIp.VhtDevInfoMagic, BigEndian.ReadU32(reply, UsbIpCodec.OpHeaderSize));
+        Assert.Equal(3u, BigEndian.ReadU32(reply, UsbIpCodec.OpHeaderSize + 4));
+
+        IReadOnlyList<UsbIpCodec.VhtDeviceInfo> back = UsbIpCodec.DecodeVhtDeviceInfoReply(reply);
+
+        Assert.Equal(3, back.Count);
+        Assert.Equal("1-1", back[0].BusId);
+        Assert.Equal("Label printer", back[0].Nickname);
+        Assert.Null(back[1].Nickname);                 // omitted, not an empty string
+        Assert.Equal("Büro-Stick ★", back[2].Nickname); // UTF-8, and no ASCII coercion
+    }
+
+    [Fact]
+    public void ALongerNicknameIsTruncatedOnACodepointBoundary()
+    {
+        // 100 two-byte characters is 200 UTF-8 bytes, above the 96-byte ceiling. The truncation
+        // must stop at a codepoint boundary, or the far side decodes replacement characters.
+        string long_ = string.Concat(Enumerable.Repeat('é', 100));
+
+        byte[] encoded = UsbIpCodec.EncodeNickname(long_);
+
+        Assert.True(encoded.Length <= UsbIp.VhtNicknameMaxBytes);
+        Assert.Equal(UsbIp.VhtNicknameMaxBytes, encoded.Length);
+        Assert.Equal(new string('é', UsbIp.VhtNicknameMaxBytes / 2),
+            System.Text.Encoding.UTF8.GetString(encoded));
+
+        // ...and it survives the frame itself, with no bytes left over.
+        byte[] reply = UsbIpCodec.EncodeVhtDeviceInfoReply(new[] { new UsbIpCodec.VhtDeviceInfo("1-1", long_) });
+        Assert.Equal(UsbIpCodec.OpHeaderSize + 8 + UsbIpCodec.VhtDeviceInfoEntryHeaderSize + encoded.Length,
+            reply.Length);
+        Assert.Equal(new string('é', UsbIp.VhtNicknameMaxBytes / 2),
+            UsbIpCodec.DecodeVhtDeviceInfoReply(reply)[0].Nickname);
+    }
+
+    [Fact]
+    public void ADeviceInfoEntryThatOverrunsTheFrameIsAProtocolError()
+    {
+        byte[] reply = UsbIpCodec.EncodeVhtDeviceInfoReply(new[] { new UsbIpCodec.VhtDeviceInfo("1-1", "abcd") });
+
+        // Claim a name longer than the frame holds: the decoder must refuse rather than read past it.
+        BigEndian.WriteU8(reply, UsbIpCodec.OpHeaderSize + 8 + UsbIp.BusIdLength, 96);
+
+        Assert.Throws<UsbIpProtocolException>(() => UsbIpCodec.DecodeVhtDeviceInfoReply(reply));
+
+        // And a name length above the documented ceiling is refused before any read at all.
+        byte[] overLong = UsbIpCodec.EncodeVhtDeviceInfoReply(new[] { new UsbIpCodec.VhtDeviceInfo("1-1", "abcd") });
+        BigEndian.WriteU8(overLong, UsbIpCodec.OpHeaderSize + 8 + UsbIp.BusIdLength, 200);
+        Assert.Throws<UsbIpProtocolException>(() => UsbIpCodec.DecodeVhtDeviceInfoReply(overLong));
+    }
+
+    [Fact]
+    public void TheDeviceInfoReplyIsRefusedWithoutTheExtensionMagic()
+    {
+        byte[] reply = UsbIpCodec.EncodeVhtDeviceInfoReply(Array.Empty<UsbIpCodec.VhtDeviceInfo>());
+        BigEndian.WriteU32(reply, UsbIpCodec.OpHeaderSize, 0);   // not 'VHT1'
+
+        Assert.Throws<UsbIpProtocolException>(() => UsbIpCodec.DecodeVhtDeviceInfoReply(reply));
+    }
 }

@@ -24,6 +24,33 @@ public static class UsbIp
     /// <summary><c>OP_REP_IMPORT</c> — server answers the import request.</summary>
     public const ushort OpRepImport = 0x0003;
 
+    // ---- VirtualThere's own op-phase extension (docs/SERVER.md §8) --------------------
+
+    /// <summary>
+    /// <c>OP_REQ_VHT_DEVINFO</c> — VirtualThere-private request for export metadata
+    /// (the operator's device nicknames). Not part of <c>usbip_protocol.rst</c>: the stock
+    /// device record has no string field, so the nickname cannot travel inside it.
+    /// </summary>
+    /// <remarks>
+    /// A stock client never sends this code and never sees this reply, so the stock wire
+    /// format is untouched; a VirtualThere client sends it deliberately and treats a peer
+    /// that does not answer as "no metadata available" rather than as an error.
+    /// </remarks>
+    public const ushort OpReqVhtDevInfo = 0x8f01;
+
+    /// <summary><c>OP_REP_VHT_DEVINFO</c> — the reply to <see cref="OpReqVhtDevInfo"/>.</summary>
+    public const ushort OpRepVhtDevInfo = 0x0f01;
+
+    /// <summary>Magic (<c>"VHT1"</c>) that opens the body of both halves of the extension.</summary>
+    public const uint VhtDevInfoMagic = 0x56485431;
+
+    /// <summary>
+    /// Hard ceiling on one nickname on the wire, in UTF-8 bytes, matching the transport
+    /// handshake's own 96-byte client-name cap. A longer nickname is truncated on a
+    /// codepoint boundary; the wire length is therefore always bounded, never implied.
+    /// </summary>
+    public const int VhtNicknameMaxBytes = 96;
+
     // ---- command/return codes (URB phase, first 4 bytes) ------------------------------
 
     /// <summary><c>USBIP_CMD_SUBMIT</c> — client submits a URB.</summary>

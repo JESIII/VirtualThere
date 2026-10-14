@@ -21,6 +21,17 @@ internal sealed record InventoryEntry
     internal bool IsQualified => RoutingKey.Contains('@', StringComparison.Ordinal);
 
     /// <summary>
+    /// The operator's nickname for this device on its peer, when the peer implements
+    /// VirtualThere's device-info extension (docs/SERVER.md §8). <see langword="null"/> when the
+    /// operator set none, or when the peer is a stock usbipd — the stock 312-byte device record
+    /// has no string field for one, so there is nowhere else this could have come from.
+    /// </summary>
+    internal string? Nickname { get; init; }
+
+    /// <summary>What the UI shows for this device: the nickname when there is one, else the vendor/product pair.</summary>
+    internal string DisplayName => string.IsNullOrWhiteSpace(Nickname) ? Device.VendorProduct : Nickname!;
+
+    /// <summary>
     /// Device identity used by the policy layer (auto-attach grants, allow/deny lists). Deliberately
     /// spans peer identity and the *remote* busid: a grant is for a specific device on a specific
     /// server (ARCHITECTURE.md §7), and a device that moves to a different busid is a different device.

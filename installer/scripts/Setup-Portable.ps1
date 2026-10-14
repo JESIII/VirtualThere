@@ -197,7 +197,7 @@ try {
     if (-not $elevated -and -not $WhatIf) {
         Write-Log 'this action needs Administrator: it installs a driver package, edits the Windows Firewall, and optionally registers a service.' 'error'
         Write-Log 'Nothing was changed. Run the same command from a prompt opened with "Run as administrator":' 'error'
-        Write-Log ("    powershell -NoProfile -ExecutionPolicy Bypass -File \"{0}\" -Action {1}{2}" -f
+        Write-Log ('    powershell -NoProfile -ExecutionPolicy Bypass -File "{0}" -Action {1}{2}' -f
             $PSCommandPath, $Action, $(if ($IncludeService) { ' -IncludeService' } else { '' })) 'error'
         Write-Log 'To see the exact privileged commands without running them: add -WhatIf' 'error'
         exit 3

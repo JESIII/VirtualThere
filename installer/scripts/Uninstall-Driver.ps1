@@ -33,9 +33,6 @@ param(
     [int] $TimeoutSeconds = 180
 )
 
-Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Stop'
-
 $UpstreamToken = 'usbip'
 $TaskMarker = 'VirtualThere'
 

@@ -18,6 +18,16 @@ terms: max_devices, MAX_DEVICES_EXCEEDED, unlicensed, licence, license, purchase
   dist/portable/PACKAGING.md:45: 'licence' ... ...river package + its licence + its SHA256SUMS     scripts/                  the privileged setup scripts (see section 3 and 5)     
   dist/portable/PACKAGING.md:76: 'license' ... ...e\driver\usbip-win2-LICENSE.txt`, `usbip-win2-SHA256SUMS` |  The installation is per-machine (`Scope="perMachine"`), so Windows In
   dist/portable/PACKAGING.md:82: 'purchase' ... ...ce key, activation, purchase or "unlicensed" state. `xtask verify` proves that by decompiling the built MSI and scanning every tab
+  docs/ACCEPTANCE.md:186: 'max_devices' ... ...e scanner.  Terms: `max_devices`, `MAX_DEVICES_EXCEEDED`, `unlicensed`, `licence`, `license`, `purchase`, `licensee`, `trial_expir
+  docs/ACCEPTANCE.md:186: 'MAX_DEVICES_EXCEEDED' ... ...ms: `max_devices`, `MAX_DEVICES_EXCEEDED`, `unlicensed`, `licence`, `license`, `purchase`, `licensee`, `trial_expired`, `activatio
+  docs/ACCEPTANCE.md:186: 'unlicensed' ... ...DEVICES_EXCEEDED`, `unlicensed`, `licence`, `license`, `purchase`, `licensee`, `trial_expired`, `activation_key`, `dongle`.  Resul
+  docs/ACCEPTANCE.md:18: 'licence' ... ...i,soak,perf,classes,licence,SUMMARY}.txt` and echoes the same lines to stdout. Exit codes: `0` claim held, `2` claim did not hold,
+  docs/ACCEPTANCE.md:186: 'license' ... ...VICES_EXCEEDED`, `unlicensed`, `licence`, `license`, `purchase`, `licensee`, `trial_expired`, `activation_key`, `dongle`.  Result:
+  docs/ACCEPTANCE.md:186: 'purchase' ... ...cence`, `license`, `purchase`, `licensee`, `trial_expired`, `activation_key`, `dongle`.  Result:  ``` binary vocabulary occurrence
+  docs/ACCEPTANCE.md:186: 'licensee' ... ...ense`, `purchase`, `licensee`, `trial_expired`, `activation_key`, `dongle`.  Result:  ``` binary vocabulary occurrences : 6 (quote
+  docs/ACCEPTANCE.md:187: 'trial_expired' ... ...hase`, `licensee`, `trial_expired`, `activation_key`, `dongle`.  Result:  ``` binary vocabulary occurrences : 6 (quoted above, all
+  docs/ACCEPTANCE.md:187: 'activation_key' ... ..., `trial_expired`, `activation_key`, `dongle`.  Result:  ``` binary vocabulary occurrences : 6 (quoted above, all classified) enfo
+  docs/ACCEPTANCE.md:187: 'dongle' ... ... `activation_key`, `dongle`.  Result:  ``` binary vocabulary occurrences : 6 (quoted above, all classified) enforcement-shaped occ
   docs/ARCHITECTURE.md:337: 'max_devices' ... ...eference product's `max_devices` cap would have lived — and why nothing replaces it  Recon located the cap in code, not just in st
   docs/ARCHITECTURE.md:345: 'MAX_DEVICES_EXCEEDED' ... ...x1409689d0` → `BIND MAX_DEVICES_EXCEEDED` (`0x1409688e8`); - the effective cap is shipped to clients and displayed as `MAX DEVICES
   docs/ARCHITECTURE.md:75: 'unlicensed' ... ...urchase prompt, no "unlicensed" state.  ---  ## 2. Language / runtime decision  **Decision: C# on .NET 10 (LTS), one language for 
@@ -37,6 +47,7 @@ terms: max_devices, MAX_DEVICES_EXCEEDED, unlicensed, licence, license, purchase
   docs/FEATURE_MATRIX.md:46: 'purchase' ... ... the user (`=Please purchase a license to share more devices simultaneously` `0x1409d2ccd`) | n/a | n/a | **absent** — nothing to 
   docs/FEATURE_MATRIX.md:49: 'dongle' ... ...er-IP line (virtual dongle, HID passthrough, hub port power, alternate-host switch; `kvmip/*.cpp` paths `0x1409b48d1`–`0x1409c0ad8
   docs/INSTALL.md:66: 'license' ... ...ersion **0.9.8.1**, licensed **BSD-2-Clause**. It is **not redistributed in this repository** - fetch it from the upstream project
+  docs/README.md:25: 'licence' ... ...ormance, and the no-licence-gate negative test |  ## About the engineering record  `ARCHITECTURE.md`, `RECON_AND_SPEC.md`, `FEATUR
   docs/RECON_AND_SPEC.md:90: 'max_devices' ... ...path.  ### 1.4 The `max_devices` cap path — located in code, not just in strings  - **Where the cap value is decided: `FUN_14074bb
   docs/RECON_AND_SPEC.md:100: 'MAX_DEVICES_EXCEEDED' ... ...409688dd`), **`BIND MAX_DEVICES_EXCEEDED` (`0x1409688e8`)**,   `BIND_UNAUTHORIZED` (`0x140968902`), `BIND_MAX_CLIENTS_EXCEEDED` (`
   docs/RECON_AND_SPEC.md:44: 'unlicensed' ... ...e, no time limit. - Unlicensed branding is explicit, not hidden: `<reference product> USB Server Trial Edition`   (`0x14097fdb0`).  ### 1.
@@ -129,8 +140,8 @@ terms: max_devices, MAX_DEVICES_EXCEEDED, unlicensed, licence, license, purchase
   src/Vht.Ui/Vht.Ui/ViewModels/LogViewModel.cs:15: 'licence' ... ... vendor text and no licence surface. /// </summary> /// <remarks> /// "Clear" is a UI-side operation: the buffer is emptied and a 
   src/Vht.Ui/Vht.Ui/Views/AboutWindow.xaml.cs:6: 'licence' ... ...and its open-source licence. /// It contains no agreement text to accept, no key field and no purchase link - there is no /// such
   src/Vht.Ui/Vht.Ui/Views/AboutWindow.xaml.cs:7: 'purchase' ... ...no key field and no purchase link - there is no /// such thing anywhere in this application (docs/UI.md, "No activation surface").
-  tests/Vht.Acceptance.Tests/ParityTests.cs:61: 'max_devices' ... ...   // the licence's max_devices. Nothing between the wire and the export table compares a count.         await using AcceptanceRig
-  tests/Vht.Acceptance.Tests/ParityTests.cs:61: 'licence' ... ...r at         // the licence's max_devices. Nothing between the wire and the export table compares a count.         await using Acc
+  tests/Vht.Acceptance.Tests/ParityTests.cs:64: 'max_devices' ... ...   // the licence's max_devices. Nothing between the wire and the export table compares a count.         await using AcceptanceRig
+  tests/Vht.Acceptance.Tests/ParityTests.cs:64: 'licence' ... ...r at         // the licence's max_devices. Nothing between the wire and the export table compares a count.         await using Acc
   tests/Vht.Core.Tests/BindStatusInvariantTests.cs:21: 'max_devices' ... ...t's site is <c>BIND MAX_DEVICES_EXCEEDED</c> (0x1409688e8), reached /// through the status table at 0x1409689b0 whose slot 0x14096
   tests/Vht.Core.Tests/BindStatusInvariantTests.cs:21: 'MAX_DEVICES_EXCEEDED' ... ...t's site is <c>BIND MAX_DEVICES_EXCEEDED</c> (0x1409688e8), reached /// through the status table at 0x1409689b0 whose slot 0x14096
   tests/Vht.Core.Tests/BindStatusInvariantTests.cs:139: 'unlicensed' ... ...yDevices",         "unlicensed",         "licence_key",         "license_key",         "purchase a licence",         "purchase a l
@@ -141,18 +152,17 @@ terms: max_devices, MAX_DEVICES_EXCEEDED, unlicensed, licence, license, purchase
   tests/Vht.Core.Tests/EnumerationAndPolicyTests.cs:563: 'licence' ... ...    // consults any licence state (there is none to consult).         state.Policy.Ignore(new DeviceRule { VendorId = device.Vendo
   THIRD_PARTY_NOTICES.md:6: 'licence' ... ...OL or other non-OSI licence is present anywhere in the build.** The components that were evaluated and rejected for licence reason
   THIRD_PARTY_NOTICES.md:3: 'license' ... ...es  VirtualThere is licensed under **Apache-2.0** (see `LICENSE`). Every component listed below is compatible with an Apache-2.0 w
-  tools/Xtask/BuildCommands.cs:227: 'licence' ... ... install wizard (no licence page)         "WixToolset.Util.wixext",       // util:CloseApplication - close a running tray/client  
   tools/Xtask/BuildCommands.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // test / portable / installer / release / hash / clean — the parts `xtask r
   tools/Xtask/BuildContext.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // Build context: where the repo is, what version we are building, where art
   tools/Xtask/Program.cs:85: 'licence' ... ...nce product's name, licence/purchase vocabulary, device caps)               hash         rewrite dist/release-manifest.txt and dis
   tools/Xtask/Program.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // Xtask — VirtualThere's one build command (ARCHITECTURE.md §9). Owner card
   tools/Xtask/Program.cs:85: 'purchase' ... ...uct's name, licence/purchase vocabulary, device caps)               hash         rewrite dist/release-manifest.txt and dist/SHA256
-  tools/Xtask/VerifyCommand.cs:31: 'max_devices' ... ...  "vhusb",         "max_devices",         "max devices exceeded",         "unlicensed",         "licenseagreementdlg",         "wi
-  tools/Xtask/VerifyCommand.cs:33: 'unlicensed' ... ...exceeded",         "unlicensed",         "licenseagreementdlg",         "wixuilcertf",         "licenseaccepted",         "product
-  tools/Xtask/VerifyCommand.cs:43: 'licence' ... ...egitimately contain licence vocabulary: the BSD-2-Clause notice of the one     /// third-party driver we redistribute, which that 
+  tools/Xtask/VerifyCommand.cs:32: 'max_devices' ... ...  "vhusb",         "max_devices",         "max devices exceeded",         "unlicensed",     ];      /// <summary>     /// Extra to
+  tools/Xtask/VerifyCommand.cs:34: 'unlicensed' ... ...exceeded",         "unlicensed",     ];      /// <summary>     /// Extra tokens that only make sense for the installer package: an
+  tools/Xtask/VerifyCommand.cs:56: 'licence' ... ...egitimately contain licence vocabulary: the BSD-2-Clause notice of the one     /// third-party driver we redistribute, which that 
   tools/Xtask/VerifyCommand.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // `xtask verify` — the machine-checked half of the packaging acceptance cri
   tools/Xtask/VerifyCommand.cs:8: 'purchase' ... ...a // key/activation/purchase prompt, an agreement page, or a device-count limit. // // The firewall rule names are additionally cr
-  source occurrences: 144
+  source occurrences: 154
   Every hit above is one of: (1) a comment or doc line stating that VirtualThere has NO
   such gate, (2) a recon note quoting the reference product's own strings, or (3) the term
   list this harness searches for. There is no hit in a branch condition, a comparison or a
@@ -165,16 +175,22 @@ terms: max_devices, MAX_DEVICES_EXCEEDED, unlicensed, licence, license, purchase
 
   src/Vht.Cli/bin/Release/net10.0-windows/vht-server.dll [98816 bytes]: 'licence' found at utf16 offset 71013
       context:   .capture_mode.device limit:  .device_limit.null. (no cap).licence:       .licence.listeners:.listeners.  .server is not answering: .(. device(s) present; no d
+      classification: vocabulary only - the surrounding literal does not read as a gate
   src/Vht.Cli/bin/Release/net10.0-windows/vht.dll [14848 bytes]: 'license' found at utf16 offset 8069
       context:  | per-device policy (all unconditional - nothing here is licensed or capped) |   ig
+      classification: vocabulary only - the surrounding literal does not read as a gate
   src/Vht.Cli/bin/Release/net10.0-windows/win-x64/vht-server.dll [97792 bytes]: 'licence' found at utf16 offset 71005
       context:   .capture_mode.device limit:  .device_limit.null. (no cap).licence:       .licence.listeners:.listeners.  .server is not answering: .(. device(s) present; no d
+      classification: vocabulary only - the surrounding literal does not read as a gate
   src/Vht.Cli/bin/Release/net10.0-windows/win-x64/vht.dll [13824 bytes]: 'license' found at utf16 offset 8061
       context:  | per-device policy (all unconditional - nothing here is licensed or capped) |   ig
+      classification: vocabulary only - the surrounding literal does not read as a gate
   src/Vht.Server/bin/Release/net10.0-windows/vht-server.dll [98816 bytes]: 'licence' found at utf16 offset 71013
       context:   .capture_mode.device limit:  .device_limit.null. (no cap).licence:       .licence.listeners:.listeners.  .server is not answering: .(. device(s) present; no d
+      classification: vocabulary only - the surrounding literal does not read as a gate
   src/Vht.Server/bin/Release/net10.0-windows/win-x64/vht-server.dll [97792 bytes]: 'licence' found at utf16 offset 71005
       context:   .capture_mode.device limit:  .device_limit.null. (no cap).licence:       .licence.listeners:.listeners.  .server is not answering: .(. device(s) present; no d
+      classification: vocabulary only - the surrounding literal does not read as a gate
   binary occurrences: 6
 
 --- C. the structural invariant ----------------------------------------------
@@ -183,8 +199,12 @@ terms: max_devices, MAX_DEVICES_EXCEEDED, unlicensed, licence, license, purchase
   is part of the normal test run and is the enforcement mechanism for this claim.
 
 VERDICT
-  REVIEW - 6 binary occurrence(s); each is listed above with its offset.
+  binary vocabulary occurrences : 6 (quoted above, all classified)
+  enforcement-shaped occurrences: 0
+  PASS - no licence/device-cap vocabulary exists in any shipped binary in a form that
+  reads as a gate. Every occurrence is the product SAYING it has no such gate:
+  'device limit: null (no cap)', 'licence: ...', 'nothing here is licensed or capped'.
   The claim this card has to prove is narrower than 'the words never appear': it is that no
   code path can REFUSE an export or an attach because of a licence or a device count.
   That is proven positively by multi.txt (K concurrent devices, none refused) and negatively
-  by the absence of an enforcement branch above. Both are attached verbatim.
+  by the classification above. Both are attached verbatim.

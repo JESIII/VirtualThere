@@ -86,6 +86,22 @@ jobs:
           fi
           echo "clean: no licence-gate vocabulary in $(echo "$bins" | wc -l) assemblies/binaries"
 
+      - name: Acceptance/parity suite
+        shell: bash
+        # The actual parity run. The suite boots the production server stack (VhtServerState plus the
+        # real UsbIpTcpServer accept loop) on real loopback TCP and speaks USB/IP to it; a non-zero
+        # exit fails the job. Run the project by path as well as via the solution so this job's result
+        # never depends on the solution listing staying correct.
+        run: dotnet test tests/Vht.Acceptance.Tests/Vht.Acceptance.Tests.csproj -c Release --logger "trx;LogFileName=parity.trx"
+
+      - name: Upload parity test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-test-results
+          path: 'tests/Vht.Acceptance.Tests/TestResults/**/*.trx'
+          if-no-files-found: ignore
+
       - name: Server status reports an explicit null device limit
         shell: bash
         # End-to-end evidence rather than a grep: start the server on a test port and read its status.

@@ -1,8 +1,26 @@
 ﻿VirtualThere acceptance - throughput and transport overhead
-loopback, single process, 3s per case, 64 KiB URBs, 8 in-flight URBs per device
+loopback, single process, 5s per case, 64 KiB URBs, 8 in-flight URBs per device
 Synthetic devices; production transport code (Vht.Transport) and production USB/IP codec.
 
-  PlainTcp / 1 dev / incompressible                  2163.0 MB/s
-  PlainTcp / 8 dev / incompressible                  5897.3 MB/s
-  PlainTcp / 1 dev / compressible                    2624.5 MB/s
-  PlainTcp / 8 dev / compressible                    5951.2 MB/s
+  PlainTcp / 1 dev / incompressible                  2174.7 MB/s
+  PlainTcp / 8 dev / incompressible                  6229.3 MB/s
+  PlainTcp / 1 dev / compressible                    2849.5 MB/s
+  PlainTcp / 8 dev / compressible                    6334.0 MB/s
+  Tls / 1 dev / incompressible                        976.2 MB/s
+  Tls / 8 dev / incompressible                       3729.5 MB/s
+  Tls / 1 dev / compressible                          956.2 MB/s
+  Tls / 8 dev / compressible                         3954.1 MB/s
+  TlsLz4 / 1 dev / incompressible                     572.4 MB/s
+  TlsLz4 / 8 dev / incompressible                    2942.3 MB/s
+  TlsLz4 / 1 dev / compressible                       700.0 MB/s
+  TlsLz4 / 8 dev / compressible                      3094.3 MB/s
+
+TRANSPORT OVERHEAD (single device, incompressible payload)
+  TLS   vs plain : 55.1% slower (2174.7 -> 976.2 MB/s)
+  TLS+LZ4 incompressible vs TLS : 41.4% (LZ4 is a net loss on noise)
+  TLS+LZ4 compressible vs TLS   : -28.3% (976.2 -> 700.0 MB/s)
+
+SCALING (plain TCP, incompressible)
+  1 device  : 2174.7 MB/s
+8 devices : 6229.3 MB/s aggregate (778.7 MB/s per device)
+  scaling   : 2.86x for 8x the devices

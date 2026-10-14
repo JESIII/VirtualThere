@@ -20,9 +20,10 @@ namespace Xtask;
 internal static partial class VerifyCommand
 {
     /// <summary>
-    /// Hard failures. Deliberately vocabulary, not prose: the package must not name the reference
-    /// product, must not offer a key/activation/purchase, must not have an agreement page, and must
-    /// not contain a device-count concept (ARCHITECTURE.md §5.4).
+    /// Hard failures for every artifact (the MSI and each shipped executable). Deliberately
+    /// vocabulary, not prose: the package must not name the reference product, must not have a
+    /// device-count concept (ARCHITECTURE.md §5.4), and must not describe a state the product cannot
+    /// be in.
     /// </summary>
     private static readonly string[] ForbiddenTokens =
     [
@@ -31,12 +32,24 @@ internal static partial class VerifyCommand
         "max_devices",
         "max devices exceeded",
         "unlicensed",
+    ];
+
+    /// <summary>
+    /// Extra tokens that only make sense for the installer package: an agreement page, a key entry,
+    /// or an activation/purchase path. They are not applied to the executables because those are
+    /// self-contained single files that embed the .NET runtime, whose own resource strings contain
+    /// ordinary English words like "activation" and "purchase" that have nothing to do with this
+    /// product; the project-specific tokens above are the meaningful check there.
+    /// </summary>
+    private static readonly string[] InstallerOnlyForbiddenTokens =
+    [
         "licenseagreementdlg",
-        "wixuilcertf",
         "licenseaccepted",
+        "licenseacceptedcheckbox",
+        "wixuilcertf",
         "productkey",
-        "activation",
         "purchase",
+        "activation",
     ];
 
     /// <summary>
@@ -66,6 +79,21 @@ internal static partial class VerifyCommand
         ("client logon task custom action", "Install-ClientTask.ps1"),
         ("pinned driver payload", "USBip-0.9.8.1-x64.exe"),
         ("installed packaging document", "PACKAGING.md"),
+    ];
+
+    /// <summary>
+    /// What the MSI must NOT contain. The package deliberately ships no wizard at all: every dialog
+    /// set the WiX UI extension offers routes through LicenseAgreementDlg, and this product has no
+    /// agreement to accept. Any of these appearing means a page that must not exist is back.
+    /// </summary>
+    private static readonly (string What, string Marker)[] ForbiddenStructures =
+    [
+        ("wizard dialog table", "<Dialog "),
+        ("agreement page in the wizard", "LicenseAgreementDlg"),
+        ("terms-accepted checkbox", "LicenseAcceptedCheckBox"),
+        ("agreement text variable", "WixUILicenseRtf"),
+        ("key-entry property", "PIDKEY"),
+        ("install-directory wizard binding", "WIXUI_INSTALLDIR"),
     ];
 
     internal static async Task<int> RunAsync(BuildContext context)
@@ -116,6 +144,18 @@ internal static partial class VerifyCommand
             }
         }
 
+        report.AppendLine();
+        report.AppendLine("1b. pages and properties the package must NOT contain");
+        foreach ((string what, string marker) in ForbiddenStructures)
+        {
+            bool present = decompiledText.Contains(marker, StringComparison.OrdinalIgnoreCase);
+            Say($"   [{(present ? "FAIL" : "ok")}] absent: {what}  ('{marker}')");
+            if (present)
+            {
+                problems.Add($"the MSI contains {what} ('{marker}')");
+            }
+        }
+
         // ---- 2. forbidden vocabulary ---------------------------------------------------------
         report.AppendLine();
         report.AppendLine("2. forbidden vocabulary (another vendor, key/activation/purchase, agreement page, device cap)");
@@ -137,11 +177,16 @@ internal static partial class VerifyCommand
 
         foreach ((string what, string path) in scanned)
         {
-            Dictionary<string, int> hits = ScanFile(path, ForbiddenTokens);
+            bool isInstaller = what is "msi" or "decompiled-msi-source";
+            string[] tokens = isInstaller
+                ? [.. ForbiddenTokens, .. InstallerOnlyForbiddenTokens]
+                : ForbiddenTokens;
+
+            Dictionary<string, int> hits = ScanFile(path, tokens);
             var found = hits.Where(pair => pair.Value > 0).ToList();
             if (found.Count == 0)
             {
-                Say($"   [ok] {what}: none of {ForbiddenTokens.Length.ToString(CultureInfo.InvariantCulture)} tokens present");
+                Say($"   [ok] {what}: none of {tokens.Length.ToString(CultureInfo.InvariantCulture)} tokens present");
             }
             else
             {
@@ -273,20 +318,32 @@ internal static partial class VerifyCommand
         text.Split(token, StringSplitOptions.None).Length - 1;
 
     /// <summary>
+    /// Case-insensitive occurrence count. Prose is scanned case-insensitively so that a stray
+    /// "License Agreement" page or "Licence Key" prompt cannot slip past on capitalisation.
+    /// </summary>
+    private static int CountOccurrencesIgnoreCase(string text, string token) =>
+        text.Split(token, StringSplitOptions.None).Length - 1 +
+        text.ToLowerInvariant().Split(token, StringSplitOptions.None).Length - 1 - CountOccurrences(text, token);
+
+    /// <summary>
     /// Case-insensitive raw scan of a file for the tokens as ASCII and as UTF-16LE, in chunks so a
     /// 180 MB MSI does not have to be read into memory. Counts in the chunk overlap can double.
     /// </summary>
     private static Dictionary<string, int> ScanFile(string path, IEnumerable<string> tokens)
     {
+        string[] list = [.. tokens];
         var needles = new List<(string Token, byte[] Bytes)>();
-        foreach (string token in tokens)
+        foreach (string token in list)
         {
             needles.Add((token, Encoding.ASCII.GetBytes(token)));
             needles.Add((token, Encoding.Unicode.GetBytes(token)));
         }
 
-        var hits = needles.ToDictionary(needle => needle.Token, _ => 0);
-        var seen = new HashSet<(string, int)>();
+        var hits = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (string token in list)
+        {
+            hits[token] = 0;
+        }
         const int ChunkSize = 1 << 20;
         const int Overlap = 64;
 
@@ -317,8 +374,7 @@ internal static partial class VerifyCommand
                         break;
                     }
 
-                    hits[token]++;
-                    seen.Add((token, 0));
+                    hits[token] = hits[token] + 1;
                     index += at + 1;
                 }
             }

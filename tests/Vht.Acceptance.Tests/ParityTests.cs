@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using Vht.Core.Capture;
 using Vht.Core.Model;
 using Vht.Core.Policy;
@@ -51,7 +52,10 @@ public sealed class ParityTests
         Assert.Equal(0x0781, first.VendorId);
         Assert.Equal(0x5581, first.ProductId);
         Assert.Equal(UsbIp.SpeedHigh, first.Speed);
-        Assert.NotEmpty(first.Product);
+        Assert.Equal(UsbClass.MassStorage, first.DeviceClass);
+        Assert.Equal(1, first.NumInterfaces);
+        Assert.NotEmpty(first.Path);
+        Assert.Equal(string.Empty, first.Product); // the wire record has no string field; see the nickname tests below
     }
 
     [Fact]
@@ -210,10 +214,18 @@ public sealed class ParityTests
     [Fact]
     public async Task Ignore_List_Hides_A_Device_Even_When_It_Is_Also_Allowed()
     {
+        // The documented ordering (DevicePolicy.Evaluate): an explicit ignore beats an allow, and an
+        // allow list that exists hides everything that does not match it. So the device is allowed by
+        // the allow list *and* named in the ignore list, which must hide it, while the two devices the
+        // allow list also names stay exported.
         var policy = new DevicePolicy();
-        Assert.True(DeviceRule.TryParse("0781:5581", out DeviceRule rule));
-        policy.Allow(rule);
-        policy.Ignore(rule);
+        Assert.True(DeviceRule.TryParse("0781:5581", out DeviceRule massStorage));
+        Assert.True(DeviceRule.TryParse("046d:c31c", out DeviceRule hid));
+        Assert.True(DeviceRule.TryParse("2341:0043", out DeviceRule cdc));
+        policy.Allow(massStorage);
+        policy.Allow(hid);
+        policy.Allow(cdc);
+        policy.Ignore(massStorage);
 
         await using AcceptanceRig rig = await StartAsync(policy: policy);
         await using UsbIpClient client = await ConnectAsync(rig);
@@ -254,25 +266,23 @@ public sealed class ParityTests
 
         await using AcceptanceRig rig = await StartAsync(policy: policy);
 
-        UsbDevice exported = rig.State.Exports.Snapshot().Single().Device;
+        UsbDevice exported = rig.State.Exports.Snapshot().Single(e => e.Device.BusId == "1-1").Device;
         Assert.Equal("acceptance-stick", exported.Nickname);
         Assert.Equal("acceptance-stick", exported.DisplayName);
         Assert.Equal("acceptance-stick", policy.GetNickname(identity));
     }
 
     [Fact]
-    public async Task Known_Gap_Nickname_Is_Not_Yet_Carried_On_The_USB_IP_Wire()
+    public async Task The_Nickname_Reaches_A_Client_Through_VirtualTheres_Own_Op()
     {
-        // CHARACTERISATION TEST for a real parity gap, filed as a follow-up card rather than
-        // fixed here (this card's scope excludes fixes).
-        //
         // The reference product shows the operator's nickname to the client as the device name.
-        // VirtualThere keeps the nickname and shows it in its own views (previous test) but
-        // UsbDevice.ToUsbIpDevice() sends the raw product string, so a stock USB/IP client still
-        // sees "VirtualThere acceptance mass-storage #0".
-        //
-        // If this test starts failing, the gap has been closed: delete it and update
-        // docs/ACCEPTANCE.md §Parity.
+        // VirtualThere keeps the nickname and shows it in its own views, and the *stock* USB/IP
+        // OP_REP_DEVLIST record (312 bytes: 256-byte path, 32-byte bus id, then the numeric fields)
+        // has no string field at all — so the nickname cannot travel inside it without breaking every
+        // stock parser. It travels beside it: in VirtualThere's own op (docs/SERVER.md §8), a
+        // separate op_common exchange that a stock client neither sends nor receives. This test
+        // drives the production server over loopback TCP and reads both the stock list and the
+        // extension.
         var policy = new DevicePolicy();
         var identity = new DeviceIdentity(0x0781, 0x5581, "07815581-0000");
         policy.SetNickname(identity, "acceptance-stick");
@@ -283,7 +293,101 @@ public sealed class ParityTests
         IReadOnlyList<UsbIpDevice> listed = await client.ListDevicesAsync(CancellationToken.None);
         UsbIpDevice device = listed.Single(d => d.BusId == "1-1");
 
-        Assert.Equal("VirtualThere acceptance mass-storage #0", device.Product);
+        // The stock record still carries no strings: nothing was repurposed to make room.
+        Assert.Equal(string.Empty, device.Product);
+        Assert.Equal(string.Empty, device.Manufacturer);
+        Assert.Equal(string.Empty, device.Serial);
+
+        // ...and the nickname arrives over the extension, for the same bus id the stock list named.
+        IReadOnlyDictionary<string, string> nicknames = await client.ListNicknamesAsync(CancellationToken.None);
+        Assert.Equal("acceptance-stick", nicknames["1-1"]);
+
+        // Only the device that has a nickname is named; the other two exported devices are absent
+        // rather than present with an empty name.
+        Assert.Single(nicknames);
+
+        // The server's own export table agrees, which is what the operator sees.
+        Assert.Equal(
+            "acceptance-stick",
+            rig.State.Exports.Snapshot().Single(e => e.Device.BusId == "1-1").Device.Nickname);
+    }
+
+    [Fact]
+    public async Task The_Devlist_Record_Is_Byte_For_Byte_The_Stock_Layout()
+    {
+        // The other half of the nickname decision: because the nickname rides in its own op, the
+        // OP_REP_DEVLIST frame the server sends has to be indistinguishable from one a stock usbipd
+        // would send. This builds that frame from the spec (op_common, big-endian u32 count, a
+        // 312-byte usbip_usb_device at its documented offsets, then 4-byte interface records)
+        // without calling the project's codec at all, and compares it with the bytes the live server
+        // actually put on the wire.
+        UsbDevice device = SyntheticDevices.Build(SyntheticDevices.All[0], 0);
+
+        await using AcceptanceRig rig = await StartAsync(new[] { device });
+        await using UsbIpClient client = await ConnectAsync(rig);
+        await client.ListDevicesAsync(CancellationToken.None);
+
+        byte[] expected = StockDevlistFrame(device);
+        byte[] actual = client.LastDevlistFrame.ToArray();
+
+        Assert.Equal(expected.Length, actual.Length);
+        Assert.Equal(expected, actual);
+    }
+
+    /// <summary>
+    /// Builds an <c>OP_REP_DEVLIST</c> reply for one device straight from the protocol
+    /// documentation, deliberately not calling <see cref="UsbIpCodec"/>.
+    /// </summary>
+    private static byte[] StockDevlistFrame(UsbDevice device)
+    {
+        const int RecordSize = 312;
+        int interfaces = device.Interfaces.Count;
+        var frame = new byte[UsbIpCodec.OpHeaderSize + 4 + RecordSize + interfaces * 4];
+        var span = frame.AsSpan();
+
+        BinaryPrimitives.WriteUInt16BigEndian(span, UsbIp.ProtocolVersion);
+        BinaryPrimitives.WriteUInt16BigEndian(span[2..], UsbIp.OpRepDevlist);
+        BinaryPrimitives.WriteUInt32BigEndian(span[4..], 0);                 // op_common.status
+        BinaryPrimitives.WriteUInt32BigEndian(span[8..], 1);                 // op_devlist_reply.ndev
+
+        // usbip_usb_device, packed: path[256], busid[32], busnum, devnum, speed, idVendor,
+        // idProduct, bcdDevice, then six single-byte fields.
+        Span<byte> record = span.Slice(UsbIpCodec.OpHeaderSize + 4, RecordSize);
+        WriteFixed(record[..256], device.SysPath);
+        WriteFixed(record.Slice(256, 32), device.BusId);
+        BinaryPrimitives.WriteUInt32BigEndian(record[288..], device.BusNum);
+        BinaryPrimitives.WriteUInt32BigEndian(record[292..], device.DevNum);
+        BinaryPrimitives.WriteUInt32BigEndian(record[296..], device.Speed);
+        BinaryPrimitives.WriteUInt16BigEndian(record[300..], device.VendorId);
+        BinaryPrimitives.WriteUInt16BigEndian(record[302..], device.ProductId);
+        BinaryPrimitives.WriteUInt16BigEndian(record[304..], device.BcdDevice);
+        record[306] = device.DeviceClass;
+        record[307] = device.DeviceSubClass;
+        record[308] = device.DeviceProtocol;
+        record[309] = device.ConfigurationValue;
+        record[310] = device.NumConfigurations;
+        record[311] = (byte)Math.Min(interfaces, byte.MaxValue);
+
+        int offset = UsbIpCodec.OpHeaderSize + 4 + RecordSize;
+        foreach (UsbIpInterface iface in device.Interfaces)
+        {
+            span[offset + 0] = iface.InterfaceClass;
+            span[offset + 1] = iface.InterfaceSubClass;
+            span[offset + 2] = iface.InterfaceProtocol;
+            span[offset + 3] = 0;
+            offset += 4;
+        }
+
+        return frame;
+    }
+
+    /// <summary>NUL-padded ASCII, exactly what the kernel's <c>%s</c> treatment of a char[] field means.</summary>
+    private static void WriteFixed(Span<byte> field, string value)
+    {
+        field.Clear();
+        int n = Math.Min(value.Length, field.Length - 1);
+        for (int i = 0; i < n; i++)
+            field[i] = (byte)value[i];
     }
 
     // -------------------------------------------------------------------------------------
@@ -296,12 +400,20 @@ public sealed class ParityTests
         var policy = new DevicePolicy();
         var identity = new DeviceIdentity(0x0781, 0x5581, "07815581-0000");
         policy.SetPasswordVerifier(identity, "verifier-placeholder");
+        // A nickname too, so the containment assertion below is about the extension and not about
+        // the absence of any names at all.
+        policy.SetNickname(identity, "protected-stick");
 
         await using AcceptanceRig rig = await StartAsync(policy: policy);
         await using UsbIpClient client = await ConnectAsync(rig);
 
         IReadOnlyList<UsbIpDevice> listed = await client.ListDevicesAsync(CancellationToken.None);
         Assert.DoesNotContain(listed, d => d.BusId == "1-1");
+
+        // The extension obeys the same containment rule: the client cannot learn a nickname for a
+        // device it was never offered either.
+        IReadOnlyDictionary<string, string> nicknames = await client.ListNicknamesAsync(CancellationToken.None);
+        Assert.Empty(nicknames);
 
         // Even knowing the bus id, the import is refused rather than served unprotected.
         ImportOutcome refused = await client.ImportAsync("1-1", CancellationToken.None);

@@ -99,7 +99,7 @@ Policy can be changed on a running server; it is also writable in the config fil
 ```bash
 vht status                                   # exports, attachments, connections, listeners, "no cap"
 vht list
-vht nickname <busid> --name "Label printer"  # friendly name shown to clients
+vht nickname <busid> --name "Label printer"  # friendly name shown to clients (see §8 for the wire format)
 vht password <busid> --password "..."        # per-device password (TLS listener only)
 vht ignore 1050:0407                         # never export
 vht unignore 1050:0407
@@ -147,3 +147,80 @@ design (the tray runs unelevated), which is why the pipe is not world-writable.
    silently ignored.
 5. Elevation is needed to claim devices and to install the service. If a command fails, it says so
    and stops - it does not fall back to a weaker mode.
+
+## 8. Device nicknames on the wire (`_vht` op extension)
+
+`vht nickname <busid> --name "Label printer"` stores a friendly name for a device. Where that name
+goes on the wire is a deliberate decision, because **the stock USB/IP protocol has nowhere to put
+it**: the `usbip_usb_device` record carried by `OP_REP_DEVLIST` and `OP_REP_IMPORT` is 312 bytes of
+fixed fields (256-byte `path`, 32-byte `busid`, then `busnum`, `devnum`, `speed`, `idVendor`,
+`idProduct`, `bcdDevice` and six single-byte class/configuration fields). There is no string field at
+all - not for product, not for manufacturer, not for a nickname.
+
+**Decision: the nickname travels beside the stock record, in VirtualThere's own op, never inside it.**
+Rationale:
+
+1. Every byte of those 312 bytes is specified, and third-party parsers read them at fixed offsets.
+   Repurposing slack - appending the name after the NUL that terminates `path`, say - would make
+   VirtualThere's frames non-conforming and would hide non-path data in a field every stock tool
+   prints. A separate op cannot collide with anything: a Linux `usbip list`/`usbip attach` sees a
+   device record identical to the one a stock `usbipd` sends.
+2. A stock peer never sends the op, so it can never be confused by it, and VirtualThere's client only
+   sends it where it is prepared for the answer to be silence.
+3. Attach stays untouched: `OP_REQ_IMPORT` and every URB are byte-for-byte what they always were. The
+   nickname is metadata about a device, not part of importing one.
+
+### 8.1 Wire format
+
+Request - `OP_REQ_VHT_DEVINFO`, code `0x8f01`, 12 bytes, no length field:
+
+| Offset | Size | Field |
+|---|---|---|
+| 0 | 2 | version `0x0111` |
+| 2 | 2 | code `0x8f01` |
+| 4 | 4 | `status`, 0 in a request |
+| 8 | 4 | magic `VHT1` (`0x56485431`) |
+
+Reply - `OP_REP_VHT_DEVINFO`, code `0x0f01`:
+
+| Offset | Size | Field |
+|---|---|---|
+| 0 | 2 | version `0x0111` |
+| 2 | 2 | code `0x0f01` |
+| 4 | 4 | `status` (`0`; a non-zero status means "no metadata", never an error) |
+| 8 | 4 | magic `VHT1` |
+| 12 | 4 | entry count |
+| 16 | 32 | `busid`, NUL-padded ASCII |
+| 48 | 1 | nickname length in UTF-8 bytes (`0` = this device has no nickname) |
+| 49 | n | nickname, UTF-8 |
+
+The last three fields repeat once per entry, in bus-id order.
+
+### 8.2 The rules that keep it safe
+
+- **Same device set as the stock list.** The entries name exactly the devices `OP_REP_DEVLIST`
+  advertises on that same connection, so the §6.4 containment rule holds in the extension too: a
+  password-protected device is not named on the plaintext listener, and no client can learn a name
+  for a device it was not offered.
+- **Bounded by construction.** One nickname is capped at 96 UTF-8 bytes
+  (`UsbIp.VhtNicknameMaxBytes`, the same ceiling the transport handshake puts on a client name) and
+  truncated on a codepoint boundary, so neither the reply length nor a client's allocation is driven
+  by an unvalidated number - and the far side never decodes a split character.
+- **Validated on read.** The decoder checks the magic, the entry count and every name length against
+  the frame before reading anything; a hostile or corrupt reply is a protocol error, never an
+  out-of-bounds read.
+- **A peer that does not speak it loses nothing.** A stock `usbipd` closes the connection when an
+  unknown op arrives (that is what its op switch does), so `vht-client` asks for names on a
+  connection of its own and treats any failure as "this peer has no names". The device list is never
+  at risk and the peer is not reported as unavailable.
+- **What a stock client sees:** the stock device record, byte for byte as before, and no nickname -
+  exactly what it sees against `usbipd`. The nickname is a VirtualThere-to-VirtualThere refinement.
+
+### 8.3 What uses it
+
+`UsbIpCodec.EncodeVhtDeviceInfoReply`/`DecodeVhtDeviceInfoReply` and
+`UsbIpSession.HandleVhtDeviceInfoAsync` on the server; `UsbipOp.ReadNicknamesAsync` and
+`RemoteDeviceCatalog` on the client, which asks once per refresh and carries the answer on
+`InventoryEntry.Nickname`. The client control plane publishes it as `nickname` in `devices.list`, and
+the UI prefers it over the vendor/product pair - so a nicknamed device shows the operator's name in
+the client, not `[0781:5581]`. An absent nickname means "no name configured", never "no device".

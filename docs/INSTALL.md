@@ -1,8 +1,43 @@
 # Install
 
-VirtualThere v0.1.0 is a **source release**: there is no installer and no prebuilt download yet
-(packaging is in progress). You build it with the .NET SDK and, for the *client*, install one
-third-party driver.
+VirtualThere v0.1.0 ships three ways. The first two need no compiler:
+
+| Path | What it is | Elevation |
+|---|---|---|
+| **Installer** | `VirtualThere-0.1.0-x64.msi` — both apps, the `vht-server` service, the virtual-controller driver, the firewall rules, the client logon task and the Start-menu shortcuts | one UAC prompt for the install |
+| **Portable folder** | `dist/portable/` — run the executables straight from the folder: no registry, no service. The machine-wide parts (driver, firewall, optional service) come from `Setup-Portable.ps1` | none to run; one prompt for `Setup-Portable.ps1 -Action Install` |
+| **From source** | clone and `dotnet build` (sections 1–2 and 5 below) | as the two above |
+
+The MSI and the executables are **unsigned** here — no code-signing certificate exists in this
+environment — so Windows shows its usual "unknown publisher" prompt. The kernel driver is not ours:
+it is the vendor's own signed package, consumed verbatim (section 4).
+
+`installer/PACKAGING.md` is the packaging document: what each artifact contains, the driver and
+elevation model, the versioning/update story, and — section 8 — exactly what was verified on a real
+machine and what still needs a clean VM.
+
+## 0. The one-command release build
+
+```powershell
+./build.ps1 release        # tests, portable build, MSI, manifest, SHA-256 of every artifact
+# identical to: dotnet run --project tools/Xtask -- release
+```
+
+Artifacts land in `dist/`: `dist/installer/VirtualThere-<version>-x64.msi` and `dist/portable/`
+(plus `release-manifest.txt` and `SHA256SUMS`, listing every file with its size and hash). Needs the
+.NET SDK 10 and network access on the first run, to fetch the pinned WiX 5.0.2 toolset and its two
+extensions.
+
+```bash
+msiexec /i VirtualThere-0.1.0-x64.msi              # install (interactive; no wizard pages)
+msiexec /i VirtualThere-0.1.0-x64.msi /qn          # silent
+msiexec /x VirtualThere-0.1.0-x64.msi /qn          # uninstall: service, driver, firewall rules, files
+```
+
+The portable folder is used in place: copy `dist/portable/` anywhere (it is not under
+`%ProgramFiles%` and is not registered with the SCM) and run `vht-server.exe`, `vht-client.exe`,
+`vht-tray.exe` or `vht.exe` from there. Configuration stays in `./config` next to the binaries,
+because the folder contains `portable.marker`.
 
 Everything below was exercised on Windows 11 (build 26300) with .NET SDK 10.0.402.
 
@@ -26,8 +61,8 @@ dotnet test  VirtualThere.slnx -c Release
 ```
 
 Expected: build succeeds with **0 warnings, 0 errors** (projects set `TreatWarningsAsErrors=true`),
-and the test run reports **340 passed, 0 failed** across `Vht.Core.Tests` (151), `Vht.Config.Tests`
-(77), `Vht.Transport.Tests` (67) and `Vht.Client.Tests` (45).
+and the test run reports **348 passed, 0 failed** across `Vht.Core.Tests` (155), `Vht.Config.Tests`
+(77), `Vht.Transport.Tests` (67) and `Vht.Client.Tests` (49).
 
 Executables:
 
@@ -74,7 +109,8 @@ sha256sum USBip-0.9.8.1-x64.exe          # in Git Bash
 # or:  certutil -hashfile USBip-0.9.8.1-x64.exe SHA256
 ```
 
-Then run the installer **from an elevated shell** and follow its prompts. The driver is
+Then run the driver package **from an elevated shell** and follow its prompts — the MSI from section 0
+does this step for you, hash-checked first, via `scripts\Install-Driver.ps1`. The driver is
 attestation-signed upstream; on a machine with Secure Boot and Driver Signature Enforcement on, an
 unsigned *modified* driver would not load - which is exactly why this project ships the upstream
 package unmodified and does not re-sign anything.

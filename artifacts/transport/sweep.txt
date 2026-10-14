@@ -1,0 +1,63 @@
+vht-transport-bench sweep  started 2026-10-14 16:41:25 -07:00
+host: ZUAN  os: Microsoft Windows NT 10.0.26300.0
+cores: 16  runtime: 10.0.13
+loopback only (127.0.0.1)  payload per run: 64 MiB  repeats: 7 (median reported; observed range in brackets)
+Lz4Options.ThresholdBytes in effect: 1024 (unaltered product default). Every swept size is above it, so no TlsLz4 row is suppressed by the threshold.
+
+PlainTcp  compressible    4 KiB        327.6 [   288.0-   395.1]  frames       -  compressed       -  wire/payload -
+PlainTcp  compressible    8 KiB        651.8 [   527.5-   678.0]  frames       -  compressed       -  wire/payload -
+PlainTcp  compressible    16 KiB      1164.0 [   809.5-  1280.2]  frames       -  compressed       -  wire/payload -
+PlainTcp  compressible    32 KiB      1363.6 [   983.9-  1774.7]  frames       -  compressed       -  wire/payload -
+PlainTcp  compressible    64 KiB      1674.4 [   669.2-  2768.5]  frames       -  compressed       -  wire/payload -
+PlainTcp  compressible    256 KiB     3663.8 [  2068.2-  6085.0]  frames       -  compressed       -  wire/payload -
+PlainTcp  compressible    1 MiB       1788.0 [  1600.1-  2274.5]  frames       -  compressed       -  wire/payload -
+PlainTcp  incompressible  4 KiB        352.9 [   265.8-   368.2]  frames       -  compressed       -  wire/payload -
+PlainTcp  incompressible  8 KiB        597.8 [   508.8-   727.7]  frames       -  compressed       -  wire/payload -
+PlainTcp  incompressible  16 KiB      1366.3 [  1202.3-  1503.9]  frames       -  compressed       -  wire/payload -
+PlainTcp  incompressible  32 KiB      2249.2 [  1167.8-  2419.9]  frames       -  compressed       -  wire/payload -
+PlainTcp  incompressible  64 KiB      3793.8 [  1398.4-  4118.2]  frames       -  compressed       -  wire/payload -
+PlainTcp  incompressible  256 KiB     4044.4 [  3293.5-  5627.9]  frames       -  compressed       -  wire/payload -
+PlainTcp  incompressible  1 MiB       4083.5 [  2409.9-  5139.4]  frames       -  compressed       -  wire/payload -
+Tls       compressible    4 KiB        339.8 [   289.6-   361.7]  frames       -  compressed       -  wire/payload -
+Tls       compressible    8 KiB        556.3 [   451.4-   601.0]  frames       -  compressed       -  wire/payload -
+Tls       compressible    16 KiB      1027.8 [   709.7-  1157.0]  frames       -  compressed       -  wire/payload -
+Tls       compressible    32 KiB      1134.7 [   884.3-  1302.2]  frames       -  compressed       -  wire/payload -
+Tls       compressible    64 KiB      1054.3 [  1014.7-  1260.2]  frames       -  compressed       -  wire/payload -
+Tls       compressible    256 KiB     1079.4 [   976.8-  1231.7]  frames       -  compressed       -  wire/payload -
+Tls       compressible    1 MiB        939.6 [   840.0-  1088.3]  frames       -  compressed       -  wire/payload -
+Tls       incompressible  4 KiB        324.1 [   304.2-   326.2]  frames       -  compressed       -  wire/payload -
+Tls       incompressible  8 KiB        593.3 [   440.1-   676.3]  frames       -  compressed       -  wire/payload -
+Tls       incompressible  16 KiB      1108.7 [  1036.8-  1180.9]  frames       -  compressed       -  wire/payload -
+Tls       incompressible  32 KiB      1029.3 [   907.9-  1114.3]  frames       -  compressed       -  wire/payload -
+Tls       incompressible  64 KiB      1115.3 [   849.1-  1206.2]  frames       -  compressed       -  wire/payload -
+Tls       incompressible  256 KiB     1036.4 [   851.6-  1123.1]  frames       -  compressed       -  wire/payload -
+Tls       incompressible  1 MiB        855.1 [   714.8-  1002.7]  frames       -  compressed       -  wire/payload -
+TlsLz4    compressible    4 KiB        190.8 [   128.0-   266.3]  frames   16384  compressed   16384  wire/payload 0.071
+TlsLz4    compressible    8 KiB        367.3 [   222.4-   451.7]  frames    8192  compressed    8192  wire/payload 0.037
+TlsLz4    compressible    16 KiB       648.2 [   399.9-   744.6]  frames    4096  compressed    4096  wire/payload 0.021
+TlsLz4    compressible    32 KiB      1010.1 [   687.7-  1040.7]  frames    2048  compressed    2048  wire/payload 0.012
+TlsLz4    compressible    64 KiB      1356.4 [  1252.7-  1477.2]  frames    1024  compressed    1024  wire/payload 0.008
+TlsLz4    compressible    256 KiB     1672.6 [  1516.8-  1763.5]  frames     256  compressed     256  wire/payload 0.005
+TlsLz4    compressible    1 MiB       1783.0 [  1557.1-  2005.9]  frames      64  compressed      64  wire/payload 0.004
+TlsLz4    incompressible  4 KiB        253.7 [   234.6-   258.9]  frames   16384  compressed       0  wire/payload 1.003
+TlsLz4    incompressible  8 KiB        408.4 [   351.8-   438.7]  frames    8192  compressed       0  wire/payload 1.002
+TlsLz4    incompressible  16 KiB       397.7 [   239.8-   430.3]  frames    4096  compressed       0  wire/payload 1.001
+TlsLz4    incompressible  32 KiB       399.3 [   223.2-   506.0]  frames    2048  compressed       0  wire/payload 1.000
+TlsLz4    incompressible  64 KiB       522.9 [   338.4-   578.5]  frames    1024  compressed       0  wire/payload 1.000
+TlsLz4    incompressible  256 KiB      534.7 [   361.5-   670.7]  frames     256  compressed       0  wire/payload 1.000
+TlsLz4    incompressible  1 MiB        566.5 [   370.6-   672.7]  frames      64  compressed       0  wire/payload 1.000
+
+LZ4 vs TLS at equal chunk size and payload shape (positive = LZ4 faster):
+
+chunk     compressible       incompressible
+--------  -----------------  -----------------
+4 KiB        -43.8%            -21.7%
+8 KiB        -34.0%            -31.2%
+16 KiB       -36.9%            -64.1%
+32 KiB       -11.0%            -61.2%
+64 KiB       +28.7%            -53.1%
+256 KiB      +55.0%            -48.4%
+1 MiB        +89.8%            -33.7%
+
+Smallest swept size where LZ4 beats TLS on compressible payload: 64 KiB.
+Below that size LZ4 is overhead: CRC-32C plus a copy per frame, with no wire saving worth the CPU.

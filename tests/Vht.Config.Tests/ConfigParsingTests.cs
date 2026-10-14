@@ -36,7 +36,7 @@ public sealed class ConfigParsingTests : IDisposable
         Assert.Equal("TESTSERVER", result.Config.Server.Name);
         Assert.Equal(3240, result.Config.Transport.PlaintextPort);
         Assert.Equal(3241, result.Config.Transport.TlsPort);
-        Assert.Equal(1024, result.Config.Transport.Lz4ThresholdBytes);
+        Assert.Equal(64 * 1024, result.Config.Transport.Lz4ThresholdBytes);
         Assert.Equal(Discovery.ServiceTypes.Vht, result.Config.Discovery.ServiceType);
         Assert.Equal(5, result.Config.Discovery.BrowseSeconds);
         Assert.Equal(64, result.Config.Server.PasswordMaxLength);

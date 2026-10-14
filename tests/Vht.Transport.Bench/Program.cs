@@ -32,6 +32,30 @@ internal static class Program
     /// </summary>
     private const int ThroughputRepeats = 5;
 
+    /// <summary>
+    /// Payload sizes the LZ4 crossover sweep walks. 4 KiB is below any plausible threshold and 1 MiB
+    /// is where the single-size bench already measured a win; 64 KiB is the URB size the acceptance
+    /// rig uses, where compression measured as a net loss.
+    /// </summary>
+    private static readonly int[] SweepChunkBytes =
+    {
+        4 * 1024, 8 * 1024, 16 * 1024, 32 * 1024, 64 * 1024, 256 * 1024, 1024 * 1024,
+    };
+
+    /// <summary>
+    /// Per-run payload for the sweep. Smaller than <see cref="TransferBytes"/> so the 4 KiB row does
+    /// not need a quarter of a million frames per repetition; 64 MiB is 16 384 frames at 4 KiB, which
+    /// is far more than enough for the per-frame overhead to dominate the measurement.
+    /// </summary>
+    private const int SweepTransferBytes = 64 * 1024 * 1024;
+
+    /// <summary>
+    /// Repetitions per sweep case. More than the throughput table's five, because the small-chunk rows
+    /// are exactly where the LZ4-vs-TLS difference is closest to the run-to-run spread, and a crossover
+    /// that lives inside the noise is not a crossover.
+    /// </summary>
+    private const int SweepRepeats = 7;
+
     /// <summary>Real work factor, used for the authenticated-handshake measurement (never lowered in production).</summary>
     private const int RealWorkFactor = SecretVerifier.DefaultIterations;
 
@@ -43,10 +67,23 @@ internal static class Program
 
     private static X509Certificate2? _serverCertificate;
 
+    /// <summary>
+    /// LZ4 policy override for the sweep mode. The sweep has to hold policy fixed at "always attempt"
+    /// (<see cref="Lz4Options.ThresholdBytes"/> = 0) or it would only be measuring the threshold's own
+    /// effect: a 4 KiB row under a 64 KiB threshold never reaches LZ4 at all, and the crossover the
+    /// sweep exists to find would be invisible by construction.
+    /// </summary>
+    private static Lz4Options? _lz4Override;
+
     private static async Task<int> Main(string[] args)
     {
-        var outputDirectory = args.Length > 0
-            ? args[0]
+        // `sweep` is a second, self-contained mode: the chunk-size crossover measurement for the LZ4
+        // threshold decision. `dotnet run … -- sweep [output-dir]`.
+        var sweep = args.Length > 0 && string.Equals(args[0], "sweep", StringComparison.OrdinalIgnoreCase);
+        var positional = sweep ? args[1..] : args;
+
+        var outputDirectory = positional.Length > 0
+            ? positional[0]
             : Path.Combine(Path.GetTempPath(), "vht-transport-bench");
 
         Directory.CreateDirectory(outputDirectory);
@@ -58,6 +95,11 @@ internal static class Program
             Path.Combine(outputDirectory, "cert"),
             "localhost",
             out _);
+
+        if (sweep)
+        {
+            return await SweepAsync(outputDirectory).ConfigureAwait(false);
+        }
 
         var results = new List<Result>();
         var lines = new List<string>();
@@ -225,12 +267,16 @@ internal static class Program
             samples[Math.Min(samples.Length - 1, (int)Math.Ceiling(samples.Length * 0.95) - 1)]);
     }
 
-    private static async Task<ThroughputSummary> MeasureThroughputAsync(TransportKind kind, bool compressible, string outputDirectory)
+    private static Task<ThroughputSummary> MeasureThroughputAsync(TransportKind kind, bool compressible, string outputDirectory) =>
+        MeasureThroughputAsync(kind, compressible, ChunkBytes, TransferBytes, ThroughputRepeats, outputDirectory);
+
+    private static async Task<ThroughputSummary> MeasureThroughputAsync(
+        TransportKind kind, bool compressible, int chunkBytes, int transferBytes, int repeats, string outputDirectory)
     {
-        var samples = new List<ThroughputResult>(ThroughputRepeats);
-        for (var repeat = 0; repeat < ThroughputRepeats; repeat++)
+        var samples = new List<ThroughputResult>(repeats);
+        for (var repeat = 0; repeat < repeats; repeat++)
         {
-            samples.Add(await MeasureThroughputOnceAsync(kind, compressible, outputDirectory).ConfigureAwait(false));
+            samples.Add(await MeasureThroughputOnceAsync(kind, compressible, chunkBytes, transferBytes, outputDirectory).ConfigureAwait(false));
         }
 
         var ordered = samples.OrderBy(s => s.MegabytesPerSecond).ToList();
@@ -240,9 +286,10 @@ internal static class Program
             ordered[^1].MegabytesPerSecond);
     }
 
-    private static async Task<ThroughputResult> MeasureThroughputOnceAsync(TransportKind kind, bool compressible, string outputDirectory)
+    private static async Task<ThroughputResult> MeasureThroughputOnceAsync(
+        TransportKind kind, bool compressible, int chunkBytes, int transferBytes, string outputDirectory)
     {
-        var payload = new byte[ChunkBytes];
+        var payload = new byte[chunkBytes];
         if (compressible)
         {
             // Highly compressible, and stable across the run so LZ4 has something to win on.
@@ -259,12 +306,12 @@ internal static class Program
         await using var pair = await ConnectAsync(kind, outputDirectory).ConfigureAwait(false);
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
 
-        var chunks = TransferBytes / ChunkBytes;
+        var chunks = transferBytes / chunkBytes;
         var received = 0L;
         var reader = Task.Run(async () =>
         {
-            var buffer = new byte[ChunkBytes];
-            while (received < TransferBytes)
+            var buffer = new byte[chunkBytes];
+            while (received < transferBytes)
             {
                 var read = await pair.Server.ReadAsync(buffer, cts.Token).ConfigureAwait(false);
                 if (read == 0)
@@ -294,7 +341,7 @@ internal static class Program
 
         var stats = (pair.Client as Lz4Transport)?.Statistics;
         return new ThroughputResult(
-            TransferBytes / (1024.0 * 1024.0) / elapsed.TotalSeconds,
+            transferBytes / (1024.0 * 1024.0) / elapsed.TotalSeconds,
             elapsed,
             stats?.BytesWritten ?? 0,
             stats?.PayloadBytesWritten ?? 0,
@@ -328,7 +375,9 @@ internal static class Program
         ServerName = "localhost",
         ClientName = "vht-transport-bench",
         HandshakeTimeout = TimeSpan.FromSeconds(20),
-        Lz4 = new Lz4Options { Enabled = kind == TransportKind.TlsLz4 },
+        Lz4 = _lz4Override is null
+            ? new Lz4Options { Enabled = kind == TransportKind.TlsLz4 }
+            : _lz4Override with { Enabled = kind == TransportKind.TlsLz4 },
         Authentication = new AuthenticationOptions { Pbkdf2Iterations = 2_000 },
         Tls = new TlsOptions
         {
@@ -339,6 +388,121 @@ internal static class Program
             Protocols = SslProtocols.Tls13 | SslProtocols.Tls12,
         },
     };
+
+    /// <summary>
+    /// The payload-size sweep behind the LZ4 threshold decision: for every chunk size, both payload
+    /// shapes and the three transports, report the median of <see cref="ThroughputRepeats"/> runs with
+    /// the observed range, plus the frame counters that say whether compression actually engaged.
+    /// </summary>
+    private static async Task<int> SweepAsync(string outputDirectory)
+    {
+        var lines = new List<string>();
+        void Emit(string line)
+        {
+            Console.WriteLine(line);
+            lines.Add(line);
+        }
+
+        Emit($"vht-transport-bench sweep  started {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz}");
+        Emit($"host: {Environment.MachineName}  os: {Environment.OSVersion.VersionString}");
+        Emit($"cores: {Environment.ProcessorCount}  runtime: {Environment.Version}");
+        Emit($"loopback only (127.0.0.1)  payload per run: {SweepTransferBytes / (1024 * 1024)} MiB  "
+            + $"repeats: {SweepRepeats} (median reported; observed range in brackets)");
+        // Fixed policy for the experiment: attempt compression at every swept size, so the rows measure
+        // what LZ4 does to a payload rather than what the threshold does to the payload. The product
+        // default is what the decision afterwards is made from.
+        _lz4Override = new Lz4Options { ThresholdBytes = 0 };
+        Emit($"Lz4Options for this sweep: ThresholdBytes = {_lz4Override.ThresholdBytes} (compression attempted at every size). "
+            + $"Product default is {new Lz4Options().ThresholdBytes} bytes; this sweep is what sets it.");
+        Emit(string.Empty);
+
+        var rows = new List<SweepRow>();
+        // Chunk size is the outer loop so the three transports run the same size back to back: this
+        // host may be busy with unrelated work, and interleaving keeps any drift from landing entirely
+        // on one arm of the comparison.
+        foreach (var chunk in SweepChunkBytes)
+        {
+            foreach (var compressible in new[] { true, false })
+            {
+                foreach (var kind in new[] { TransportKind.PlainTcp, TransportKind.Tls, TransportKind.TlsLz4 })
+                {
+                    ThroughputSummary summary = await MeasureThroughputAsync(
+                        kind, compressible, chunk, SweepTransferBytes, SweepRepeats, outputDirectory).ConfigureAwait(false);
+                    var row = new SweepRow(kind, compressible, chunk, summary);
+                    rows.Add(row);
+                    Emit(row.Format());
+                }
+            }
+        }
+
+        Emit(string.Empty);
+        Emit("LZ4 vs TLS at equal chunk size and payload shape (positive = LZ4 faster):");
+        Emit(string.Empty);
+        Emit("chunk     compressible       incompressible");
+        Emit("--------  -----------------  -----------------");
+        foreach (var chunk in SweepChunkBytes)
+        {
+            Emit($"{Size(chunk),-8}  {Delta(rows, chunk, true),8:+0.0;-0.0;0.0}%         {Delta(rows, chunk, false),8:+0.0;-0.0;0.0}%");
+        }
+
+        // The crossover is the smallest swept size whose compressible median beats TLS. The ranges are
+        // also printed, because a crossover inside the noise is not a crossover.
+        var crossover = SweepChunkBytes.FirstOrDefault(c => Delta(rows, c, true) > 0);
+        Emit(string.Empty);
+        Emit(crossover > 0
+            ? $"Smallest swept size where LZ4 beats TLS on compressible payload: {Size(crossover)}."
+            : "No swept size has LZ4 beating TLS on compressible payload: the crossover is above the sweep.");
+        Emit("Below that size LZ4 is overhead: CRC-32C plus a copy per frame, with no wire saving worth the CPU.");
+
+        var reportPath = Path.Combine(outputDirectory, "sweep.txt");
+        await File.WriteAllLinesAsync(reportPath, lines).ConfigureAwait(false);
+        Emit(string.Empty);
+        Emit($"raw report: {reportPath}");
+
+        return 0;
+    }
+
+    private static double Delta(List<SweepRow> rows, int chunk, bool compressible)
+    {
+        double tls = rows.First(r => r.Kind == TransportKind.Tls && r.ChunkBytes == chunk && r.Compressible == compressible).Median;
+        double lz4 = rows.First(r => r.Kind == TransportKind.TlsLz4 && r.ChunkBytes == chunk && r.Compressible == compressible).Median;
+        return tls <= 0 ? 0 : (lz4 / tls - 1) * 100;
+    }
+
+    private static string Size(int bytes) => bytes >= 1024 * 1024
+        ? $"{bytes / (1024 * 1024)} MiB"
+        : $"{bytes / 1024} KiB";
+
+    private sealed record SweepRow(TransportKind Kind, bool Compressible, int ChunkBytes, ThroughputSummary Summary)
+    {
+        public double Median => Summary.Median;
+
+        public double Min => Summary.Min;
+
+        public double Max => Summary.Max;
+
+        public string Format()
+        {
+            long frames = Summary.RawFrames + Summary.CompressedFrames;
+            string frameColumn = frames == 0 ? "-" : frames.ToString();
+            string compressedColumn = frames == 0 ? "-" : Summary.CompressedFrames.ToString();
+            string ratioColumn = frames == 0 || Summary.PayloadBytes == 0
+                ? "-"
+                : ((double)Summary.WireBytes / Summary.PayloadBytes).ToString("F3");
+
+            return string.Format(
+                "{0,-9} {1,-14}  {2,-8}  {3,8:F1} [{4,8:F1}-{5,8:F1}]  frames {6,7}  compressed {7,7}  wire/payload {8}",
+                Kind,
+                Compressible ? "compressible" : "incompressible",
+                Size(ChunkBytes),
+                Median,
+                Min,
+                Max,
+                frameColumn,
+                compressedColumn,
+                ratioColumn);
+        }
+    }
 
     private sealed record HandshakeResult(double Mean, double P50, double P95);
 

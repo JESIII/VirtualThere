@@ -151,7 +151,7 @@ public static class ConfigBinder
         context.Port("transport.tls.port", 3241),
         context.NullableString("transport.tls.certificate"),
         context.Bool("transport.tls.lz4_enabled", true),
-        context.Int("transport.tls.lz4_threshold_bytes", 1024, 0, 16 * 1024 * 1024));
+        context.Int("transport.tls.lz4_threshold_bytes", 64 * 1024, 0, 16 * 1024 * 1024));
 
     private static SecurityConfig BindSecurity(BindingContext context) => new(
         context.Bool("security.plaintext_password_protected_devices", false),

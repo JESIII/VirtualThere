@@ -86,7 +86,7 @@ internal sealed class RemoteDeviceCatalog : IRemoteDeviceInventory
                     continue;
                 }
 
-                foreach (var (peer, device) in result.Devices)
+                foreach (var (peer, device, nickname) in result.Devices)
                 {
                     routes.Add(new BusidRoute
                     {
@@ -94,7 +94,13 @@ internal sealed class RemoteDeviceCatalog : IRemoteDeviceInventory
                         RemoteBusId = device.BusId,
                         Peer = peer,
                     });
-                    entries.Add(new InventoryEntry { Peer = peer, Device = device, RoutingKey = device.BusId });
+                    entries.Add(new InventoryEntry
+                    {
+                        Peer = peer,
+                        Device = device,
+                        RoutingKey = device.BusId,
+                        Nickname = nickname,
+                    });
                 }
             }
 
@@ -175,7 +181,16 @@ internal sealed class RemoteDeviceCatalog : IRemoteDeviceInventory
             await using IClientTransport transport = await _transportFactory.ConnectAsync(peer, ct).ConfigureAwait(false);
             IReadOnlyList<Usbip.UsbipDeviceRecord> devices = await Usbip.UsbipOp.ListDevicesAsync(transport, ct)
                 .ConfigureAwait(false);
-            return new PeerQueryResult(devices.Select(d => (peer, d)).ToList(), null);
+
+            // Names come from VirtualThere's own extension, never from the stock list: the two are
+            // queried separately so a peer that does not implement the extension still lists.
+            IReadOnlyDictionary<string, string> nicknames = await QueryNicknamesAsync(peer, ct).ConfigureAwait(false);
+
+            return new PeerQueryResult(
+                devices
+                    .Select(d => (peer, d, nicknames.TryGetValue(d.BusId, out string? name) ? name : null))
+                    .ToList(),
+                null);
         }
         catch (OperationCanceledException)
         {
@@ -184,12 +199,39 @@ internal sealed class RemoteDeviceCatalog : IRemoteDeviceInventory
         catch (Exception ex) when (ex is ClientException or IOException or System.Net.Sockets.SocketException)
         {
             return new PeerQueryResult(
-                Array.Empty<(Peer, Usbip.UsbipDeviceRecord)>(),
+                Array.Empty<(Peer, Usbip.UsbipDeviceRecord, string?)>(),
                 new PeerUnavailable(peer, ex.Message));
         }
     }
 
+    /// <summary>
+    /// Asks a peer for its device nicknames over VirtualThere's own op extension
+    /// (docs/SERVER.md §8). Always best-effort: a stock usbipd has never heard of the op code and
+    /// closes the connection on it, so this runs on a connection of its own and any failure simply
+    /// means "no names from this peer" — never that the peer is unavailable.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<string, string>> QueryNicknamesAsync(Peer peer, CancellationToken ct)
+    {
+        try
+        {
+            await using IClientTransport transport = await _transportFactory.ConnectAsync(peer, ct).ConfigureAwait(false);
+            return await Usbip.UsbipOp.ReadNicknamesAsync(transport, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is ClientException or IOException
+            or System.Net.Sockets.SocketException or UsbipProtocolException)
+        {
+            _log.Info("catalog",
+                $"peer '{peer.Name}' ({peer.Endpoint}) does not answer the device-nickname extension " +
+                $"({ex.Message}); showing vendor/product only");
+            return new Dictionary<string, string>(StringComparer.Ordinal);
+        }
+    }
+
     private sealed record PeerQueryResult(
-        IReadOnlyList<(Peer Peer, Usbip.UsbipDeviceRecord Device)> Devices,
+        IReadOnlyList<(Peer Peer, Usbip.UsbipDeviceRecord Device, string? Nickname)> Devices,
         PeerUnavailable? Failure);
 }

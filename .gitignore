@@ -70,3 +70,8 @@ $RECYCLE.BIN/
 *.swp
 *~
 
+
+# ---------------------------------------------------------------------------
+# Scratch output a harness copies into the tree (build output, not a record)
+# ---------------------------------------------------------------------------
+artifacts/tmp/

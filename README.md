@@ -18,9 +18,10 @@ contains no third-party product's code (`LEGAL.md`).
 | CLI | `vht.exe` | Operator surface for the server: `serve`, `status`, `list`, `kick`, `ignore`, `nickname`, `password`, service install/start/stop |
 | Tray / manager UI | `vht-tray.exe` | One WPF executable, two modes (`--mode server`, `--mode client`): tray icon plus device/peer management windows, driving the services over a local named pipe |
 
-Status: **v0.1.0, source release.** It builds clean, 340 automated tests pass, and the server, CLI,
-client and tray run for real on Windows 11 with .NET 10 - but it has not yet been through real
-hardware attach, and there is no installer or signed binary download. Read
+Status: **v0.1.0.** It builds clean, 361 automated tests pass, and the server, CLI, client and tray
+run for real on Windows 11 with .NET 10 - but it has not yet been through real hardware attach. One
+command (`./build.ps1 release`) produces an MSI installer and a no-install portable folder; both are
+**unsigned**, and neither has been exercised on a clean machine here. Read
 [Known limitations](#known-limitations) before you rely on it.
 
 ---
@@ -56,7 +57,13 @@ licence vocabulary in code, UI and build output finds nothing, and the CI workfl
 
 ## Install
 
-VirtualThere v0.1.0 is a **source release**: there is no installer and no prebuilt download yet.
+VirtualThere v0.1.0 ships two ways: an **MSI installer** and a **no-install portable folder**. Both
+are produced by the one release build, and both are **unsigned** in this environment (no code-signing
+certificate is available here), so Windows shows its usual "unknown publisher" prompt. Neither has
+been run on a clean machine yet - the packaging document says exactly what was and was not verified
+([`installer/PACKAGING.md`](installer/PACKAGING.md) section 8).
+
+**From source**
 
 **Prerequisites**
 
@@ -76,7 +83,7 @@ VirtualThere v0.1.0 is a **source release**: there is no installer and no prebui
 git clone https://github.com/JESIII/VirtualThere.git
 cd VirtualThere
 dotnet build VirtualThere.slnx -c Release
-dotnet test  VirtualThere.slnx -c Release     # expect 340 passed, 0 failed
+dotnet test  VirtualThere.slnx -c Release     # expect 361 passed, 0 failed
 ```
 
 Executables land in `src/Vht.Cli/bin/Release/net10.0-windows/vht.exe`,
@@ -166,7 +173,10 @@ The full, evidence-tagged matrix is in [`docs/CLIENT.md`](docs/CLIENT.md) sectio
 
 Stated plainly - these are the honest boundaries of v0.1.0:
 
-1. **No installer and no signed binaries yet.** Build from source. Packaging is in progress.
+1. **The installer and the executables are unsigned.** No code-signing certificate and no kernel driver
+   of our own exist in this environment. `./build.ps1 release` produces the MSI and the portable
+   folder, but the clean-machine install path (run installer -> export a device -> attach it) has not
+   been run here; see [`installer/PACKAGING.md`](installer/PACKAGING.md) sections 4 and 8.
 2. **Windows only.** `Vht.Core`, `Vht.Config` and `Vht.Transport` are platform-neutral libraries,
    but the server, client and tray are Windows-only.
 3. **Traffic is unencrypted in the shipped binaries.** `Vht.Transport` implements TLS 1.3, pinning,
@@ -175,7 +185,7 @@ Stated plainly - these are the honest boundaries of v0.1.0:
    own. Do not expose a server to an untrusted network: use a trusted LAN, a VPN, or an SSH tunnel.
    `vht --password` is documented as TLS-listener-only for the same reason (it is refused, never
    silently ignored, on the plaintext listener).
-4. **No real-hardware attach has been verified yet.** The 340 passing tests cover the codec, the
+4. **No real-hardware attach has been verified yet.** The 361 passing tests cover the codec, the
    client's attach logic against a fake USB/IP peer, the transport, the config model, the control
    plane and the UI harness - not a physical device enumerating on a second machine. Hardware
    validation is in progress; until it lands, treat "attaches a real device" as unproven.

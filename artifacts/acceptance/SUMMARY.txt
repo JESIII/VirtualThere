@@ -1,0 +1,8 @@
+﻿VirtualThere acceptance - summary
+
+  multi.txt    exit 0
+  soak.txt     exit 0
+  perf.txt     exit 0
+  classes.txt  exit 0
+  licence.txt  exit 0
+  hardware.txt exit 78 (NOT RUN - needs elevation or a WinUSB-bound device)

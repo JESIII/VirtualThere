@@ -105,9 +105,28 @@ public sealed class CoreTransportAdapter : CoreTransport.ITransport
 /// </summary>
 public sealed class BlockingServerTransportFactory
 {
+    private readonly List<CoreTransportAdapter> _accepted = new();
+    private readonly object _gate = new();
+
     /// <summary>Handshake failures per connection, so a refusal is visible rather than silent.</summary>
     public int Refusals => Volatile.Read(ref _refusals);
     private int _refusals;
+
+    /// <summary>
+    /// The transports this factory has handed to the server, in accept order. The sweep verb reads the
+    /// per-session LZ4 counters from here, which is the only way to prove from outside the session
+    /// whether compression actually engaged on the wire.
+    /// </summary>
+    public IReadOnlyList<CoreTransportAdapter> Accepted
+    {
+        get { lock (_gate) return _accepted.ToArray(); }
+    }
+
+    /// <summary>Drops the recorded transports, so one measurement case cannot read another's counters.</summary>
+    public void ResetAccepted()
+    {
+        lock (_gate) _accepted.Clear();
+    }
 
     public Func<NetworkStream, CoreTransport.TransportKind, CoreTransport.ITransport> Build(
         TransportOptions options)
@@ -127,7 +146,9 @@ public sealed class BlockingServerTransportFactory
                     () => TransportFactory.AcceptAsync(stream, options, remote, CancellationToken.None))
                 .GetAwaiter()
                 .GetResult();
-            return new CoreTransportAdapter(transport);
+            var adapter = new CoreTransportAdapter(transport);
+            lock (_gate) _accepted.Add(adapter);
+            return adapter;
         }
         catch (Exception ex)
         {

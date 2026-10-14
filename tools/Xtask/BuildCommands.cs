@@ -224,8 +224,9 @@ internal static class InstallerCommand
     private static readonly string[] Extensions =
     [
         "WixToolset.Firewall.wixext",   // fire:FirewallException - the two listening-port rules
-        "WixToolset.UI.wixext",         // ui:WixUI - the install wizard (no licence page)
         "WixToolset.Util.wixext",       // util:CloseApplication - close a running tray/client
+        // Deliberately NOT WixToolset.UI.wixext: every dialog set it ships contains an
+        // "End-User License Agreement" page, which this product must not have (see VirtualThere.wxs).
     ];
 
     internal static async Task<int> RunAsync(BuildContext context, Program.Options options)
@@ -250,12 +251,12 @@ internal static class InstallerCommand
         // The tool manifest lives in installer/ next to the source, so every wix command runs there.
         context.RunChecked("dotnet", ["tool", "restore"], workingDirectory: context.InstallerSourceDir);
 
-        RunResult listed = context.Run("dotnet", ["wix", "extension", "list", "--global"], echo: false);
-        string installed = listed.Output;
-
+        // The extension cache is per-user (~/.wix/extensions/<id>/<version>); checking it directly is
+        // more reliable than parsing `wix extension list`, and re-adding an extension that is already
+        // there would hit the network on every build.
         foreach (string extension in Extensions)
         {
-            if (installed.Contains(extension, StringComparison.OrdinalIgnoreCase))
+            if (IsExtensionCached(extension, WixVersion))
             {
                 continue;
             }
@@ -312,6 +313,13 @@ internal static class InstallerCommand
 
     /// <summary>Forward slashes: WiX accepts them and they survive MSBuild-style path handling.</summary>
     private static string Native(string path) => path.Replace('\\', '/');
+
+    /// <summary>True when the WiX extension is already in the per-user extension cache.</summary>
+    private static bool IsExtensionCached(string extensionId, string version)
+    {
+        string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return Directory.Exists(Path.Combine(profile, ".wix", "extensions", extensionId, version));
+    }
 }
 
 /// <summary>`xtask release` — everything, in the order that fails fastest.</summary>

@@ -1,0 +1,29 @@
+$ dotnet build VirtualThere.slnx -c Release
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  Vht.Ui.MockService -> G:\Repos\VirtualThere\src\Vht.Ui\harness\Vht.Ui.MockService\bin\Release\net10.0\vht-mock-control-plane.dll
+  Vht.Ui.UiDriver -> G:\Repos\VirtualThere\src\Vht.Ui\harness\Vht.Ui.UiDriver\bin\Release\net10.0-windows\vht-ui-driver.dll
+  Vht.Core -> G:\Repos\VirtualThere\src\Vht.Core\bin\Release\net10.0\Vht.Core.dll
+  Vht.Config -> G:\Repos\VirtualThere\src\Vht.Config\bin\Release\net10.0\Vht.Config.dll
+  Vht.Transport -> G:\Repos\VirtualThere\src\Vht.Transport\bin\Release\net10.0\Vht.Transport.dll
+  Vht.Client -> G:\Repos\VirtualThere\src\Vht.Client\bin\Release\net10.0-windows\vht-client.dll
+  Vht.Interop -> G:\Repos\VirtualThere\src\Vht.Interop\bin\Release\net10.0-windows\Vht.Interop.dll
+  Xtask -> G:\Repos\VirtualThere\tools\Xtask\bin\Release\net10.0\xtask.dll
+  Vht.Ui -> G:\Repos\VirtualThere\src\Vht.Ui\Vht.Ui\bin\Release\net10.0-windows\vht-tray.dll
+  Vht.Client.Tests -> G:\Repos\VirtualThere\src\Vht.Client\Tests\bin\Release\net10.0-windows\Vht.Client.Tests.dll
+  Vht.Server -> G:\Repos\VirtualThere\src\Vht.Server\bin\Release\net10.0-windows\vht-server.dll
+  Vht.Core.Tests -> G:\Repos\VirtualThere\tests\Vht.Core.Tests\bin\Release\net10.0\Vht.Core.Tests.dll
+  Vht.Config.Tests -> G:\Repos\VirtualThere\tests\Vht.Config.Tests\bin\Release\net10.0\Vht.Config.Tests.dll
+  Vht.Transport.Tests -> G:\Repos\VirtualThere\tests\Vht.Transport.Tests\bin\Release\net10.0\Vht.Transport.Tests.dll
+  Vht.Cli -> G:\Repos\VirtualThere\src\Vht.Cli\bin\Release\net10.0-windows\vht.dll
+  Vht.Transport.Bench -> G:\Repos\VirtualThere\tests\Vht.Transport.Bench\bin\Release\net10.0\vht-transport-bench.dll
+  Vht.Acceptance -> G:\Repos\VirtualThere\tests\Vht.Acceptance\bin\Release\net10.0-windows\vht-accept.dll
+  Vht.Acceptance.Tests -> G:\Repos\VirtualThere\tests\Vht.Acceptance.Tests\bin\Release\net10.0-windows\Vht.Acceptance.Tests.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:02.24
+
+exit=0

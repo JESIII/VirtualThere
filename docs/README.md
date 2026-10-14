@@ -22,6 +22,7 @@ Two kinds of document live here, and it helps to know which you are reading.
 | [`RECON_AND_SPEC.md`](RECON_AND_SPEC.md) | The clean-room recon record (behaviour, config surface, licensing model) and the parity target, including the legal position in section 9 |
 | [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md) | Feature-parity checklist: reference product free tier vs paid tier vs what VirtualThere does |
 | [`UI.md`](UI.md) | UI affordance map, branding scope, accessibility, harness evidence, screenshots in `ui-shots/` |
+| [`ACCEPTANCE.md`](ACCEPTANCE.md) | What was measured on real hardware, what was measured on the software path, and what was NOT RUN — multi-device, soak, device-class matrix, performance, and the no-licence-gate negative test |
 
 ## About the engineering record
 

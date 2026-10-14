@@ -28,8 +28,35 @@ public sealed record Lz4Options
     /// <summary>Whether the client offers LZ4 and the server accepts it.</summary>
     public bool Enabled { get; init; } = true;
 
-    /// <summary>Payloads below this many bytes are never compressed. ARCHITECTURE.md §8 default.</summary>
-    public int ThresholdBytes { get; init; } = 1024;
+    /// <summary>
+    /// Payloads below this many bytes are never compressed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>64 KiB, measured, not chosen.</b> The payload-size sweep in
+    /// <c>tests/Vht.Transport.Bench</c> (<c>sweep</c> mode, artifacts preserved at
+    /// <c>artifacts/transport/sweep.txt</c>) swept 4/8/16/32/64/256 KiB and 1 MiB on this host with
+    /// compressible and incompressible payloads. LZ4 is a **net loss** on compressible payload at every
+    /// size below 64 KiB (−43.8% at 4 KiB, −34.0% at 8 KiB, −36.9% at 16 KiB, −11.0% at 32 KiB) and a
+    /// **win** at 64 KiB and above (+28.7% at 64 KiB, +55.0% at 256 KiB, +89.8% at 1 MiB). The cost
+    /// below the crossover is the fixed per-frame work — CRC-32C plus a copy — which does not shrink
+    /// with the payload; the saving does.
+    /// </para>
+    /// <para>
+    /// The previous default (1024) therefore put every 1–32 KiB payload squarely in the measured-loss
+    /// region. 64 KiB is the smallest swept size at which compression was measured to win, so payloads
+    /// smaller than that are now left raw by construction, and only the sizes the measurement supports
+    /// are offered to LZ4. The region between 32 KiB and 64 KiB was not swept; it is treated as a loss
+    /// rather than assumed a win. See <c>docs/TRANSPORT.md</c> §6.
+    /// </para>
+    /// <para>
+    /// This threshold cannot make incompressible payload a win: those pay CRC-32C and framing with no
+    /// saving at every size. Choosing <see cref="TransportKind.Tls"/> rather than
+    /// <see cref="TransportKind.TlsLz4"/> is what handles that, and it is why compression is negotiated
+    /// per peer.
+    /// </para>
+    /// </remarks>
+    public int ThresholdBytes { get; init; } = 64 * 1024;
 
     /// <summary>Largest payload frame either peer will send or accept. Bounds decompression.</summary>
     public int MaxPayloadFrameBytes { get; init; } = 4 * 1024 * 1024;

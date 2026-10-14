@@ -248,7 +248,11 @@ internal sealed class BuildContext
         {
             // The generated manifest and hash list are not artifacts of the build; neither is
             // anything else named the same, so compare full paths rather than file names.
-            if (string.Equals(path, ManifestFile, StringComparison.OrdinalIgnoreCase) ||
+            // dist/verify/ is `xtask verify`'s scratch area — the decompiled MSI source and the files
+            // it extracted. It is not a release artifact, and hashing it here would put its contents
+            // into the manifest when `verify` is run before `hash`.
+            if (path.StartsWith(VerifyDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(path, ManifestFile, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(path, SumsFile, StringComparison.OrdinalIgnoreCase))
             {
                 continue;

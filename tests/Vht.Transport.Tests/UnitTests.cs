@@ -654,7 +654,9 @@ public sealed class TransportOptionsTests
     public void DefaultThresholdAndFrameLimitsMatchTheArchitecture()
     {
         var options = new Lz4Options();
-        Assert.Equal(1024, options.ThresholdBytes);
+        // 64 KiB: the smallest payload size the sweep measured LZ4 beating plain TLS on compressible
+        // data (tests/Vht.Transport.Bench sweep mode, artifacts/transport/sweep.txt).
+        Assert.Equal(64 * 1024, options.ThresholdBytes);
         options.Validate();
     }
 

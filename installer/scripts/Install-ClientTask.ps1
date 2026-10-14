@@ -34,15 +34,28 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $ClientExe = (Join-Path (Split-Path -Parent $PSScriptRoot) 'vht-client.exe'),
+    # Defaults are resolved in the body, not here: PowerShell 5.1 does not populate $PSScriptRoot
+    # while parameter defaults are evaluated, so a default that calls Split-Path on it binds an empty
+    # string and the script dies before running (found by running it unelevated from a portable
+    # folder, which is exactly the case this script exists for).
+    [string] $ClientExe,
     [string] $TaskName = 'VirtualThere Client',
-    [string] $LogDirectory = (Join-Path $env:ProgramData 'VirtualThere\logs')
+    [string] $LogDirectory
 )
 
 Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Stop'
+# See the note in Install-Driver.ps1: native tools report ordinary conditions on stderr, and
+# PowerShell 5.1 turns redirected native stderr into a terminating error under 'Stop'.
+$ErrorActionPreference = 'Continue'
 
-$null = New-Item -ItemType Directory -Force -Path $LogDirectory
+if (-not $ClientExe) { $ClientExe = Join-Path (Split-Path -Parent $PSScriptRoot) 'vht-client.exe' }
+if (-not $LogDirectory) { $LogDirectory = Join-Path $env:ProgramData 'VirtualThere\logs' }
+
+$null = New-Item -ItemType Directory -Force -Path $LogDirectory -ErrorAction SilentlyContinue
+if (-not (Test-Path -LiteralPath $LogDirectory)) {
+    Write-Host "VirtualThere: cannot create the log directory '$LogDirectory'"
+    exit 1
+}
 $LogFile = Join-Path $LogDirectory 'client-task.log'
 
 function Write-Log {

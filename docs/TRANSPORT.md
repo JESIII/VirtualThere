@@ -62,6 +62,11 @@ Every returned transport has already completed the version/capability handshake,
 
 Performed immediately after the TLS handshake, before a single USB/IP byte.
 
+> There is a second, unrelated `_vht` extension **below** this layer, in the USB/IP op phase: it is
+> `OP_REQ_VHT_DEVINFO`/`OP_REP_VHT_DEVINFO` (`0x8f01`/`0x0f01`), which carries the operator's device
+> nicknames beside the stock device record. It exists on the plaintext listener too, because that is
+> the connection a client lists devices on. Specified in `docs/SERVER.md` §8.
+
 ### 3.1 Client hello (no outer length prefix, 51 bytes + name + busid)
 
 | Offset | Size | Field |

@@ -30,7 +30,6 @@
     var.DocDir     installer (for PACKAGING.md)
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
-     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
      xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
      xmlns:fire="http://wixtoolset.org/schemas/v4/wxs/firewall">
 
@@ -57,10 +56,19 @@
 
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
 
-    <!-- Add/Remove Programs. WIXUI_INSTALLDIR is what WixUI_InstallDir binds the directory page to. -->
+    <!--
+      No wizard. Every dialog set the WiX UI extension ships routes the welcome page through
+      LicenseAgreementDlg ("End-User License Agreement" + an "I accept the terms" checkbox that gates
+      Next), and this product has no agreement for anyone to accept - so a wizard here could only ship
+      a page that must not exist, with WiX's own Lorem-ipsum placeholder text behind it. The package
+      therefore carries no UI tables at all: one double-click installs it (UAC, then Windows
+      Installer's standard progress and completion dialogs), /qn is silent, and `xtask verify` asserts
+      the absence of every wizard dialog and agreement marker by decompiling the built MSI.
+
+      The destination can still be chosen from the command line:
+          msiexec /i VirtualThere-$(var.Version)-x64.msi INSTALLFOLDER="D:\VirtualThere"
+    -->
     <Property Id="ARPCOMMENTS" Value="Free and unlimited, Apache-2.0. No key entry and no device limit." />
-    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
-    <ui:WixUI Id="WixUI_InstallDir" />
 
     <!--
       Escape hatch for a machine where the driver must be left alone (e.g. another product's copy of

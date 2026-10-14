@@ -12,10 +12,15 @@
     <Project Path="src/Vht.Ui/harness/Vht.Ui.UiDriver/Vht.Ui.UiDriver.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Vht.Acceptance/Vht.Acceptance.csproj" />
+    <Project Path="tests/Vht.Acceptance.Tests/Vht.Acceptance.Tests.csproj" />
     <Project Path="tests/Vht.Core.Tests/Vht.Core.Tests.csproj" />
     <Project Path="tests/Vht.Config.Tests/Vht.Config.Tests.csproj" />
     <Project Path="tests/Vht.Transport.Tests/Vht.Transport.Tests.csproj" />
     <Project Path="tests/Vht.Transport.Bench/Vht.Transport.Bench.csproj" />
     <Project Path="src/Vht.Client/Tests/Vht.Client.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Xtask/Xtask.csproj" />
   </Folder>
 </Solution>

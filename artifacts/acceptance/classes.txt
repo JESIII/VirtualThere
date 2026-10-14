@@ -38,7 +38,7 @@ count. A class this rig cannot exercise on real hardware is marked NOT RUN, neve
    import    : ok
    control   : ok (18 B device descriptor)
    bulk      : not applicable (class has no bulk endpoint)
-   interrupt : FAILED status=-32
+   interrupt : ok (8 B report)
    isochronous : REFUSED status=-32 (EPIPE as designed)
    verdict     : NOT SUPPORTED on this build - ISO is never negotiated, so the streaming
                  interface of this class cannot be exported. The control interface works.
@@ -48,7 +48,7 @@ count. A class this rig cannot exercise on real hardware is marked NOT RUN, neve
    import    : ok
    control   : ok (18 B device descriptor)
    bulk      : not applicable (class has no bulk endpoint)
-   interrupt : FAILED status=-32
+   interrupt : ok (8 B report)
    isochronous : REFUSED status=-32 (EPIPE as designed)
    verdict     : NOT SUPPORTED on this build - ISO is never negotiated, so the streaming
                  interface of this class cannot be exported. The control interface works.

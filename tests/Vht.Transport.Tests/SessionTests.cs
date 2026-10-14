@@ -385,6 +385,60 @@ public sealed class SessionTests
     }
 
     [Fact]
+    public async Task DefaultThresholdLeavesOneByteUnderItRawAndCompressesAtIt()
+    {
+        await using var pair = await Harness.ConnectAsync(
+            Harness.ServerOptions(TransportKind.TlsLz4),
+            Harness.ClientOptions(TransportKind.TlsLz4));
+
+        var client = (Lz4Transport)pair.Client;
+        int threshold = client.CompressionThresholdBytes;
+
+        // The default is the sweep's crossover, not the reference product's 1 KiB.
+        Assert.Equal(64 * 1024, threshold);
+
+        // Compressible at any size — a single repeated byte compresses hundreds to one — so the only
+        // thing that can keep the first frame raw is the threshold itself.
+        var below = new byte[threshold - 1];
+        Array.Fill(below, (byte)'Q');
+        var at = new byte[threshold];
+        Array.Fill(at, (byte)'Q');
+
+        var received = new byte[below.Length + at.Length];
+        Task reader = ReadExactlyAsync(pair.Server, received);
+        await client.WritePayloadAsync(PayloadKind.Bulk, below, CancellationToken.None);
+        await client.WritePayloadAsync(PayloadKind.Bulk, at, CancellationToken.None);
+        await reader;
+
+        var expected = new byte[below.Length + at.Length];
+        below.CopyTo(expected, 0);
+        at.CopyTo(expected, below.Length);
+        Assert.Equal(expected, received);
+        Assert.Equal(1, client.Statistics.RawFrames);
+        Assert.Equal(1, client.Statistics.CompressedFrames);
+    }
+
+    [Fact]
+    public async Task LoweringTheThresholdCompressesPayloadsTheDefaultWouldLeaveRaw()
+    {
+        // The threshold is policy, not a hard rule: an operator who measures a win at a smaller size on
+        // their own link can still opt in. Here a 4 KiB payload is compressed only because the policy
+        // was lowered to 4 KiB for this writer.
+        var payload = new byte[4096];
+        Array.Fill(payload, (byte)'Q');
+
+        var sink = new MemoryTransport();
+        await using (var writer = new Lz4Transport(sink, new Lz4Options { ThresholdBytes = 4096 }))
+        {
+            await writer.WritePayloadAsync(PayloadKind.Bulk, payload, CancellationToken.None);
+            Assert.Equal(1, writer.Statistics.CompressedFrames);
+            Assert.Equal(0, writer.Statistics.RawFrames);
+        }
+
+        Assert.True(sink.Written.Length < payload.Length / 4);
+    }
+
+    [Fact]
     public async Task IncompressiblePayloadFallsBackToRaw()
     {
         await using var pair = await Harness.ConnectAsync(
@@ -419,7 +473,9 @@ public sealed class SessionTests
     [Fact]
     public async Task CorruptedFrameIsDetectedByTheReader()
     {
-        var payload = new byte[4096];
+        // At or above the threshold, so this really is a compressed frame on the wire and not the raw
+        // fallback: below the default threshold the test would still pass while testing nothing.
+        var payload = new byte[64 * 1024];
         Array.Fill(payload, (byte)'Z');
 
         var sink = new MemoryTransport();
@@ -445,7 +501,8 @@ public sealed class SessionTests
     [Fact]
     public async Task TruncatedFrameIsDetected()
     {
-        var payload = new byte[2048];
+        // At or above the threshold: see CorruptedFrameIsDetectedByTheReader for why the size matters.
+        var payload = new byte[64 * 1024];
         var sink = new MemoryTransport();
         await using (var writer = new Lz4Transport(sink, new Lz4Options()))
         {

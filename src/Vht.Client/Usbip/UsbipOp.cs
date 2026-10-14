@@ -130,6 +130,78 @@ internal static class UsbipOp
         return ImportResult.From(status, device);
     }
 
+    /// <summary>
+    /// Sends VirtualThere's own <c>OP_REQ_VHT_DEVINFO</c> and returns busid → nickname for every
+    /// device the peer exports (docs/SERVER.md §8). Devices with no nickname configured are
+    /// absent from the result.
+    /// </summary>
+    /// <remarks>
+    /// This is an extension, not stock USB/IP: a peer that does not implement it closes the
+    /// connection (that is what usbipd does with an unknown op), so callers must run it on a
+    /// connection of its own and treat a failure as "this peer has no nicknames", never as a
+    /// failure of the peer. It never replaces OP_REQ_DEVLIST — the stock list is still the
+    /// authority on what exists.
+    /// </remarks>
+    internal static async Task<IReadOnlyDictionary<string, string>> ReadNicknamesAsync(
+        IClientTransport transport,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(transport);
+
+        var request = new byte[UsbipProtocol.VhtDeviceInfoRequestSize];
+        BigEndian.WriteU16(request, UsbipProtocol.Version);
+        BigEndian.WriteU16(request.AsSpan(2), UsbipProtocol.OpReqVhtDevInfo);
+        BigEndian.WriteU32(request.AsSpan(4), 0u);
+        BigEndian.WriteU32(request.AsSpan(UsbipProtocol.OpCommonSize), UsbipProtocol.VhtDevInfoMagic);
+        await transport.WriteAsync(request, ct).ConfigureAwait(false);
+
+        var head = new byte[UsbipProtocol.OpCommonSize + 8];
+        await ReadExactlyAsync(transport, head, ct, "OP_REP_VHT_DEVINFO header").ConfigureAwait(false);
+        RequireReply(head, UsbipProtocol.OpRepVhtDevInfo);
+
+        if (BigEndian.ReadU32(head.AsSpan(UsbipProtocol.OpCommonSize)) != UsbipProtocol.VhtDevInfoMagic)
+        {
+            throw new UsbipProtocolException(
+                "peer answered OP_REQ_VHT_DEVINFO without the VHT1 magic; refusing to guess at its layout.");
+        }
+
+        uint count = BigEndian.ReadU32(head.AsSpan(UsbipProtocol.OpCommonSize + 4));
+        if (count > UsbipProtocol.MaxVhtDeviceInfoEntries)
+        {
+            throw new UsbipProtocolException(
+                $"peer announced {count} device-info entries, above the {UsbipProtocol.MaxVhtDeviceInfoEntries} " +
+                "parse bound. Refusing to allocate from an unvalidated length.");
+        }
+
+        var nicknames = new Dictionary<string, string>(StringComparer.Ordinal);
+        var entryHeader = new byte[UsbipProtocol.VhtDeviceInfoEntryHeaderSize];
+
+        for (uint i = 0; i < count; i++)
+        {
+            await ReadExactlyAsync(transport, entryHeader, ct, $"device-info entry #{i}").ConfigureAwait(false);
+            string busId = BigEndian.ReadCString(entryHeader.AsSpan(0, UsbipProtocol.BusIdSize));
+            int nameLength = entryHeader[UsbipProtocol.BusIdSize];
+
+            if (nameLength > UsbipProtocol.VhtNicknameMaxBytes)
+            {
+                throw new UsbipProtocolException(
+                    $"device-info entry '{busId}' declares a {nameLength}-byte name, above the " +
+                    $"{UsbipProtocol.VhtNicknameMaxBytes}-byte maximum; the frame cannot be trusted.");
+            }
+
+            if (nameLength == 0)
+            {
+                continue;
+            }
+
+            var nameBytes = new byte[nameLength];
+            await ReadExactlyAsync(transport, nameBytes, ct, $"nickname of '{busId}'").ConfigureAwait(false);
+            nicknames[busId] = System.Text.Encoding.UTF8.GetString(nameBytes);
+        }
+
+        return nicknames;
+    }
+
     /// <summary>Parses one 312-byte usbip_usb_device. Field offsets are fixed by the spec.</summary>
     internal static UsbipDeviceRecord ParseDeviceRecord(ReadOnlySpan<byte> record)
     {

@@ -64,14 +64,14 @@ requires the .NET 10 Desktop Runtime and is not what `release` builds.
 | Item | Where / what |
 |---|---|
 | `vht-server.exe`, `vht-client.exe`, `vht-tray.exe`, `vht.exe` | `%ProgramFiles%\VirtualThere` |
-| `vht-server` service | display name **VirtualThere USB Server**, `LocalSystem`, automatic start, description "Shares this machine's USB devices over USB/IP. Free and unlimited; no licence step." |
+| `vht-server` service | display name **VirtualThere USB Server**, `LocalSystem`, automatic start, description "Shares this machine's USB devices over USB/IP. Free and unlimited." |
 | Virtual host controller driver | the pinned upstream package, installed through its own silent switches by `scripts\Install-Driver.ps1` (section 4) |
 | Windows Firewall | two inbound TCP rules — `VirtualThere USB/IP (TCP 3240)` and `VirtualThere USB/IP TLS (TCP 3241)` — scoped to `vht-server.exe`, all profiles; Windows Installer removes them on uninstall |
 | Client logon task | scheduled task **VirtualThere Client**, at logon, highest run level, runs `vht-client.exe serve` (section 3) |
 | Tray logon entry | `HKLM\...\CurrentVersion\Run` value `VirtualThereTray` → `vht-tray.exe --mode server --minimized` |
 | Start menu | folder **VirtualThere**: "VirtualThere Server", "VirtualThere Client", "VirtualThere Command Line" |
 | Add/Remove Programs | product **VirtualThere**, publisher VirtualThere, version from the single version source (section 6), comment "Free and unlimited, Apache-2.0. No licence key and no device limit." |
-| Registry | `HKLM\SOFTWARE\VirtualThere` — `InstallDir`, `InstalledBy` |
+| Registry | `HKLM\SOFTWARE\VirtualThere` — `InstallDir` |
 | Docs | `%ProgramFiles%\VirtualThere\docs\PACKAGING.md` (this file) |
 | Driver notices | `%ProgramFiles%\VirtualThere\driver\usbip-win2-LICENSE.txt`, `usbip-win2-SHA256SUMS` |
 
@@ -125,6 +125,9 @@ card asks for (the reference product's warn-and-restart-elevated message is its 
   → "the usbip-win2 UDE host-controller driver (GUID_DEVINTERFACE_USBIP_VHCI) is not installed…".
 * `Setup-Portable.ps1 -Action Install|Uninstall` unelevated → prints the exact elevated command to
   re-run and exits **3**, distinct from a real failure (1), having changed nothing.
+* `Install-Driver.ps1` unelevated → the same message and exit **3**, before the vendor package is
+  touched (so an unelevated run can never raise the vendor installer's own UAC prompt).
+* `Uninstall-Driver.ps1` unelevated → the same message and exit 1.
 
 ## 4. Driver deployment and signing
 
