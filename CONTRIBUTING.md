@@ -46,6 +46,23 @@ Run a single suite while iterating:
 dotnet test tests/Vht.Core.Tests/Vht.Core.Tests.csproj
 ```
 
+### The acceptance harness is not (yet) part of that command
+
+`tests/Vht.Acceptance` (the `vht-accept` rig) and `tests/Vht.Acceptance.Tests` (the parity suite) are
+**not listed in `VirtualThere.slnx`**, so `dotnet test VirtualThere.slnx` neither builds nor runs
+them. That is a known gap, tracked as follow-up work: wiring them into the solution and the CI
+`parity` job is the next step, and until it lands a green `dotnet test VirtualThere.slnx` says
+nothing about the parity suite. Run them directly when you touch them:
+
+```bash
+dotnet test tests/Vht.Acceptance.Tests/Vht.Acceptance.Tests.csproj -c Release
+dotnet run  --project tests/Vht.Acceptance -c Release -- multi --devices 6 --seconds 3
+dotnet run  --project tests/Vht.Acceptance -c Release -- licence      # no-licence-gate negative test
+```
+
+The rig writes its evidence to `artifacts/acceptance/`. Verbs that cannot run in your environment
+exit 78 and say so; a `NOT RUN` is never a pass, and neither is a suite that was skipped.
+
 ## Where things live
 
 | Path | Contents |
