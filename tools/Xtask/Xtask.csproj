@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Xtask — the release build entry point (ARCHITECTURE.md §9):
+        dotnet run [project tools/Xtask] [release]
+    Owner card: t_428614c4 (packaging). It is a build-time tool: it is never shipped in any
+    release artifact and has no NuGet dependencies.
+
+    It is deliberately a plain console project that drives `dotnet` and `wix` as child processes,
+    because the thing being verified is the artifacts those tools produce, not a reimplementation
+    of them.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Xtask</RootNamespace>
+    <AssemblyName>xtask</AssemblyName>
+    <PublishAot>false</PublishAot>
+    <!-- The analyzer set is on repo-wide (Directory.Build.props); this file keeps it honest. -->
+    <RunAnalyzersDuringBuild>true</RunAnalyzersDuringBuild>
+  </PropertyGroup>
+
+</Project>

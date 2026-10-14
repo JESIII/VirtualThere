@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  VirtualThere — Windows installer (MSI) source. Owner card: t_428614c4.
+
+  Built by tools/Xtask (`xtask installer`, or `xtask release`); see installer/PACKAGING.md for the
+  deployment model, the driver strategy and the versioning/update story.
+
+  What this package does, in one place, so it can be reviewed at a glance:
+    * installs the four binaries into %ProgramFiles%\VirtualThere
+    * registers and starts the vht-server Windows service (name: vht-server)
+    * installs the pinned third-party UDE host-controller driver via the upstream vendor package,
+      hash-verified before it is executed (scripts\Install-Driver.ps1)
+    * removes that driver on uninstall, with a pnputil backstop, and verifies it is gone
+    * opens the two USB/IP listening ports in Windows Firewall (TCP 3240 plaintext, 3241 TLS)
+      and Windows Installer removes those rules again on uninstall
+    * gives the client the privilege it needs without a UAC prompt at every logon: a logon task
+      with the highest run level (scripts\Install-ClientTask.ps1)
+    * adds a logon entry for the tray UI, Start-menu shortcuts, and the Add/Remove Programs entry
+
+  Deliberately absent: any key-entry or agreement page, activation, purchase prompt, device count or
+  "unlicensed" state. VirtualThere has no such concept (ARCHITECTURE.md §5.4), and Xtask's `verify`
+  verb greps the built package for that vocabulary. Nothing here names the product this project is
+  behaviourally compared with.
+
+  Preprocessor variables, all supplied by Xtask:
+    var.Version    product version (from Directory.Build.props)
+    var.BinDir     directory holding the four published executables
+    var.DriverDir  third_party\usbip-win2-driver (pinned, verbatim)
+    var.ScriptDir  installer\scripts
+    var.DocDir     installer (for PACKAGING.md)
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
+     xmlns:fire="http://wixtoolset.org/schemas/v4/wxs/firewall">
+
+  <Package Name="VirtualThere"
+           Manufacturer="VirtualThere"
+           Version="$(var.Version)"
+           UpgradeCode="63376925-1CE3-4FD2-89BD-B884E45EA7E2"
+           Scope="perMachine"
+           Compressed="yes"
+           InstallerVersion="500"
+           Language="1033"
+           Codepage="65001">
+
+    <SummaryInformation
+      Manufacturer="VirtualThere"
+      Description="VirtualThere $(var.Version) — share this machine's USB devices over USB/IP with any compatible client. Free and unlimited: no key entry, no device limit." />
+
+    <!-- Major upgrade: a newer MSI replaces an older one in place (PACKAGING.md §6). -->
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="A newer version of VirtualThere is already installed. Uninstall it first if you really need to downgrade to $(var.Version)." />
+
+    <Launch Condition="Installed OR VersionNT &gt;= 1000"
+            Message="VirtualThere needs Windows 10 or later: the client-side virtual host controller uses the UsbDeviceEmulation driver model (Windows 10 1903+) and device discovery uses the in-box Windows DNSAPI." />
+
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <!-- Add/Remove Programs. WIXUI_INSTALLDIR is what WixUI_InstallDir binds the directory page to. -->
+    <Property Id="ARPCOMMENTS" Value="Free and unlimited, Apache-2.0. No key entry and no device limit." />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <ui:WixUI Id="WixUI_InstallDir" />
+
+    <!--
+      Escape hatch for a machine where the driver must be left alone (e.g. another product's copy of
+      the same upstream driver is in use):
+          msiexec /x VirtualThere-$(var.Version)-x64.msi SKIPDRIVERUNINSTALL=1
+      Documented in PACKAGING.md §5.
+    -->
+    <Property Id="SKIPDRIVERUNINSTALL" Value="0" Secure="yes" />
+
+    <!--
+      Close a running tray or client before their files are replaced. Without this, a major upgrade
+      with the tray running would need a reboot; with it the processes are closed (no message, no
+      prompt) and terminated after 15 s. TerminateProcess carries the exit code used when a process
+      will not go away, and requires RebootPrompt="no".
+    -->
+    <util:CloseApplication Id="CloseRunningTray"
+                           Target="vht-tray.exe"
+                           CloseMessage="no" PromptToContinue="no" RebootPrompt="no"
+                           Timeout="15" TerminateProcess="1" />
+    <util:CloseApplication Id="CloseRunningClient"
+                           Target="vht-client.exe"
+                           CloseMessage="no" PromptToContinue="no" RebootPrompt="no"
+                           Timeout="15" TerminateProcess="1" />
+
+    <!-- ============================ files ============================ -->
+
+    <StandardDirectory Id="ProgramFiles6432Folder">
+      <Directory Id="INSTALLFOLDER" Name="VirtualThere">
+
+        <!--
+          The server binary, its service registration and the firewall rules for its two listeners
+          live in one component, so the file the SCM starts is exactly the file the installer owns,
+          and uninstalling that component removes the rules with it. Service name, display name and
+          start type match Vht.Interop.ServiceControl (DefaultServiceName / DefaultDisplayName) so
+          the MSI and `vht-server install` produce the same service object.
+        -->
+        <Component Id="ServerExeComponent" Guid="C8ED9A2F-B5F1-4A71-A688-6FA04ECDC5A0">
+          <File Id="VhtServerExe" Source="$(var.BinDir)\vht-server.exe" KeyPath="yes" Vital="yes">
+            <!--
+              Nested under the File element, so the rule is scoped to that program by definition -
+              the same thing `program=` does in the netsh equivalent in scripts\Setup-Portable.ps1.
+              Rule names and ports must stay identical to that script's (portable mode uses netsh,
+              because it has no MSI to declare the rules in); Xtask's `verify` verb checks that the
+              two agree.
+            -->
+            <fire:FirewallException Id="FirewallPort3240"
+                                    Name="VirtualThere USB/IP (TCP 3240)"
+                                    Port="3240" Protocol="tcp" Profile="all" Scope="any"
+                                    Description="VirtualThere USB/IP plaintext listener (for stock USB/IP clients)." />
+            <fire:FirewallException Id="FirewallPort3241"
+                                    Name="VirtualThere USB/IP TLS (TCP 3241)"
+                                    Port="3241" Protocol="tcp" Profile="all" Scope="any"
+                                    Description="VirtualThere USB/IP TLS listener (required for devices with a password)." />
+          </File>
+          <ServiceInstall Id="VhtServerService"
+                          Name="vht-server"
+                          DisplayName="VirtualThere USB Server"
+                          Description="Shares this machine's USB devices over USB/IP. Free and unlimited."
+                          Type="ownProcess"
+                          Start="auto"
+                          ErrorControl="normal"
+                          Account="LocalSystem"
+                          Vital="yes" />
+          <ServiceControl Id="VhtServerServiceControl"
+                          Name="vht-server"
+                          Start="install"
+                          Stop="both"
+                          Remove="uninstall"
+                          Wait="yes" />
+        </Component>
+
+        <Component Id="ClientExeComponent" Guid="A81B246B-F5E5-4D3C-8A57-E541DA753C56">
+          <File Id="VhtClientExe" Source="$(var.BinDir)\vht-client.exe" KeyPath="yes" Vital="yes" />
+        </Component>
+
+        <Component Id="TrayExeComponent" Guid="058611CA-86EB-4958-8673-A238F9A2C113">
+          <File Id="VhtTrayExe" Source="$(var.BinDir)\vht-tray.exe" KeyPath="yes" Vital="yes" />
+        </Component>
+
+        <Component Id="CliExeComponent" Guid="53B7807D-2CCA-452B-9C37-413641EB2094">
+          <File Id="VhtCliExe" Source="$(var.BinDir)\vht.exe" KeyPath="yes" Vital="yes" />
+        </Component>
+
+        <Component Id="RunKeyComponent" Guid="399A69E6-19BA-4D31-A266-25C931471F76">
+          <!-- The tray is a viewer/controller for the service; it runs unelevated. -->
+          <RegistryValue Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+                         Name="VirtualThereTray"
+                         Type="string"
+                         Value="&quot;[INSTALLFOLDER]vht-tray.exe&quot; --mode server --minimized"
+                         KeyPath="yes" />
+        </Component>
+
+        <Directory Id="ScriptsFolder" Name="scripts">
+          <Component Id="ScriptsComponent" Guid="138D130A-C54D-4967-ABE9-A0D5F4B5E883">
+            <File Id="ScriptInstallDriver" Source="$(var.ScriptDir)\Install-Driver.ps1" KeyPath="yes" />
+            <File Id="ScriptUninstallDriver" Source="$(var.ScriptDir)\Uninstall-Driver.ps1" />
+            <File Id="ScriptInstallClientTask" Source="$(var.ScriptDir)\Install-ClientTask.ps1" />
+            <File Id="ScriptRemoveClientTask" Source="$(var.ScriptDir)\Remove-ClientTask.ps1" />
+            <File Id="ScriptSetupPortable" Source="$(var.ScriptDir)\Setup-Portable.ps1" />
+          </Component>
+        </Directory>
+
+        <Directory Id="DriverFolder" Name="driver">
+          <Component Id="DriverInstallerComponent" Guid="313AB866-FBAA-4D2A-B4FE-0039ECDDF34F">
+            <File Id="DriverVendorInstaller" Source="$(var.DriverDir)\USBip-0.9.8.1-x64.exe" KeyPath="yes" />
+          </Component>
+          <Component Id="DriverNoticeComponent" Guid="95FB6FF5-7190-4850-BF84-0B48DC416EFE">
+            <!-- Attribution for the one third-party binary we redistribute (BSD-2-Clause). -->
+            <File Id="DriverNoticeLicense" Source="$(var.DriverDir)\LICENSE.txt" Name="usbip-win2-LICENSE.txt" KeyPath="yes" />
+            <File Id="DriverNoticeSums" Source="$(var.DriverDir)\SHA256SUMS" Name="usbip-win2-SHA256SUMS" />
+          </Component>
+        </Directory>
+
+        <Directory Id="DocsFolder" Name="docs">
+          <Component Id="DocsComponent" Guid="572F66D8-15B3-425A-8EE6-C995D0D5AFC1">
+            <File Id="DocPackaging" Source="$(var.DocDir)\PACKAGING.md" KeyPath="yes" />
+          </Component>
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ProgramMenuVirtualThereFolder" Name="VirtualThere">
+        <Component Id="StartMenuComponent" Guid="259F7341-129E-43AE-A605-640FB5594365">
+          <Shortcut Id="ShortcutServerTray"
+                    Name="VirtualThere Server"
+                    Description="Manage the VirtualThere USB/IP server (devices, clients, log)."
+                    Target="[INSTALLFOLDER]vht-tray.exe"
+                    Arguments="--mode server"
+                    WorkingDirectory="INSTALLFOLDER" />
+          <Shortcut Id="ShortcutClientTray"
+                    Name="VirtualThere Client"
+                    Description="Manage attached remote USB devices."
+                    Target="[INSTALLFOLDER]vht-tray.exe"
+                    Arguments="--mode client"
+                    WorkingDirectory="INSTALLFOLDER" />
+          <Shortcut Id="ShortcutCli"
+                    Name="VirtualThere Command Line"
+                    Description="Run vht / vht-server / vht-client verbs in a console window."
+                    Target="[System64Folder]cmd.exe"
+                    Arguments='/k &quot;[INSTALLFOLDER]vht.exe&quot; help'
+                    WorkingDirectory="INSTALLFOLDER" />
+          <RemoveFolder Id="RemoveProgramMenuVirtualThereFolder" Directory="ProgramMenuVirtualThereFolder" On="uninstall" />
+          <RegistryValue Root="HKLM" Key="SOFTWARE\VirtualThere" Name="InstallDir"
+                         Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+  </Package>
+
+  <!-- ============================ custom actions ============================ -->
+
+  <Fragment>
+    <!--
+      Type 34 custom actions: a working directory plus a command line. Deferred and impersonated, so
+      they run with the administrator's elevated token (the package is perMachine, which means the
+      install is already elevated) and as SYSTEM when an unattended deployment starts it that way.
+      Each script logs to %ProgramData%\VirtualThere\logs and returns a real exit code, which is what
+      Return="check" reacts to. The command line is captured into CustomActionData when the action is
+      scheduled, so [INSTALLFOLDER] is resolved correctly even though the action itself is deferred.
+
+      Deliberately not util:QuietExec (WiX v5 dropped that element), and a deferred action has no
+      interactive window station, so no console window can appear.
+
+      Ordering and conditions are in the InstallExecuteSequence fragment below.
+    -->
+    <CustomAction Id="InstallDriverAction"
+                  Directory="System64Folder"
+                  ExeCommand="[System64Folder]WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]scripts\Install-Driver.ps1&quot;"
+                  Execute="deferred" Impersonate="yes" Return="check" />
+    <CustomAction Id="UninstallDriverAction"
+                  Directory="System64Folder"
+                  ExeCommand="[System64Folder]WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]scripts\Uninstall-Driver.ps1&quot;"
+                  Execute="deferred" Impersonate="yes" Return="check" />
+    <CustomAction Id="InstallClientTaskAction"
+                  Directory="System64Folder"
+                  ExeCommand="[System64Folder]WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]scripts\Install-ClientTask.ps1&quot; -ClientExe &quot;[INSTALLFOLDER]vht-client.exe&quot;"
+                  Execute="deferred" Impersonate="yes" Return="check" />
+    <CustomAction Id="RemoveClientTaskAction"
+                  Directory="System64Folder"
+                  ExeCommand="[System64Folder]WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]scripts\Remove-ClientTask.ps1&quot;"
+                  Execute="deferred" Impersonate="yes" Return="check" />
+  </Fragment>
+
+  <Fragment>
+    <InstallExecuteSequence>
+      <!--
+        Driver first: the client is useless without it, and an early failure is cheaper than a late
+        one. On uninstall the driver goes last, so an upgrade never leaves the machine without a
+        working controller between the old and the new install.
+      -->
+      <Custom Action="InstallDriverAction" After="InstallFiles"
+              Condition="NOT Installed OR REINSTALL" />
+      <Custom Action="RemoveClientTaskAction" After="InstallFiles"
+              Condition="NOT Installed OR REINSTALL" />
+      <Custom Action="InstallClientTaskAction" After="RemoveClientTaskAction"
+              Condition="NOT Installed OR REINSTALL" />
+
+      <!-- Uninstall: stop the client task before the binaries go away, then take the driver out. -->
+      <Custom Action="RemoveClientTaskAction" Before="RemoveFiles"
+              Condition="REMOVE~=&quot;ALL&quot;" />
+      <Custom Action="UninstallDriverAction" Before="RemoveFiles"
+              Condition="REMOVE~=&quot;ALL&quot; AND NOT SKIPDRIVERUNINSTALL" />
+    </InstallExecuteSequence>
+  </Fragment>
+</Wix>

@@ -1,0 +1,689 @@
+﻿{
+  "verbCounts": {
+    "server.status": 15,
+    "devices.list": 15,
+    "log.tail": 26,
+    "server.start": 1,
+    "devices.nickname": 1,
+    "devices.ignore": 1,
+    "devices.password": 1,
+    "devices.kick": 1,
+    "peers.list": 11,
+    "clients.attach": 4,
+    "clients.detach": 1,
+    "peers.add": 1
+  },
+  "totalRequests": 78,
+  "requests": [
+    {
+      "verb": "server.status",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "server.status"
+      }
+    },
+    {
+      "verb": "devices.list",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "devices.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "server.start",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "server.start"
+      }
+    },
+    {
+      "verb": "server.status",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "server.status"
+      }
+    },
+    {
+      "verb": "devices.list",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "devices.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "devices.nickname",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "devices.nickname",
+        "key": "usb\\vid_04b8\u0026pid_0202\\5\u00262b3c4d5e\u00260\u00261",
+        "nickname": "Front-desk label printer"
+      }
+    },
+    {
+      "verb": "server.status",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "server.status"
+      }
+    },
+    {
+      "verb": "devices.list",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "devices.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "server.status",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "server.status"
+      }
+    },
+    {
+      "verb": "devices.list",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "devices.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "devices.ignore",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "devices.ignore",
+        "key": "usb\\vid_10c4\u0026pid_ea60\\5\u0026708192a3\u00260\u00261"
+      }
+    },
+    {
+      "verb": "server.status",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "server.status"
+      }
+    },
+    {
+      "verb": "devices.list",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "devices.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "server.status",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "server.status"
+      }
+    },
+    {
+      "verb": "devices.list",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "devices.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "devices.password",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "devices.password",
+        "key": "usb\\vid_046d\u0026pid_0a38\\5\u00263c4d5e6f\u00260\u00261",
+        "password": "device-secret"
+      }
+    },
+    {
+      "verb": "server.status",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "server.status"
+      }
+    },
+    {
+      "verb": "devices.list",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "devices.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "devices.kick",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "devices.kick",
+        "key": "usb\\vid_046d\u0026pid_c52b\\5\u00261a2b3c4d\u00260\u00262"
+      }
+    },
+    {
+      "verb": "server.status",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "server.status"
+      }
+    },
+    {
+      "verb": "devices.list",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "devices.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "server.status",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "server.status"
+      }
+    },
+    {
+      "verb": "devices.list",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "devices.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "server.status",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "server.status"
+      }
+    },
+    {
+      "verb": "devices.list",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "devices.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "server.status",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "server.status"
+      }
+    },
+    {
+      "verb": "devices.list",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "devices.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "server.status",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "server.status"
+      }
+    },
+    {
+      "verb": "devices.list",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "devices.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "server.status",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "server.status"
+      }
+    },
+    {
+      "verb": "devices.list",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "devices.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "peers.list",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "peers.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "server.status",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "server.status"
+      }
+    },
+    {
+      "verb": "devices.list",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "devices.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "peers.list",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "peers.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "clients.attach",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "clients.attach",
+        "peer": "workshop-pi",
+        "busid": "1-3"
+      }
+    },
+    {
+      "verb": "peers.list",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "peers.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "clients.attach",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "clients.attach",
+        "peer": "workshop-pi",
+        "busid": "1-4"
+      }
+    },
+    {
+      "verb": "peers.list",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "peers.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "clients.attach",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "clients.attach",
+        "peer": "workshop-pi",
+        "busid": "1-4",
+        "auto": true
+      }
+    },
+    {
+      "verb": "peers.list",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "peers.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "server.status",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "server.status"
+      }
+    },
+    {
+      "verb": "clients.detach",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "clients.detach",
+        "peer": "workshop-pi",
+        "busid": "1-4"
+      }
+    },
+    {
+      "verb": "peers.list",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "peers.list"
+      }
+    },
+    {
+      "verb": "devices.list",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "devices.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-server",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "peers.list",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "peers.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "clients.attach",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "clients.attach",
+        "peer": "workshop-pi",
+        "busid": "1-4"
+      }
+    },
+    {
+      "verb": "peers.list",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "peers.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "peers.add",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "peers.add",
+        "host": "10.0.0.9",
+        "port": 3241,
+        "name": null
+      }
+    },
+    {
+      "verb": "peers.list",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "peers.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "peers.list",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "peers.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    },
+    {
+      "verb": "peers.list",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "peers.list"
+      }
+    },
+    {
+      "verb": "log.tail",
+      "pipe": "vht-ui-driver-client",
+      "ok": true,
+      "request": {
+        "verb": "log.tail",
+        "max": 400
+      }
+    }
+  ]
+}

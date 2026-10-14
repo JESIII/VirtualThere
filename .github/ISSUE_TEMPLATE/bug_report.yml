@@ -1,0 +1,92 @@
+name: Bug report
+description: Something does not work - a crash, a wrong result, a device that will not attach.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Two things make a report actionable: **exact commands** and **actual
+        output**. Please do not paste device passwords or full device serial numbers.
+
+        Before filing, check `docs/TROUBLESHOOTING.md` and `docs/FAQ.md`, and read the
+        "Known limitations" section of `README.md` - several common results are documented behavior
+        (for example: no installer yet, no TLS in the shipped binaries, isochronous devices
+        unsupported, capture refused for a device its driver holds).
+
+  - type: input
+    id: version
+    attributes:
+      label: VirtualThere version / commit
+      description: Output of `vht version`, or the commit SHA you built from.
+      placeholder: "VirtualThere 0.1.0 (USB/IP 1.1.1)"
+    validations:
+      required: true
+
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: Windows version, `dotnet --version`, and which machine is which (server/client).
+      placeholder: "Windows 11 23H2 (26100), .NET 10.0.402, server = desktop, client = laptop"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - vht-server / vht (server, service, CLI)
+        - vht-client (attach, peers, bridge)
+        - vht-tray (UI)
+        - Vht.Transport (TLS / LZ4 / auth library)
+        - Vht.Config (config, discovery, identity - config parsing, discovery, device identity)
+        - Build / CI / packaging
+        - Documentation
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands, in order, from a clean state.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What actually happened
+      description: Paste the real output, including any error text. `vht status` / `vht-client status` output helps.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant log lines (console, or the file written with `--log`). Redact serials/passwords.
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before filing
+      options:
+        - label: I checked "Known limitations" in README.md and this is not one of them.
+          required: true
+        - label: This report contains no passwords, keys or device serial numbers.
+          required: true

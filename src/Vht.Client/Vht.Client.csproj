@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    vht-client — owner card client-workstream (write scope: src/Vht.Client/**, see docs/ARCHITECTURE.md
+    Appendix A). Properties are declared here rather than relying on a root Directory.Build.props so
+    this project builds standalone while the sibling cards (Vht.Core / Vht.Transport / Vht.Config)
+    are still in flight — ARCHITECTURE.md Appendix A note 1. If a root Directory.Build.props appears
+    later, the properties below still win (Directory.Build.props is imported before this body).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>Vht.Client</RootNamespace>
+    <AssemblyName>vht-client</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <Deterministic>true</Deterministic>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+    <!--
+      CA1416 (platform-compat): the project targets net10.0-windows, but a handful of APIs used by
+      tests/harness helpers are annotated Windows-only-only-on-x64. The whole assembly is Windows-only
+      by TFM, so the analyzer adds nothing here.
+    -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      The test project lives under this card's write scope (src/Vht.Client/Tests) because tests/ is
+      split between the sibling cards (ARCHITECTURE.md App. A). Excluding it here keeps the product
+      assembly free of xunit references — the default glob would otherwise compile the tests into it.
+    -->
+    <Compile Remove="Tests/**/*.cs" />
+    <None Remove="Tests/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      The client's types are internal by design (nothing here is a public API surface yet). The test
+      project is the one legitimate consumer of them, so it gets access explicitly rather than the
+      code being made public to satisfy a test.
+    -->
+    <InternalsVisibleTo Include="Vht.Client.Tests" />
+  </ItemGroup>
+
+</Project>

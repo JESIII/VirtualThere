@@ -1,0 +1,10 @@
+VirtualThere
+Copyright 2026 John Scales and the VirtualThere contributors
+
+This product includes software developed by third parties. See
+THIRD_PARTY_NOTICES.md for the full list of components, their versions, their
+licences and the provenance of each.
+
+This product is an independent implementation of the open USB/IP protocol. It
+contains no code from, and is not affiliated with, VirtualHere Pty. Ltd.; see
+LEGAL.md.

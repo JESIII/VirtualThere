@@ -1,0 +1,59 @@
+<Window x:Class="Vht.Ui.Views.PromptWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="440"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource WindowBackground}"
+        AutomationProperties.Name="VirtualThere input">
+  <StackPanel Margin="16">
+    <TextBlock x:Name="LabelText" TextWrapping="Wrap" Margin="0,0,0,8" />
+
+    <TextBox x:Name="ValueBox"
+             Height="26"
+             VerticalContentAlignment="Center"
+             AutomationProperties.AutomationId="Value"
+             AutomationProperties.Name="Value"
+             KeyDown="OnBoxKeyDown" />
+
+    <PasswordBox x:Name="SecretBox"
+                 Height="26"
+                 VerticalContentAlignment="Center"
+                 Visibility="Collapsed"
+                 AutomationProperties.AutomationId="Device password"
+                 AutomationProperties.Name="Device password"
+                 KeyDown="OnBoxKeyDown" />
+
+    <CheckBox x:Name="RemoveCheck"
+              Content="Remove the password"
+              Margin="0,10,0,0"
+              Visibility="Collapsed"
+              AutomationProperties.Name="Remove the password"
+              Checked="OnRemoveChecked"
+              Unchecked="OnRemoveChecked" />
+
+    <TextBlock x:Name="HintText"
+               Style="{StaticResource SubtleText}"
+               TextWrapping="Wrap"
+               Margin="0,10,0,0" />
+
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+      <Button x:Name="OkButton"
+              Content="_OK"
+              MinWidth="80"
+              Padding="10,4"
+              IsDefault="True"
+              AutomationProperties.AutomationId="OK"
+              AutomationProperties.Name="OK"
+              Click="OnOkClick" />
+      <Button Content="_Cancel"
+              MinWidth="80"
+              Padding="10,4"
+              Margin="8,0,0,0"
+              IsCancel="True"
+              AutomationProperties.Name="Cancel" />
+    </StackPanel>
+  </StackPanel>
+</Window>

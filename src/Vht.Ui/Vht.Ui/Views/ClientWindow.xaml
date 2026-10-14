@@ -1,0 +1,198 @@
+<views:TrayWindow x:Class="Vht.Ui.Views.ClientWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:Vht.Ui.Views"
+        Title="{Binding Title}"
+        Width="1140" Height="680" MinWidth="860" MinHeight="500"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource WindowBackground}"
+        UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Display"
+        KeyboardNavigation.TabNavigation="Continue"
+        AutomationProperties.Name="VirtualThere Client window">
+  <views:TrayWindow.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVis" />
+  </views:TrayWindow.Resources>
+
+  <Grid Margin="12">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <!-- Header -->
+    <Grid Grid.Row="0" Margin="0,0,0,10">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+
+      <StackPanel Grid.Column="0">
+        <TextBlock Text="{Binding Title}" Style="{StaticResource HeaderText}" AutomationProperties.Name="Client window title" />
+        <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+          <TextBlock Text="Control pipe:" Style="{StaticResource SubtleText}" Margin="0,0,4,0" />
+          <TextBlock Text="{Binding PipeName}" Style="{StaticResource SubtleText}" FontWeight="SemiBold" AutomationProperties.Name="Control pipe name" />
+          <TextBlock Text="  -  attach USB devices exported by remote servers" Style="{StaticResource SubtleText}" />
+        </StackPanel>
+      </StackPanel>
+
+      <Border Grid.Column="1" Style="{StaticResource StatusPill}">
+        <TextBlock Text="{Binding StateText}" Foreground="{StaticResource AccentText}" FontWeight="SemiBold"
+                   AutomationProperties.AutomationId="client-state" />
+      </Border>
+    </Grid>
+
+    <!-- Toolbar -->
+    <WrapPanel Grid.Row="1" Margin="0,0,0,8">
+      <Button x:Name="AttachButton" Content="Attach _selected" Style="{StaticResource ToolbarButton}" MinWidth="110"
+              Command="{Binding AttachSelectedCommand}" AutomationProperties.AutomationId="attach-selected"
+              AutomationProperties.Name="Attach the selected device" />
+      <Button x:Name="DetachButton" Content="Detach selec_ted" Style="{StaticResource ToolbarButton}" MinWidth="110"
+              Command="{Binding DetachSelectedCommand}" AutomationProperties.AutomationId="detach-selected"
+              AutomationProperties.Name="Detach the selected device" />
+      <Button x:Name="AddPeerButton" Content="_Add server..." Style="{StaticResource ToolbarButton}" MinWidth="104"
+              Command="{Binding AddPeerCommand}" AutomationProperties.AutomationId="add-server"
+              AutomationProperties.Name="Add a server by address" />
+      <Button x:Name="RefreshButton" Content="Re_fresh" Style="{StaticResource ToolbarButton}"
+              Command="{Binding RefreshCommand}" AutomationProperties.AutomationId="refresh"
+              AutomationProperties.Name="Refresh discovered servers" />
+      <Button x:Name="MinimizeButton" Content="Minimi_ze to tray" Style="{StaticResource ToolbarButton}" MinWidth="120"
+              Command="{Binding MinimizeCommand}" AutomationProperties.AutomationId="minimize"
+              AutomationProperties.Name="Minimize to notification area" />
+      <Button x:Name="LogButton" Content="_Log" Style="{StaticResource ToolbarButton}"
+              Command="{Binding ToggleLogCommand}" AutomationProperties.AutomationId="toggle-log"
+              AutomationProperties.Name="Show or hide the log viewer" />
+      <Button x:Name="AboutButton" Content="A_bout" Style="{StaticResource ToolbarButton}"
+              Command="{Binding AboutCommand}" AutomationProperties.AutomationId="about"
+              AutomationProperties.Name="About VirtualThere" />
+      <Button x:Name="ExitButton" Content="E_xit" Style="{StaticResource ToolbarButton}"
+              Command="{Binding ExitCommand}" AutomationProperties.AutomationId="exit"
+              AutomationProperties.Name="Exit the tray application" />
+    </WrapPanel>
+
+    <!-- Servers (left) and their exported devices (right) -->
+    <Grid Grid.Row="2">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="290" MinWidth="200" />
+        <ColumnDefinition Width="6" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+
+      <Border Grid.Column="0" Style="{StaticResource PanelBorderStyle}">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Top" Text="Servers" FontWeight="SemiBold" Margin="2,0,0,6" />
+          <ListBox x:Name="PeerList"
+                   ItemsSource="{Binding Peers}"
+                   SelectedItem="{Binding SelectedPeer, Mode=TwoWay}"
+                   AutomationProperties.Name="Discovered servers">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <StackPanel Margin="2,3">
+                  <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="{Binding AddressText}" Style="{StaticResource SubtleText}" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Style="{StaticResource SubtleText}" TextTrimming="CharacterEllipsis">
+                    <Run Text="{Binding StatusText, Mode=OneWay}" />
+                    <Run Text=" - " />
+                    <Run Text="{Binding SourceText, Mode=OneWay}" />
+                  </TextBlock>
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
+      </Border>
+
+      <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" />
+
+      <Grid Grid.Column="2">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <DockPanel Grid.Row="0" Margin="2,0,0,6">
+          <!-- The SubtleText style targets TextBlock, so it must not be applied to an inline Run. -->
+          <TextBlock DockPanel.Dock="Left" FontWeight="SemiBold" Foreground="{StaticResource TextSecondary}"
+                     AutomationProperties.Name="Selected server">
+            <Run Text="{Binding SelectedPeer.DisplayName, Mode=OneWay}" />
+            <Run Text="  " />
+            <Run Text="{Binding SelectedPeer.AddressText, Mode=OneWay}" />
+          </TextBlock>
+          <Button DockPanel.Dock="Right" HorizontalAlignment="Right" Content="Attach _all devices"
+                  Style="{StaticResource RowButton}" MinWidth="120"
+                  Command="{Binding SelectedPeer.AttachAllCommand}"
+                  AutomationProperties.Name="Attach all devices exported by this server" />
+        </DockPanel>
+
+        <Border Grid.Row="1" Style="{StaticResource PanelBorderStyle}">
+          <DataGrid x:Name="DeviceGrid"
+                    ItemsSource="{Binding Devices}"
+                    SelectedItem="{Binding SelectedDevice, Mode=TwoWay}"
+                    AutomationProperties.Name="Exported devices of the selected server"
+                    ColumnWidth="Auto">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="Device" Binding="{Binding DisplayName}" Width="2*" />
+              <DataGridTextColumn Header="Device ID" Binding="{Binding Identity}" Width="Auto" />
+              <DataGridTextColumn Header="Bus ID" Binding="{Binding BusId}" Width="Auto" />
+              <DataGridTextColumn Header="State" Binding="{Binding StatusText}" Width="2*" />
+              <DataGridTemplateColumn Header="Auto-attach" Width="Auto">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <CheckBox IsChecked="{Binding AutoAttach, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                              ToolTip="Attach this device automatically whenever this server exports it"
+                              AutomationProperties.AutomationId="{Binding AutoAttachAutomationId}"
+                              AutomationProperties.Name="Auto-attach this device" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <!-- Header-only sizing would clip the Attach/Detach button, so width is explicit. -->
+              <DataGridTemplateColumn Header="Actions" Width="100">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <StackPanel Orientation="Horizontal" Margin="2,2">
+                      <Button Content="{Binding AttachButtonText}" Style="{StaticResource RowButton}" MinWidth="70"
+                              Command="{Binding ToggleAttachCommand}"
+                              AutomationProperties.AutomationId="{Binding ToggleAutomationId}"
+                              AutomationProperties.Name="{Binding AttachButtonText}" />
+                    </StackPanel>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+            </DataGrid.Columns>
+          </DataGrid>
+        </Border>
+
+        <TextBlock Grid.Row="1"
+                   Text="{Binding EmptyStateText}"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   Style="{StaticResource SubtleText}"
+                   Visibility="{Binding EmptyStateVisible, Converter={StaticResource BoolToVis}}"
+                   AutomationProperties.Name="No servers message" />
+      </Grid>
+    </Grid>
+
+    <GridSplitter Grid.Row="3" Height="5" HorizontalAlignment="Stretch"
+                  Visibility="{Binding Log.IsVisible, Converter={StaticResource BoolToVis}}" />
+
+    <views:LogView Grid.Row="4"
+                   MinHeight="140"
+                   DataContext="{Binding Log}"
+                   Visibility="{Binding IsVisible, Converter={StaticResource BoolToVis}}" />
+
+    <Grid Grid.Row="5" Margin="0,8,0,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+      <TextBlock Grid.Column="0" Text="{Binding ConnectionText}" Style="{StaticResource SubtleText}"
+                 TextTrimming="CharacterEllipsis" AutomationProperties.Name="Connection status" />
+      <TextBlock Grid.Column="1" Text="{Binding SummaryText}" Style="{StaticResource SubtleText}"
+                 AutomationProperties.Name="Client summary" />
+    </Grid>
+  </Grid>
+</views:TrayWindow>

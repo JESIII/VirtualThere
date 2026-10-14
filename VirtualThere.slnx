@@ -1,0 +1,21 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Vht.Core/Vht.Core.csproj" />
+    <Project Path="src/Vht.Config/Vht.Config.csproj" />
+    <Project Path="src/Vht.Transport/Vht.Transport.csproj" />
+    <Project Path="src/Vht.Interop/Vht.Interop.csproj" />
+    <Project Path="src/Vht.Server/Vht.Server.csproj" />
+    <Project Path="src/Vht.Client/Vht.Client.csproj" />
+    <Project Path="src/Vht.Cli/Vht.Cli.csproj" />
+    <Project Path="src/Vht.Ui/Vht.Ui/Vht.Ui.csproj" />
+    <Project Path="src/Vht.Ui/harness/Vht.Ui.MockService/Vht.Ui.MockService.csproj" />
+    <Project Path="src/Vht.Ui/harness/Vht.Ui.UiDriver/Vht.Ui.UiDriver.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Vht.Core.Tests/Vht.Core.Tests.csproj" />
+    <Project Path="tests/Vht.Config.Tests/Vht.Config.Tests.csproj" />
+    <Project Path="tests/Vht.Transport.Tests/Vht.Transport.Tests.csproj" />
+    <Project Path="tests/Vht.Transport.Bench/Vht.Transport.Bench.csproj" />
+    <Project Path="src/Vht.Client/Tests/Vht.Client.Tests.csproj" />
+  </Folder>
+</Solution>

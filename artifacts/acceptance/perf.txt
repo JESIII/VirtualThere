@@ -1,0 +1,8 @@
+﻿VirtualThere acceptance - throughput and transport overhead
+loopback, single process, 3s per case, 64 KiB URBs, 8 in-flight URBs per device
+Synthetic devices; production transport code (Vht.Transport) and production USB/IP codec.
+
+  PlainTcp / 1 dev / incompressible                  2163.0 MB/s
+  PlainTcp / 8 dev / incompressible                  5897.3 MB/s
+  PlainTcp / 1 dev / compressible                    2624.5 MB/s
+  PlainTcp / 8 dev / compressible                    5951.2 MB/s

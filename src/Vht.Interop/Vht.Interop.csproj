@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>Vht.Interop</RootNamespace>
+    <AssemblyName>Vht.Interop</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Description>VirtualThere P/Invoke surface: SetupAPI, CfgMgr32, WinUSB, SCM, DNSAPI, UDE driver IOCTLs. Hotspot: owned by the vht-server card; other cards add new files in their own sub-namespace and never edit existing ones (ARCHITECTURE.md Appendix A).</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The server (and its CLI/tests) consume the internal P/Invoke surface directly rather
+         than through a parallel public wrapper layer: one declaration per OS entry point is the
+         point of this assembly (ARCHITECTURE.md Appendix A). -->
+    <InternalsVisibleTo Include="vht-server" />
+    <InternalsVisibleTo Include="vht" />
+    <InternalsVisibleTo Include="Vht.Core.Tests" />
+  </ItemGroup>
+
+</Project>

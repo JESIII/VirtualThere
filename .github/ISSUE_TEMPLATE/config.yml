@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/JESIII/VirtualThere/tree/main/docs
+    about: Install, server, client, config, transport, troubleshooting and FAQ.
+  - name: Known limitations
+    url: https://github.com/JESIII/VirtualThere#known-limitations
+    about: Read this first - several surprising behaviours are documented, deliberate limitations.
+  - name: Security policy
+    url: https://github.com/JESIII/VirtualThere/security/policy
+    about: Do not open a public issue for a vulnerability; use private vulnerability reporting.
+  - name: Why is this free and unlimited? / legal position
+    url: https://github.com/JESIII/VirtualThere/blob/main/LEGAL.md
+    about: Independent USB/IP implementation, no third-party code, not wire-compatible, not affiliated.

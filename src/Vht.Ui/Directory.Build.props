@@ -1,0 +1,44 @@
+<Project>
+
+  <!--
+    Vht.Ui subtree build settings (owner: task vht-ui).
+
+    This file deliberately does NOT import the repository-root Directory.Build.props:
+    the UI subtree must be buildable on its own while the sibling subsystem cards are
+    still in flight (see docs/ARCHITECTURE.md Appendix A note 1). Every property the UI
+    needs is therefore stated here explicitly rather than inherited.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Deterministic>true</Deterministic>
+    <DebugType>embedded</DebugType>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <!--
+      WFO0003 asks WinForms projects to move DPI settings out of the manifest. This project is
+      a WPF application that merely hosts a WinForms NotifyIcon, so the manifest is the correct
+      and only mechanism that applies (WPF reads DPI awareness from the manifest; the WinForms
+      ApplicationHighDpiMode property is consumed by a WinForms ApplicationConfiguration.Initialize()
+      that a WPF entry point never calls).
+    -->
+    <NoWarn>$(NoWarn);WFO0003;NETSDK1137</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Version>0.1.0</Version>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+    <FileVersion>0.1.0.0</FileVersion>
+    <Authors>VirtualThere contributors</Authors>
+    <Company>VirtualThere contributors</Company>
+    <Copyright>VirtualThere contributors</Copyright>
+  </PropertyGroup>
+
+</Project>

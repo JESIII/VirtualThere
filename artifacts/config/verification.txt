@@ -1,0 +1,21 @@
+# vht-config evidence 2026-10-14T22:35:05Z
+
+## unit suite (Debug)
+Test run for G:\Repos\VirtualThere\tests\Vht.Config.Tests\bin\Debug\net10.0\Vht.Config.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:    77, Skipped:     0, Total:    77, Duration: 125 ms - Vht.Config.Tests.dll (net10.0)
+
+## unit suite (Release)
+Test run for G:\Repos\VirtualThere\tests\Vht.Config.Tests\bin\Release\net10.0\Vht.Config.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:    77, Skipped:     0, Total:    77, Duration: 121 ms - Vht.Config.Tests.dll (net10.0)
+
+## live DNS-SD self-test (registers _vht._tcp on this host, browses it back, asserts PTR->SRV->TXT join)
+Test run for G:\Repos\VirtualThere\tests\Vht.Config.Tests\bin\Debug\net10.0\Vht.Config.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:     1, Skipped:     0, Total:     1, Duration: 8 s - Vht.Config.Tests.dll (net10.0)
+
+host: MSYS_NT-10.0-26300 Zuan 3.6.6-1cdd4371.x86_64 2026-01-15 22:20 UTC x86_64 Msys

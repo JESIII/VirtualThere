@@ -1,0 +1,190 @@
+﻿VirtualThere acceptance - negative test: no licence or device-count gate exists
+
+Two independent scans:
+  A. source  - every .cs/.csproj/.toml/.md/.slnx under the repo, excluding build output
+  B. binaries - every .dll/.exe produced by the Release build, scanned as raw bytes in BOTH
+     UTF-8 and UTF-16LE, because .NET string literals are stored UTF-16
+
+terms: max_devices, MAX_DEVICES_EXCEEDED, unlicensed, licence, license, purchase, licensee, trial_expired, activation_key, dongle
+
+--- A. source scan -----------------------------------------------------------
+  .github/pull_request_template.md:20: 'licence' ... ...h` passes) - [ ] No licence, device-cap, trial or purchase vocabulary added anywhere - [ ] New dependency: added to `third_party/n
+  .github/pull_request_template.md:20: 'purchase' ... ...evice-cap, trial or purchase vocabulary added anywhere - [ ] New dependency: added to `third_party/notices/allowed-packages.txt` *
+  CODE_OF_CONDUCT.md:52: 'license' ... ...ributor Covenant is licensed under CC BY 4.0. 
+  CONTRIBUTING.md:7: 'licence' ... ...roject's Apache-2.0 licence (inbound = outbound). There is no CLA and no copyright assignment. Adding `Signed-off-by:` to your com
+  CONTRIBUTING.md:7: 'license' ... ...our contribution is licensed under the project's Apache-2.0 licence (inbound = outbound). There is no CLA and no copyright assignm
+  dist/portable/PACKAGING.md:272: 'max_devices' ... ...ount vocabulary   (`max_devices`, `MAX DEVICES EXCEEDED`). It also asserts the expected tables exist: `ServiceInstall`   for `vht-
+  dist/portable/PACKAGING.md:82: 'unlicensed' ... ...ation, purchase or "unlicensed" state. `xtask verify` proves that by decompiling the built MSI and scanning every table plus every
+  dist/portable/PACKAGING.md:45: 'licence' ... ...river package + its licence + its SHA256SUMS     scripts/                  the privileged setup scripts (see section 3 and 5)     
+  dist/portable/PACKAGING.md:76: 'license' ... ...e\driver\usbip-win2-LICENSE.txt`, `usbip-win2-SHA256SUMS` |  The installation is per-machine (`Scope="perMachine"`), so Windows In
+  dist/portable/PACKAGING.md:82: 'purchase' ... ...ce key, activation, purchase or "unlicensed" state. `xtask verify` proves that by decompiling the built MSI and scanning every tab
+  docs/ARCHITECTURE.md:337: 'max_devices' ... ...eference product's `max_devices` cap would have lived — and why nothing replaces it  Recon located the cap in code, not just in st
+  docs/ARCHITECTURE.md:345: 'MAX_DEVICES_EXCEEDED' ... ...x1409689d0` → `BIND MAX_DEVICES_EXCEEDED` (`0x1409688e8`); - the effective cap is shipped to clients and displayed as `MAX DEVICES
+  docs/ARCHITECTURE.md:75: 'unlicensed' ... ...urchase prompt, no "unlicensed" state.  ---  ## 2. Language / runtime decision  **Decision: C# on .NET 10 (LTS), one language for 
+  docs/ARCHITECTURE.md:74: 'licence' ... ...m` grep for it), no licence UI, no purchase prompt, no "unlicensed" state.  ---  ## 2. Language / runtime decision  **Decision: C#
+  docs/ARCHITECTURE.md:75: 'license' ... ...chase prompt, no "unlicensed" state.  ---  ## 2. Language / runtime decision  **Decision: C# on .NET 10 (LTS), one language for se
+  docs/ARCHITECTURE.md:74: 'purchase' ... ..., no licence UI, no purchase prompt, no "unlicensed" state.  ---  ## 2. Language / runtime decision  **Decision: C# on .NET 10 (LT
+  docs/CLIENT.md:66: 'max_devices' ... ...n `Vht.Client`: no `max_devices`, no slots, no licence check, no policy branch that counts. Each attach is one `PLUGIN_HARDWARE` I
+  docs/CLIENT.md:66: 'licence' ... ...ices`, no slots, no licence check, no policy branch that counts. Each attach is one `PLUGIN_HARDWARE` IOCTL on its own virtual por
+  docs/FAQ.md:8: 'licence' ... ...rotocol, and has no licence system to defeat. `LEGAL.md` names that product, states the independence claim in full, and says what 
+  docs/FAQ.md:103: 'license' ... ...tribution notices (`LICENSE`, `NOTICE`, `THIRD_PARTY_NOTICES.md`). You are responsible for the driver you install and for how you 
+  docs/FAQ.md:16: 'purchase' ... ...trial state, and no purchase prompt anywhere in the product. See `README.md` -> "Why this exists", and `vht status`, which prints 
+  docs/FEATURE_MATRIX.md:19: 'max_devices' ... ... device cap | `BIND MAX_DEVICES_EXCEEDED` (`0x1409688e8`), cap from the licence blob field (`0x140980736`, logged as `max_devices=
+  docs/FEATURE_MATRIX.md:19: 'MAX_DEVICES_EXCEEDED' ... ... device cap | `BIND MAX_DEVICES_EXCEEDED` (`0x1409688e8`), cap from the licence blob field (`0x140980736`, logged as `max_devices=
+  docs/FEATURE_MATRIX.md:60: 'unlicensed' ... ...rcmp(DAT_140a5f258,"unlicensed")` in front of every paid hook | there is no `DAT_140a5f258`; nothing to bypass |  Because every pa
+  docs/FEATURE_MATRIX.md:8: 'licence' ... ...id tier)** — what a licence unlocks. - **VirtualThere-target** — what we build. VirtualThere has **no licence tier at all**: the p
+  docs/FEATURE_MATRIX.md:20: 'license' ... ...ct event requires a licensed server!` (`0x140980285`, gate `0x1407468e9` in `FUN_140746630`) | runs `cmd.exe /C <script>` | always
+  docs/FEATURE_MATRIX.md:46: 'purchase' ... ... the user (`=Please purchase a license to share more devices simultaneously` `0x1409d2ccd`) | n/a | n/a | **absent** — nothing to 
+  docs/FEATURE_MATRIX.md:49: 'dongle' ... ...er-IP line (virtual dongle, HID passthrough, hub port power, alternate-host switch; `kvmip/*.cpp` paths `0x1409b48d1`–`0x1409c0ad8
+  docs/INSTALL.md:66: 'license' ... ...ersion **0.9.8.1**, licensed **BSD-2-Clause**. It is **not redistributed in this repository** - fetch it from the upstream project
+  docs/RECON_AND_SPEC.md:90: 'max_devices' ... ...path.  ### 1.4 The `max_devices` cap path — located in code, not just in strings  - **Where the cap value is decided: `FUN_14074bb
+  docs/RECON_AND_SPEC.md:100: 'MAX_DEVICES_EXCEEDED' ... ...409688dd`), **`BIND MAX_DEVICES_EXCEEDED` (`0x1409688e8`)**,   `BIND_UNAUTHORIZED` (`0x140968902`), `BIND_MAX_CLIENTS_EXCEEDED` (`
+  docs/RECON_AND_SPEC.md:44: 'unlicensed' ... ...e, no time limit. - Unlicensed branding is explicit, not hidden: `<reference product> USB Server Trial Edition`   (`0x14097fdb0`).  ### 1.
+  docs/RECON_AND_SPEC.md:36: 'licence' ... ...)  ### 1.1 What the licence text says  - Free tier = **one USB device per server**. Verbatim from the embedded EULA   (`0x14097eae
+  docs/RECON_AND_SPEC.md:41: 'license' ... ...you must purchase a License."* - NAS variant is worse: 1 device **and** a 10-day time limit (`0x14097e590`). - Third variant, Linu
+  docs/RECON_AND_SPEC.md:41: 'purchase' ... ...gle server you must purchase a License."* - NAS variant is worse: 1 device **and** a 10-day time limit (`0x14097e590`). - Third va
+  docs/RECON_AND_SPEC.md:403: 'dongle' ... ...t/<reference product>/kvmip/Dongle.cpp` (`0x1409b48d1`), `KVMGlobals.h` (`0x1409b5ebb`), `EmulatorDongle.cpp` (`0x1409b7339`), `HIDHelper.
+  docs/TRANSPORT.md:461: 'licence' ... ...0. Dependencies and licences  Every dependency of `Vht.Transport`, with the licence its package metadata declares (verified from t
+  docs/UI.md:64: 'unlicensed' ... ...ence key entry, no "unlicensed" state, no trial nag, no purchase prompt, and no code path that can render one. Concretely:  - The 
+  docs/UI.md:34: 'licence' ... ...ache-2.0 notice, no licence text) | | Exit | `exit` | none (real shutdown) | | Device list: nickname, `[vid:pid]`, bus ID, attache
+  docs/UI.md:64: 'license' ... ...ce key entry, no "unlicensed" state, no trial nag, no purchase prompt, and no code path that can render one. Concretely:  - The on
+  docs/UI.md:62: 'purchase' ... ...e of any licence or purchase UI  There is no licence key entry, no "unlicensed" state, no trial nag, no purchase prompt, and no co
+  IDEA.md:18: 'licence' ... ... implemented as: no licence key, no device cap, no trial state, no purchase prompt, and no gated verb, ever - see `README.md`.  
+  IDEA.md:18: 'purchase' ... ... no trial state, no purchase prompt, and no gated verb, ever - see `README.md`.  
+  installer/PACKAGING.md:273: 'max_devices' ... ...ount vocabulary   (`max_devices`, `MAX DEVICES EXCEEDED`). It also asserts the expected tables exist: `ServiceInstall`   for `vht-
+  installer/PACKAGING.md:82: 'unlicensed' ... ...ation, purchase or "unlicensed" state. `xtask verify` proves that by decompiling the built MSI and scanning every table plus every
+  installer/PACKAGING.md:45: 'licence' ... ...river package + its licence + its SHA256SUMS     scripts/                  the privileged setup scripts (see section 3 and 5)     
+  installer/PACKAGING.md:76: 'license' ... ...e\driver\usbip-win2-LICENSE.txt`, `usbip-win2-SHA256SUMS` |  The installation is per-machine (`Scope="perMachine"`), so Windows In
+  installer/PACKAGING.md:82: 'purchase' ... ...ce key, activation, purchase or "unlicensed" state. `xtask verify` proves that by decompiling the built MSI and scanning every tab
+  LEGAL.md:3: 'licence' ... ...lThere. It is not a licence (that is `LICENSE`), and it is not legal advice.  ## 1. What VirtualThere is  VirtualThere is an **ind
+  LEGAL.md:4: 'license' ... ...a licence (that is `LICENSE`), and it is not legal advice.  ## 1. What VirtualThere is  VirtualThere is an **independent, clean-ro
+  LEGAL.md:31: 'purchase' ... ...vice counter and no purchase prompt anywhere in the product or the UI.  ## 3. How the compatibility information was obtained  Virt
+  README.md:45: 'max_devices' ... ... no slot table, no `max_devices` and no branch   that compares a device count against anything. `vht status` prints `device limit:
+  README.md:4: 'licence' ... ...device limit and no licence**.  VirtualThere is an independent implementation of the open **USB/IP** protocol (protocol version 1.
+  README.md:11: 'license' ... ...ver of ours.  It is licensed **Apache-2.0**, it is not affiliated with any commercial USB-over-IP product, and it contains no thir
+  README.md:43: 'purchase' ... ...tate, nag screen or purchase prompt** exists anywhere in the   code, the UI, the CLI or the control-plane vocabulary. * **No devic
+  src/Vht.Client/Attach/AttachManager.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // AttachManager: the client's brain. It owns the set of attached devices, a
+  src/Vht.Client/Attach/IDeviceController.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // The controller abstraction: "make Windows see a virtual USB device on por
+  src/Vht.Client/Attach/UdeDeviceController.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // The real virtual host controller: the usbip-win2 UDE driver, driven throu
+  src/Vht.Client/Bridge/BusidRouter.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // Busid routing: how a busid the UDE driver asks for maps back to a peer an
+  src/Vht.Client/Bridge/DeviceInventory.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // The client's view of "what do my peers export right now". The bridge answ
+  src/Vht.Client/Bridge/LoopbackBridge.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // The loopback bridge: ARCHITECTURE.md §6.2. The UDE driver opens the USB/I
+  src/Vht.Client/ClientExceptions.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // Errors the client raises at its own boundary, so the CLI/control plane ca
+  src/Vht.Client/Cli/ClientCli.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // vht-client — the product entry point. // // ARCHITECTURE.md §1: `vht-clie
+  src/Vht.Client/Cli/ParsedArguments.cs:4: 'licence' ... ...a CLI package whose licence would have to be // audited for third_party/notices/THIRD_PARTY_NOTICES (ARCHITECTURE.md App. D).  nam
+  src/Vht.Client/Cli/ParsedArguments.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // Argument parsing for vht-client. Hand-rolled on purpose: the surface is a
+  src/Vht.Client/Config/ClientPaths.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // Where the client keeps its files. ARCHITECTURE.md §9: `%LOCALAPPDATA%\Vir
+  src/Vht.Client/Control/ClientControlServer.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // The client's control plane: \\.\pipe\vht-client, JSON lines, one request/
+  src/Vht.Client/Credentials/CredentialCache.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // Per-device passwords (deliverable 7). ARCHITECTURE.md §6.1: the password 
+  src/Vht.Client/Diagnostics/ClientLog.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // Client logging. Structured, small, and deliberately able to serve `log.ta
+  src/Vht.Client/Interop/Ude/UdeBufferCodec.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // Byte-exact builders/parsers for the UDE driver's IOCTL structs, written a
+  src/Vht.Client/Interop/Ude/UdeConstants.cs:8: 'licence' ... ...he pinned package + licence): //   vadimgrn/usbip-win2, BSD-2-Clause //   include/usbip/vhci.h  — GUID_DEVINTERFACE_USBIP_VHCI, io
+  src/Vht.Client/Interop/Ude/UdeConstants.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // namespace Vht.Interop.Ude — the client's P/Invoke surface for the usbip-w
+  src/Vht.Client/Interop/Ude/UdeNative.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // The native calls the client makes against the UDE driver's device interfa
+  src/Vht.Client/Peers/Peer.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // A peer: a remote USB/IP server this client can attach from. // // Lives i
+  src/Vht.Client/Peers/PeerStore.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // The client's own peer list, phase 1: a JSON file the user edits through t
+  src/Vht.Client/Peers/RemoteDeviceCatalog.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // RemoteDeviceCatalog: reads every configured peer's export list and keeps 
+  src/Vht.Client/Policy/AutoAttachPolicy.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // Policy: the allow/ignore lists and the per-device auto-attach grant (deli
+  src/Vht.Client/Program.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // vht-client process entry point. Kept deliberately thin: everything testab
+  src/Vht.Client/Tests/BridgeAndAttachTests.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // The tests that prove the headline claim at the client's layer: many remot
+  src/Vht.Client/Tests/ClientTestFixture.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // Shared test wiring: temp config dirs (never the user's real %LOCALAPPDATA
+  src/Vht.Client/Tests/ProtocolAndPolicyTests.cs:524: 'max_devices' ... ...ng[] forbidden = { "max_devices", "MAX DEVICES EXCEEDED", "unlicensed", "purchase a licence",                                "purc
+  src/Vht.Client/Tests/ProtocolAndPolicyTests.cs:524: 'unlicensed' ... ...DEVICES EXCEEDED", "unlicensed", "purchase a licence",                                "purchase a license", "licence key", "licens
+  src/Vht.Client/Tests/ProtocolAndPolicyTests.cs:521: 'licence' ... ...lientSourceEnforcesALicenceOrDeviceGate()     {         string root = LocateClientSourceRoot();         string[] forbidden = { "ma
+  src/Vht.Client/Tests/ProtocolAndPolicyTests.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // Wire-format and policy tests. These are the tests that catch a byte-offse
+  src/Vht.Client/Tests/ProtocolAndPolicyTests.cs:524: 'purchase' ... ...ED", "unlicensed", "purchase a licence",                                "purchase a license", "licence key", "license key" };     
+  src/Vht.Client/Tests/TestDoubles.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // Test doubles. These are NOT substitutes for hardware testing — the accept
+  src/Vht.Client/Transport/IClientTransport.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // The client-side transport seam and the *stub* transport this card is allo
+  src/Vht.Client/Transport/PlainTcpTransport.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // The agreed stub transport: plain TCP to the peer. No TLS, no LZ4 — those 
+  src/Vht.Client/Usbip/UsbipDeviceRecord.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // The device record carried by OP_REP_DEVLIST / OP_REP_IMPORT. Wire layout:
+  src/Vht.Client/Usbip/UsbipOp.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // The two USB/IP *op* exchanges the client performs itself: list a peer's e
+  src/Vht.Client/Usbip/UsbipOpWriter.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // Writes the two reply frames the client must be able to synthesise rather 
+  src/Vht.Client/Usbip/UsbipProtocol.cs:8: 'licence' ... ... upstream package + licence); no upstream code is copied, only the protocol's own vocabulary, // which is what ARCHITECTURE.md §3.
+  src/Vht.Client/Usbip/UsbipProtocol.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // USB/IP protocol constants and the big-endian primitives used by every cod
+  src/Vht.Cli/Program.cs:21: 'licence' ... ...ara> /// <para> /// Licences do not appear here because there is no licence concept anywhere in the product: no /// verb is gated,
+  src/Vht.Cli/Program.cs:202: 'license' ... ...l - nothing here is licensed or capped)");         output.WriteLine("  kick <busid>                    force-detach the client hol
+  src/Vht.Core/Concurrency/ServerTables.cs:91: 'max_devices' ... ...ejection is <c>BIND MAX_DEVICES_EXCEEDED</c> reached through the status table at /// <c>0x1409689b0</c> (ARCHITECTURE.md §5.4). //
+  src/Vht.Core/Concurrency/ServerTables.cs:91: 'MAX_DEVICES_EXCEEDED' ... ...ejection is <c>BIND MAX_DEVICES_EXCEEDED</c> reached through the status table at /// <c>0x1409689b0</c> (ARCHITECTURE.md §5.4). //
+  src/Vht.Core/Concurrency/ServerTables.cs:207: 'licence' ... ...<c>OnDeviceKick</c> licence gate     /// (RECON_AND_SPEC.md §1.3); here it is unconditional.     /// </summary>     public bool Ki
+  src/Vht.Core/Hooks/HookVocabulary.cs:14: 'licence' ... ... hooks behind /// a licence (RECON_AND_SPEC.md §1.3). There is no gate function here and no licence state to /// consult; a hook t
+  src/Vht.Core/Logging/StructuredLogger.cs:8: 'licence' ... ...ND_SPEC.md §2): its licence gates log at /// level 3 and its connection lifecycle at level 6, so <see cref="Warn"/> is 3 and /// <
+  src/Vht.Core/Policy/DevicePolicy.cs:138: 'licence' ... ...nDeviceKick</c> are licence-gated — RECON_AND_SPEC.md §1.3); there is no gate here to /// remove because none is written. The clas
+  src/Vht.Core/Protocol/BindStatus.cs:40: 'max_devices' ... ...valent slot is BIND MAX_DEVICES_EXCEEDED     // (0x1409688e8), reached through the status table at 0x1409689b0 whose slot     // 0
+  src/Vht.Core/Protocol/BindStatus.cs:40: 'MAX_DEVICES_EXCEEDED' ... ...valent slot is BIND MAX_DEVICES_EXCEEDED     // (0x1409688e8), reached through the status table at 0x1409689b0 whose slot     // 0
+  src/Vht.Core/Protocol/BindStatus.cs:44: 'licence' ... ...) out of the     // licence blob seeded at 0x140980736.     //     // VirtualThere has no licence blob, no cap value, and no branc
+  src/Vht.Core/Server/VhtServerState.cs:183: 'licence' ... ...itional: no     /// licence check, no permission model beyond the fact that only an operator or the local     /// control plane ca
+  src/Vht.Interop/ServiceControl.cs:13: 'licence' ... ...re's service has no licence state to consult at start-up. /// </remarks> [SupportedOSPlatform("windows")] public static partial cl
+  src/Vht.Server/Control/ControlPlaneServer.cs:213: 'max_devices' ... ...ce product's cap is max_devices, and             // this field is where it would have to appear. There is no field to hold one.   
+  src/Vht.Server/Control/ControlPlaneServer.cs:31: 'licence' ... ...duct gates behind a licence (RECON_AND_SPEC.md §1.3) and there is no licence /// state anywhere in this process to consult. /// </
+  src/Vht.Server/Devices/UsbDeviceEnumerator.cs:241: 'licence' ... ...port rules (never a licence or a count; all three are physical safety) --         if (IsClass(className, "Keyboard") || IsClass(cl
+  src/Vht.Server/Hosting/ServerCommands.cs:33: 'licence' ... ... output.WriteLine($"licence:       {status["licence"]}");             output.WriteLine("listeners:");             if (status["list
+  src/Vht.Server/Net/UsbIpTcpServer.cs:21: 'max_devices' ... ... is the /// <c>BIND MAX_DEVICES_EXCEEDED</c> refusal; this file contains no branch that can produce it. /// </para> /// <para> ///
+  src/Vht.Server/Net/UsbIpTcpServer.cs:21: 'MAX_DEVICES_EXCEEDED' ... ... is the /// <c>BIND MAX_DEVICES_EXCEEDED</c> refusal; this file contains no branch that can produce it. /// </para> /// <para> ///
+  src/Vht.Transport/Tls/PinValidator.cs:25: 'licence' ... ...de.Strict"/>, not a licence to accept /// anything: silently degrading to "trust everyone" is exactly the failure this layer exist
+  src/Vht.Transport/Vht.Transport.csproj:16: 'license' ... ...iption>     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>   </PropertyGroup>    <ItemGroup>     <PackageReferenc
+  src/Vht.Transport/Vht.Transport.csproj:16: 'licensee' ... ...iption>     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>   </PropertyGroup>    <ItemGroup>     <PackageReferenc
+  src/Vht.Ui/Vht.Ui/Branding.cs:43: 'licence' ... ...c const string AboutLicenceLine =         "Licensed under the Apache License, Version 2.0. See LICENSE in the project root.";     
+  src/Vht.Ui/Vht.Ui/Branding.cs:44: 'license' ... ...enceLine =         "Licensed under the Apache License, Version 2.0. See LICENSE in the project root.";      public const string Pi
+  src/Vht.Ui/Vht.Ui/Branding.cs:16: 'purchase' ... ...of any activation / purchase surface is deliberate and enforced by /// tests/Vht.Ui.Tests (see docs/UI.md, "No activation surface"
+  src/Vht.Ui/Vht.Ui/ViewModels/LogViewModel.cs:15: 'licence' ... ... vendor text and no licence surface. /// </summary> /// <remarks> /// "Clear" is a UI-side operation: the buffer is emptied and a 
+  src/Vht.Ui/Vht.Ui/Views/AboutWindow.xaml.cs:6: 'licence' ... ...and its open-source licence. /// It contains no agreement text to accept, no key field and no purchase link - there is no /// such
+  src/Vht.Ui/Vht.Ui/Views/AboutWindow.xaml.cs:7: 'purchase' ... ...no key field and no purchase link - there is no /// such thing anywhere in this application (docs/UI.md, "No activation surface").
+  tests/Vht.Acceptance.Tests/ParityTests.cs:61: 'max_devices' ... ...   // the licence's max_devices. Nothing between the wire and the export table compares a count.         await using AcceptanceRig
+  tests/Vht.Acceptance.Tests/ParityTests.cs:61: 'licence' ... ...r at         // the licence's max_devices. Nothing between the wire and the export table compares a count.         await using Acc
+  tests/Vht.Core.Tests/BindStatusInvariantTests.cs:21: 'max_devices' ... ...t's site is <c>BIND MAX_DEVICES_EXCEEDED</c> (0x1409688e8), reached /// through the status table at 0x1409689b0 whose slot 0x14096
+  tests/Vht.Core.Tests/BindStatusInvariantTests.cs:21: 'MAX_DEVICES_EXCEEDED' ... ...t's site is <c>BIND MAX_DEVICES_EXCEEDED</c> (0x1409688e8), reached /// through the status table at 0x1409689b0 whose slot 0x14096
+  tests/Vht.Core.Tests/BindStatusInvariantTests.cs:139: 'unlicensed' ... ...yDevices",         "unlicensed",         "licence_key",         "license_key",         "purchase a licence",         "purchase a l
+  tests/Vht.Core.Tests/BindStatusInvariantTests.cs:15: 'licence' ... ...VirtualThere has no licence blob and no device-count cap. That claim is worthless as prose, /// so it is asserted three ways here:
+  tests/Vht.Core.Tests/BindStatusInvariantTests.cs:139: 'license' ... ...evices",         "unlicensed",         "licence_key",         "license_key",         "purchase a licence",         "purchase a lic
+  tests/Vht.Core.Tests/BindStatusInvariantTests.cs:142: 'purchase' ... ...ense_key",         "purchase a licence",         "purchase a license",         "trial expired",         "activation key",     };  
+  tests/Vht.Core.Tests/ConcurrencyTests.cs:14: 'licence' ... ...ing here consults a licence, and /// no count is ever compared against a limit — see <c>BindStatusInvariantTests</c> for the /// m
+  tests/Vht.Core.Tests/EnumerationAndPolicyTests.cs:563: 'licence' ... ...    // consults any licence state (there is none to consult).         state.Policy.Ignore(new DeviceRule { VendorId = device.Vendo
+  THIRD_PARTY_NOTICES.md:6: 'licence' ... ...OL or other non-OSI licence is present anywhere in the build.** The components that were evaluated and rejected for licence reason
+  THIRD_PARTY_NOTICES.md:3: 'license' ... ...es  VirtualThere is licensed under **Apache-2.0** (see `LICENSE`). Every component listed below is compatible with an Apache-2.0 w
+  tools/Xtask/BuildCommands.cs:227: 'licence' ... ... install wizard (no licence page)         "WixToolset.Util.wixext",       // util:CloseApplication - close a running tray/client  
+  tools/Xtask/BuildCommands.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // test / portable / installer / release / hash / clean — the parts `xtask r
+  tools/Xtask/BuildContext.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // Build context: where the repo is, what version we are building, where art
+  tools/Xtask/Program.cs:85: 'licence' ... ...nce product's name, licence/purchase vocabulary, device caps)               hash         rewrite dist/release-manifest.txt and dis
+  tools/Xtask/Program.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // Xtask — VirtualThere's one build command (ARCHITECTURE.md §9). Owner card
+  tools/Xtask/Program.cs:85: 'purchase' ... ...uct's name, licence/purchase vocabulary, device caps)               hash         rewrite dist/release-manifest.txt and dist/SHA256
+  tools/Xtask/VerifyCommand.cs:31: 'max_devices' ... ...  "vhusb",         "max_devices",         "max devices exceeded",         "unlicensed",         "licenseagreementdlg",         "wi
+  tools/Xtask/VerifyCommand.cs:33: 'unlicensed' ... ...exceeded",         "unlicensed",         "licenseagreementdlg",         "wixuilcertf",         "licenseaccepted",         "product
+  tools/Xtask/VerifyCommand.cs:43: 'licence' ... ...egitimately contain licence vocabulary: the BSD-2-Clause notice of the one     /// third-party driver we redistribute, which that 
+  tools/Xtask/VerifyCommand.cs:1: 'license' ... // SPDX-License-Identifier: Apache-2.0 // // `xtask verify` — the machine-checked half of the packaging acceptance cri
+  tools/Xtask/VerifyCommand.cs:8: 'purchase' ... ...a // key/activation/purchase prompt, an agreement page, or a device-count limit. // // The firewall rule names are additionally cr
+  source occurrences: 144
+  Every hit above is one of: (1) a comment or doc line stating that VirtualThere has NO
+  such gate, (2) a recon note quoting the reference product's own strings, or (3) the term
+  list this harness searches for. There is no hit in a branch condition, a comparison or a
+  refusal path; that is what C below enforces mechanically.
+
+--- B. binary scan of the PRODUCT binaries -----------------------------------
+  scope: src/*/bin/Release/**/*.dll and src/*/bin/Release/**/vht-*.exe, i.e. the assemblies
+  a user installs. Framework DLLs, test assemblies, obj/ intermediates and this harness's
+  own term list are excluded: including them would make the count a measure of the scanner.
+
+  src/Vht.Cli/bin/Release/net10.0-windows/vht-server.dll [98816 bytes]: 'licence' found at utf16 offset 71013
+      context:   .capture_mode.device limit:  .device_limit.null. (no cap).licence:       .licence.listeners:.listeners.  .server is not answering: .(. device(s) present; no d
+  src/Vht.Cli/bin/Release/net10.0-windows/vht.dll [14848 bytes]: 'license' found at utf16 offset 8069
+      context:  | per-device policy (all unconditional - nothing here is licensed or capped) |   ig
+  src/Vht.Cli/bin/Release/net10.0-windows/win-x64/vht-server.dll [97792 bytes]: 'licence' found at utf16 offset 71005
+      context:   .capture_mode.device limit:  .device_limit.null. (no cap).licence:       .licence.listeners:.listeners.  .server is not answering: .(. device(s) present; no d
+  src/Vht.Cli/bin/Release/net10.0-windows/win-x64/vht.dll [13824 bytes]: 'license' found at utf16 offset 8061
+      context:  | per-device policy (all unconditional - nothing here is licensed or capped) |   ig
+  src/Vht.Server/bin/Release/net10.0-windows/vht-server.dll [98816 bytes]: 'licence' found at utf16 offset 71013
+      context:   .capture_mode.device limit:  .device_limit.null. (no cap).licence:       .licence.listeners:.listeners.  .server is not answering: .(. device(s) present; no d
+  src/Vht.Server/bin/Release/net10.0-windows/win-x64/vht-server.dll [97792 bytes]: 'licence' found at utf16 offset 71005
+      context:   .capture_mode.device limit:  .device_limit.null. (no cap).licence:       .licence.listeners:.listeners.  .server is not answering: .(. device(s) present; no d
+  binary occurrences: 6
+
+--- C. the structural invariant ----------------------------------------------
+  tests/Vht.Core.Tests/BindStatusInvariantTests.cs reflects over Vht.Core.BindStatus and
+  fails the build if a member matching Max.*Devices or Device.*Limit ever appears. That test
+  is part of the normal test run and is the enforcement mechanism for this claim.
+
+VERDICT
+  REVIEW - 6 binary occurrence(s); each is listed above with its offset.
+  The claim this card has to prove is narrower than 'the words never appear': it is that no
+  code path can REFUSE an export or an attach because of a licence or a device count.
+  That is proven positively by multi.txt (K concurrent devices, none refused) and negatively
+  by the absence of an enforcement branch above. Both are attached verbatim.

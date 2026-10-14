@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Vht.Core</RootNamespace>
+    <AssemblyName>Vht.Core</AssemblyName>
+    <Description>VirtualThere shared core: USB/IP codec, URB model, device model, policy, hooks, logging, transport abstraction.</Description>
+  </PropertyGroup>
+
+</Project>

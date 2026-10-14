@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Vht.Transport.Bench</RootNamespace>
+    <AssemblyName>vht-transport-bench</AssemblyName>
+    <Description>Throughput and handshake-latency benchmark for Vht.Transport (plain TCP vs TLS vs TLS+LZ4), on loopback.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Vht.Transport\Vht.Transport.csproj" />
+  </ItemGroup>
+
+</Project>

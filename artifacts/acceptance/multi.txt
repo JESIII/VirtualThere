@@ -1,0 +1,53 @@
+﻿VirtualThere acceptance - multi-device concurrency
+devices=6  exercise=3s  transport=plain TCP  loopback
+
+NOTE ON HARDWARE: this host exports 0 real USB devices (see hardware.txt). The devices below
+are synthesised by the acceptance rig and driven through the production server stack, the
+production USB/IP wire codec and a real TCP connection. This proves the software holds N
+devices concurrently; it is NOT a claim about N physical devices, and is reported as such.
+
+server listening on 127.0.0.1:11685 (real UsbIpTcpServer accept loop)
+
+phase 0 - enumeration : server advertised 6 device(s) over OP_REP_DEVLIST
+
+phase 1 - 6 concurrent connections, one device imported on each
+  1-1      attached as devid=0x00010002 class=mass-storage
+  1-2      attached as devid=0x00010003 class=hid
+  1-3      attached as devid=0x00010004 class=communications
+  1-4      attached as devid=0x00010005 class=vendor-specific
+  1-5      attached as devid=0x00010006 class=mass-storage
+  1-6      attached as devid=0x00010007 class=hid
+
+attached simultaneously : 6 of 6 (import refusals: 0)
+server-side attach table : 6
+
+phase 2 - exercising all 6 devices concurrently for 3s
+
+  busid     class             MB/s     MiB     URBs   failed
+  --------  ----------------  -------  ------  -----  ------
+  1-1       mass-storage        855.9  2576.8  41228       0
+  1-2       hid                 852.7  2565.8  41053       0
+  1-3       communications      862.5  2595.3  41525       0
+  1-4       vendor-specific     849.8  2557.3  40917       0
+  1-5       mass-storage        868.9  2614.7  41835       0
+  1-6       hid                 868.5  2613.4  41815       0
+  TOTAL     6 devices          5158.2  15523.3
+
+aggregate throughput : 5158.2 MB/s
+per-device mean      : 859.7 MB/s
+failed URBs          : 0
+
+phase 3 - one connection importing every device (no per-connection device cap)
+  imported on a single connection : 0
+  (expected 0 here: every device is already held exclusively by phase 1)
+  refusal status for a held device : device_busy (exclusivity)
+
+phase 4 - fresh rig: attach every device on a single connection, then use them all
+  devices imported on one connection : 6 of 6
+  server-side attach table           : 6
+  devices answering a control transfer : 6 of 6
+
+VERDICT
+  VirtualThere attached and used 6 devices simultaneously at $0; the reference product's free tier allows 1.
+  (software-path claim: 6 concurrent USB/IP device sessions over real TCP against the
+   production server; see the hardware note above for what this is not.)

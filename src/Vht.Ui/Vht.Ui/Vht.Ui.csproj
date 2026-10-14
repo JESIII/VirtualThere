@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>Vht.Ui</RootNamespace>
+    <AssemblyName>vht-tray</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Product>VirtualThere</Product>
+    <AssemblyTitle>VirtualThere</AssemblyTitle>
+    <Description>VirtualThere tray application and device manager.</Description>
+    <NeutralLanguage>en</NeutralLanguage>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <!--
+    No NuGet dependencies. The tray is System.Windows.Forms.NotifyIcon (MIT, in-box);
+    the control plane is System.IO.Pipes + System.Text.Json (in-box). See docs/UI.md.
+  -->
+
+</Project>

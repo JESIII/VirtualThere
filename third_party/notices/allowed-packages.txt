@@ -1,0 +1,28 @@
+# Package licence allow-list.
+#
+# Every NuGet package in the build graph (top-level and transitive) must appear here, or
+# scripts/check-third-party.sh fails CI. Format: <package-id-lowercase> <licence> [# note]
+# Keep this list in sync with THIRD_PARTY_NOTICES.md.
+#
+# Permitted licences: MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, MS-PL, ISC.
+# Forbidden: GPL, LGPL, AGPL, CPOL, SSPL, CDDL, EUPL - anything copyleft or non-OSI.
+
+# --- runtime / build graph -------------------------------------------------
+tomlyn                                       BSD-2-Clause   # TOML parsing (Vht.Config)
+k4os.compression.lz4                         MIT            # LZ4 block compression (Vht.Transport)
+
+# --- test-only -------------------------------------------------------------
+microsoft.net.test.sdk                       MIT
+microsoft.codecoverage                       MIT
+microsoft.testplatform.objectmodel           MIT
+microsoft.testplatform.testhost              MIT
+newtonsoft.json                              MIT            # transitive of Microsoft.NET.Test.Sdk
+coverlet.collector                           MIT
+xunit                                        Apache-2.0
+xunit.runner.visualstudio                    Apache-2.0
+xunit.abstractions                           Apache-2.0
+xunit.analyzers                              Apache-2.0
+xunit.assert                                 Apache-2.0
+xunit.core                                   Apache-2.0
+xunit.extensibility.core                     Apache-2.0
+xunit.extensibility.execution                Apache-2.0

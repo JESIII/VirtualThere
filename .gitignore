@@ -1,0 +1,72 @@
+# ---------------------------------------------------------------------------
+# Build output
+# ---------------------------------------------------------------------------
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+*.userosscache
+.vs/
+.vscode/
+dist/
+TestResults/
+*.trx
+*.coverage
+*.coverage.xml
+coverage*.json
+coverage*.xml
+
+# ---------------------------------------------------------------------------
+# Secrets / generated credentials - never commit these
+# ---------------------------------------------------------------------------
+*.pfx
+*.snk
+*.key
+*.key.pem
+*.pem.key
+artifacts/**/cert/
+artifacts/**/certs/
+*.secret
+.env
+
+# ---------------------------------------------------------------------------
+# Reverse-engineering working set - NEVER published
+#
+# unpacked/ and GhidraProj/ hold unpacked copies of a third party's proprietary
+# binaries and the Ghidra project database built over them. They are analysis
+# inputs for the clean-room recon in docs/RECON_AND_SPEC.md, not part of this
+# project, and they must not appear in any commit, archive or release.
+# ---------------------------------------------------------------------------
+unpacked/
+GhidraProj/
+*.rep/
+*.gpr
+*.gzf
+
+# ---------------------------------------------------------------------------
+# Third-party binaries we do not redistribute
+#
+# The usbip-win2 driver package is fetched from upstream and verified by hash
+# (see docs/INSTALL.md). Only its upstream headers, its licence text and the
+# SHA256SUMS manifest are committed.
+# ---------------------------------------------------------------------------
+third_party/**/*.exe
+third_party/**/*.msi
+third_party/**/*.msix
+third_party/**/*.sys
+third_party/**/*.cat
+third_party/**/*.inf
+
+# ---------------------------------------------------------------------------
+# OS cruft
+# ---------------------------------------------------------------------------
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+*.swp
+*~
+

@@ -1,0 +1,74 @@
+﻿VirtualThere acceptance - USB device-class matrix
+
+Method: each class is enumerated, imported, and driven end to end over real TCP against the
+production session. "works" means the URB completed with status 0 and the expected byte
+count. A class this rig cannot exercise on real hardware is marked NOT RUN, never assumed.
+
+== mass-storage  (0781:5581, class 0x08)
+   enumerate : ok (1 advertised)
+   import    : ok
+   control   : ok (18 B device descriptor)
+   bulk OUT  : ok (4096 B written)
+   bulk IN   : ok (4096 B read)
+   interrupt : not applicable (class has no interrupt endpoint)
+   isochronous : not applicable
+   verdict     : SUPPORTED (control/bulk/interrupt path)
+
+== hid-keyboard  (046d:c31c, class 0x03)
+   enumerate : ok (1 advertised)
+   import    : ok
+   control   : ok (18 B device descriptor)
+   bulk      : not applicable (class has no bulk endpoint)
+   interrupt : ok (8 B report)
+   isochronous : not applicable
+   verdict     : SUPPORTED (control/bulk/interrupt path)
+
+== cdc-serial  (2341:0043, class 0x02)
+   enumerate : ok (1 advertised)
+   import    : ok
+   control   : ok (18 B device descriptor)
+   bulk OUT  : ok (4096 B written)
+   bulk IN   : ok (4096 B read)
+   interrupt : ok (8 B report)
+   isochronous : not applicable
+   verdict     : SUPPORTED (control/bulk/interrupt path)
+
+== usb-audio-iso  (1235:8210, class 0x01)
+   enumerate : ok (1 advertised)
+   import    : ok
+   control   : ok (18 B device descriptor)
+   bulk      : not applicable (class has no bulk endpoint)
+   interrupt : FAILED status=-32
+   isochronous : REFUSED status=-32 (EPIPE as designed)
+   verdict     : NOT SUPPORTED on this build - ISO is never negotiated, so the streaming
+                 interface of this class cannot be exported. The control interface works.
+
+== uvc-webcam-iso  (046d:0825, class 0x0e)
+   enumerate : ok (1 advertised)
+   import    : ok
+   control   : ok (18 B device descriptor)
+   bulk      : not applicable (class has no bulk endpoint)
+   interrupt : FAILED status=-32
+   isochronous : REFUSED status=-32 (EPIPE as designed)
+   verdict     : NOT SUPPORTED on this build - ISO is never negotiated, so the streaming
+                 interface of this class cannot be exported. The control interface works.
+
+== vendor-winlbusb  (2e8a:000a, class 0xff)
+   enumerate : ok (1 advertised)
+   import    : ok
+   control   : ok (18 B device descriptor)
+   bulk OUT  : ok (4096 B written)
+   bulk IN   : ok (4096 B read)
+   interrupt : ok (8 B report)
+   isochronous : not applicable
+   verdict     : SUPPORTED (control/bulk/interrupt path)
+
+NOT RUN against real hardware (no claimable device on this host - see hardware.txt):
+  - mass storage mount/read/write by Windows
+  - HID input actually reaching an application
+  - CDC serial enumerated as a COM port
+  - audio endpoint enumeration by the Windows audio stack
+  - UVC capture by a media application
+
+2 class(es) are unsupported end to end: the isochronous streaming interfaces.
+Control/bulk/interrupt classes are supported on the software path and unproven on hardware.

@@ -1,0 +1,109 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# The product is Windows-only (net10.0-windows targets plus Win32 P/Invoke), so CI runs on Windows.
+# The portable libraries (Vht.Core / Vht.Config / Vht.Transport) also build cross-platform, but the
+# release gate is the Windows build.
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: build, test, guards
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Show SDK version
+        run: dotnet --version
+
+      - name: Restore
+        run: dotnet restore VirtualThere.slnx
+
+      - name: Build (Release)
+        # Directory.Build.props sets TreatWarningsAsErrors=true, so this fails on warnings too.
+        run: dotnet build VirtualThere.slnx -c Release --no-restore
+
+      - name: Test (Release)
+        run: dotnet test VirtualThere.slnx -c Release --no-build --logger "trx;LogFileName=results.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/TestResults/**/*.trx'
+          if-no-files-found: ignore
+
+      - name: Guard - no foreign branding, no licence machinery
+        shell: bash
+        run: bash scripts/check-branding.sh
+
+      - name: Guard - third-party licences
+        shell: bash
+        run: bash scripts/check-third-party.sh
+
+  parity:
+    name: parity and licence-gate checks
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore and build
+        run: |
+          dotnet restore VirtualThere.slnx
+          dotnet build VirtualThere.slnx -c Release --no-restore
+
+      - name: No device-count cap anywhere in the shipped assemblies
+        shell: bash
+        # The product's central claim: no licence gate, no device cap, no paid tier. Strings are what
+        # ship, so this greps the binaries rather than the source (comments cannot produce a hit).
+        run: |
+          set -euo pipefail
+          vocab='max_devices|MAX_DEVICES_EXCEEDED|MAX DEVICES EXCEEDED|unlicensed|purchase a licen[cs]e|licen[cs]e key|activation key|trial edition|trial expired'
+          bins=$(find src -type f \( -name '*.dll' -o -name '*.exe' \) -path '*/bin/*' -not -path '*/Tests/*')
+          if [ -z "$bins" ]; then echo "no binaries found"; exit 1; fi
+          if grep -lEi "$vocab" $bins; then
+            echo "::error::licence-gate vocabulary found in shipped output"
+            exit 1
+          fi
+          echo "clean: no licence-gate vocabulary in $(echo "$bins" | wc -l) assemblies/binaries"
+
+      - name: Server status reports an explicit null device limit
+        shell: bash
+        # End-to-end evidence rather than a grep: start the server on a test port and read its status.
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/vht"
+          cat > "$RUNNER_TEMP/vht/server.toml" <<'TOML'
+          [server]
+          name = "CI"
+          [transport.plaintext]
+          enabled = true
+          port = 13240
+          [transport.tls]
+          enabled = false
+          TOML
+          ./src/Vht.Cli/bin/Release/net10.0-windows/vht.exe serve \
+              --config "$(cygpath -w "$RUNNER_TEMP/vht/server.toml")" > "$RUNNER_TEMP/vht/serve.log" 2>&1 &
+          sleep 8
+          ./src/Vht.Cli/bin/Release/net10.0-windows/vht.exe status | tee "$RUNNER_TEMP/vht/status.txt"
+          grep -qE "device limit: +null \(no cap\)" "$RUNNER_TEMP/vht/status.txt"
+          ./src/Vht.Cli/bin/Release/net10.0-windows/vht.exe stop-server || true

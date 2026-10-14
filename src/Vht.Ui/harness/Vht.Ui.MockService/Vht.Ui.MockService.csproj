@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Vht.Ui.MockService</RootNamespace>
+    <AssemblyName>vht-mock-control-plane</AssemblyName>
+    <Product>VirtualThere</Product>
+    <Description>Test double for the VirtualThere server/client control pipes (harness only, not shipped).</Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+    Deliberately no reference to the tray project: the double speaks the protocol text, so it
+    verifies the UI against the frozen interface rather than against the UI's own types.
+  -->
+
+</Project>

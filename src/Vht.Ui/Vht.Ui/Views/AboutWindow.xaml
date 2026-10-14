@@ -1,0 +1,38 @@
+<Window x:Class="Vht.Ui.Views.AboutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="About VirtualThere"
+        Width="520"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource WindowBackground}"
+        AutomationProperties.Name="About VirtualThere">
+  <StackPanel Margin="18">
+    <TextBlock Text="VirtualThere" Style="{StaticResource HeaderText}" AutomationProperties.Name="Product name VirtualThere" />
+    <TextBlock x:Name="VersionText" Style="{StaticResource SubtleText}" Margin="0,2,0,0" />
+    <TextBlock Text="USB devices over the network, for Windows." Margin="0,8,0,0" TextWrapping="Wrap" />
+
+    <Border Style="{StaticResource PanelBorderStyle}" Margin="0,12,0,0">
+      <TextBlock x:Name="BodyText" TextWrapping="Wrap" LineHeight="18" />
+    </Border>
+
+    <TextBlock Text="Components" FontWeight="SemiBold" Margin="0,12,0,4" />
+    <TextBlock x:Name="ComponentsText" Style="{StaticResource SubtleText}" TextWrapping="Wrap" LineHeight="17" />
+
+    <Border Background="{StaticResource WarnBackground}" BorderBrush="{StaticResource PanelBorder}" BorderThickness="1" Padding="8" Margin="0,12,0,0" CornerRadius="3">
+      <TextBlock x:Name="LicenceText" TextWrapping="Wrap" Style="{StaticResource SubtleText}" />
+    </Border>
+
+    <Button x:Name="CloseButton"
+            Content="_Close"
+            HorizontalAlignment="Right"
+            Margin="0,14,0,0"
+            Padding="14,4"
+            IsDefault="True"
+            IsCancel="True"
+            AutomationProperties.Name="Close about window"
+            Click="OnCloseClick" />
+  </StackPanel>
+</Window>

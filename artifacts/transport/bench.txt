@@ -1,0 +1,17 @@
+vht-transport-bench  started 2026-10-14 15:26:27 -07:00
+host: ZUAN  os: Microsoft Windows NT 10.0.26300.0
+cores: 16  runtime: 10.0.13
+loopback only (127.0.0.1)  transfer: 256 MiB per case  chunk: 1024 KiB
+
+kind      handshake mean/p50/p95 (ms)   MB/s compressible (median min-max)      MB/s incompressible (median min-max)
+--------  ---------------------------   -----------------------------------     ----------------------------------
+PlainTcp      0.25 /   0.24 /   0.34       2347.0   814.9- 2899.6       1689.2  1426.5- 5864.4
+Tls           2.64 /   2.61 /   2.85       1416.8  1384.3- 1441.0       1470.3  1395.7- 1500.9
+TlsLz4        2.60 /   2.58 /   2.81       2028.7  1853.5- 2096.5        817.3   761.1-  854.9
+
+authenticated handshake (TLS + _vht hello + HMAC challenge-response, shared secret, 600,000 PBKDF2 iterations), 5 samples:
+  mean 73.1 ms   p50 59.3 ms   p95 124.2 ms   (of which PBKDF2-HMAC-SHA256 on the client is the dominant term)
+
+PlainTcp: no per-frame counters (no framing layer), 256 MiB payload per run
+Tls: no per-frame counters (no framing layer), 256 MiB payload per run
+TlsLz4: last compressible run = 256 frames, 256 compressed, wire bytes 1,122,560 for 268,435,456 payload bytes (ratio 239.1x)

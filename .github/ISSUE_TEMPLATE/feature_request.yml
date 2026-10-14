@@ -1,0 +1,59 @@
+name: Feature request
+description: Suggest a capability, device class or workflow VirtualThere does not have yet.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This project has two hard constraints that a proposal cannot break: **no licence machinery,
+        no device cap** (see `README.md`), and **no code taken from another product** (see
+        `LEGAL.md`). Everything else is open. Proposals that remove a limitation listed in the
+        README's "Known limitations" are especially welcome.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the situation, not the implementation. What are you unable to do today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like VirtualThere to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Including anything you tried with the reference product or with a stock USB/IP tool.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Server (capture, export, policy, hooks)
+        - Client (attach, multi-device, auto-attach, reconnect)
+        - Transport (TLS, LZ4, authentication, pinning)
+        - Configuration and discovery
+        - UI / tray
+        - Installation, packaging, portable build
+        - Documentation
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints
+      options:
+        - label: This request does not require a licence check, a device cap, or a paid tier.
+          required: true
+        - label: This request does not require copying code or protocol details from a product we are not allowed to copy from.
+          required: true
