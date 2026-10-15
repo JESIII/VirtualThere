@@ -1,0 +1,97 @@
+# P2 rebind: before/after transcript
+
+Card: `t_6f34fa4d` — "P2 rebind is unreachable: the capture provider bails on IsExportable()
+before the rebind block". Landed as commit `2a1fe0e` on `main` (fix) plus `2a1fe0e`'s follow-up
+transcript commit. Host: ZUAN, 14 USB devices present, unelevated shell, `elevated=False`.
+
+Every run below is a real process on this machine. The only thing that was *not* run is the
+elevated half of P2 (see "NOT RUN" at the end).
+
+## 1. Pre-fix (HEAD `1bbbd21`, fix stashed): `vht list --local --rebind`
+
+```
+1-a0cf85fb [3710:5406] "3710:5406" speed=unknown class=per-interface state=CaptureUnsupported reason=driver_holds_device detail="no WinUSB handle (win32 8); the function driver holds this device and capture.rebind.enabled offers the P2 rebind path"
+1-c830978b [0fd9:0063] ... state=CaptureUnsupported reason=driver_holds_device detail="no WinUSB handle (win32 31); ... offers the P2 rebind path"
+... 14 device(s) present; no device limit
+```
+
+The detail text claims the rebind is offered while the **state** says `CaptureUnsupported` — the
+contradiction the card describes: the claim is inert because nothing downstream acts on it.
+
+## 2. Pre-fix: `vht serve --rebind --log-file <file>` (12 s)
+
+```
+ServerStarting: starting VirtualThere 0.1.0 (USB/IP 1.1.1) capture_mode=auto rebind=True elevated=False
+HotplugArrival: device-interface notifications could not be registered (CR 31); falling back to a periodic rescan
+ListenerStarted: listening for USB/IP on 0.0.0.0:3240 (PlainTcp)
+ServerStarted: VirtualThere 0.1.0 (USB/IP 1.1.1) is serving 0 device(s) with no device limit; listeners: 0.0.0.0:3240 (PlainTcp) exported=0
+ControlPlaneStarted: control plane listening on \\.\pipe\vht-server
+```
+
+No capture line, no rebind line — the provider was never asked. `exported=0`.
+
+## 3. Post-fix (commit `2a1fe0e`): `vht list --local --rebind`
+
+```
+1-a0cf85fb [3710:5406] "3710:5406" speed=unknown class=per-interface state=RebindOffered reason=driver_holds_device
+1-c830978b [0fd9:0063] "0fd9:0063" speed=unknown class=per-interface state=RebindOffered reason=driver_holds_device
+... (14 device(s) present; no device limit)
+```
+
+All 14 driver-held devices are now `RebindOffered` instead of `CaptureUnsupported`.
+
+## 4. Post-fix: `vht serve --rebind` (own config, free port 3340, 20 s)
+
+```
+ServerStarting: starting VirtualThere 0.1.0 (USB/IP 1.1.1)
+DeviceExportAdded: exporting 1-db603f4e [046d:0aaa] "046d:0aaa" - the function driver holds it; the P2 rebind runs when a client attaches
+... one DeviceExportAdded line per device (14)
+ServerStarted: VirtualThere 0.1.0 (USB/IP 1.1.1) is serving 14 device(s) with no device limit; listeners: 127.0.0.1:3340 (PlainTcp)
+ClientConnected: connection 1 from 127.0.0.1:9811 (PlainTcp)
+DeviceCaptureRefused: 1-db603f4e: capture.rebind.enabled is set but this process is not elevated, so the P2 rebind path cannot run
+DeviceCaptureRefused: capture of 1-db603f4e failed at bind: driver_holds_device WinUsbIo.Open('\\?\usb#vid_046d&pid_0aaa#000000000000#{a5dcbf10-6530-11d2-901f-00c04fb951ed}') failed (win32 8)
+BindRefused: import refused for connection 1: Error - cannot claim the device: driver_holds_device ...
+ClientDisconnected: connection 1 closed
+```
+
+The client was a minimal USB/IP `OP_REQ_IMPORT` (op 0x8003) client, the same request a stock
+`usbip attach` sends, so this is the real claim path inside `UsbIpSession`. Instead of silence the
+server now names the P2 outcome: **the not-elevated refusal**, one of the three outcomes the card
+asks for. `exported=14` instead of `0`.
+
+Note the 3240 conflict: a long-running `G:\Repos\VirtualThere\dist\portable\vht.exe` (started
+01:16:40 by an earlier run) still owns port 3240, so this run used its own config on 3340. The
+first import attempt against 3240 was served by *that* process and refused with `Unknown`.
+
+## 5. The regression tests fail on the pre-fix code
+
+`tests/Vht.Acceptance.Tests/CaptureRebindPathTests.cs`, reverted one half of the fix at a time.
+
+* Provider half reverted (`IsClaimable()` gate → the old `IsExportable()` bail):
+  `Failed: 4, Passed: 6` — including
+  `DriverHeldDevice_WithRebindEnabled_ReachesTheP2RebindAttempt: Assert.Single() Failure: The collection was empty`
+  (the rebinder was never called).
+* Enumerator half reverted (`ClassifyOpenFailure` never offers the rebind):
+  `Failed: 7, Passed: 3` — including
+  `ClassifyOpenFailure_OffersRebindOnlyWhenPermitted_AndNamesTheState: Assert.Equal() Failure: Values differ`
+  (`RebindOffered` vs `CaptureUnsupported`).
+* Both restored: `Passed: 10, Failed: 0`.
+
+## 6. Whole suite and branding
+
+At the landed commit `2a1fe0e`, in a fresh clone (`verify-2a1fe0e`), `dotnet test VirtualThere.slnx -c Release`:
+427 passed / 0 failed (Xtask 10, Config 77, Transport 69, Core 160, Ui 24, Acceptance 37,
+Client 50). `scripts/check-branding.sh`: **PASSED**.
+
+The shared checkout `G:\Repos\VirtualThere` could not be used for the test run: a peer worker was
+building in it at the time and the build failed with `CS2012` on locked `obj/` outputs — the
+condition documented in `docs/TROUBLESHOOTING.md` ("Rebuilding while the acceptance rig is
+running fails"). Hence the fresh clone, same commit, clean `obj/`.
+
+## NOT RUN
+
+* **Elevated rebind (`rebound onto the inbox winusb.sys`, including the reboot-required line).**
+  Elevation on this host is an interactive UAC prompt and cannot be answered from an unattended
+  run (`docs/ACCEPTANCE.md` §2 records the same limitation). The two elevated outcomes are
+  therefore **NOT RUN**, and the not-elevated outcome above stands in as the real, observed P2
+  attempt.
