@@ -35,8 +35,9 @@ namespace Vht.Server.Devices;
 ///   over cuts the session.</item>
 ///   <item>Everything else that opens on WinUSB is capturable; everything else that does not is
 ///   <see cref="CaptureState.CaptureUnsupported"/> with the precise
-///   <see cref="CaptureReason"/> (a driver-holds-device device is offered to the rebind path
-///   only when the operator opted in).</item>
+///   <see cref="CaptureReason"/> - except a driver-held device whose rebind the operator has
+///   enabled, which is <see cref="CaptureState.RebindOffered"/> instead: claimable, but only via
+///   the P2 rebind at attach time.</item>
 /// </list>
 /// </para>
 /// </remarks>
@@ -66,6 +67,64 @@ public sealed class UsbDeviceEnumerator : IDeviceEnumerator
 
     /// <summary>Bumps the generation counter; the hotplug watcher calls this on every event.</summary>
     public long BumpGeneration() => Interlocked.Increment(ref _generation);
+
+    /// <summary>
+    /// True when the operator's configuration offers the P2 rebind path at all.
+    /// </summary>
+    /// <remarks>
+    /// This is deliberately the same expression the capture provider gates the rebind on
+    /// (<see cref="WinUsbCaptureProvider.OpenAsync"/>): <c>capture.rebind.enabled</c> with
+    /// <c>capture.mode = "auto"</c>. The enumerator must never advertise a
+    /// <see cref="CaptureState.RebindOffered"/> device that the provider would then refuse to
+    /// rebind - <c>prebound-only</c> means "never rebinds" (docs/SERVER.md §3), so it does not
+    /// offer the path, and both halves of this decision live in one expression in each place.
+    /// </remarks>
+    public bool RebindOffered => _options.RebindEnabled && _options.CaptureMode == "auto";
+
+    /// <summary>
+    /// Classifies a device interface that could not be opened: the state, the reason and the
+    /// operator-facing detail, as a pure function of the win32 error and whether the rebind
+    /// path is offered.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Kept static and public so the rule can be asserted without hardware: a driver-held
+    /// device is <see cref="CaptureState.RebindOffered"/> when the operator opted in, and
+    /// <see cref="CaptureState.CaptureUnsupported"/> when they did not. The two states are the
+    /// difference between "the server has no way to claim this" and "the server claims this by
+    /// rebinding it when a client asks", and every caller downstream acts on that difference.
+    /// </para>
+    /// <para>
+    /// A device exposing no interface at all (<c>ERROR_FILE_NOT_FOUND</c>) is never offered: the
+    /// P2 INF re-selects a driver for a devnode, it cannot conjure an interface that is not
+    /// there.
+    /// </para>
+    /// </remarks>
+    public static (CaptureState State, CaptureReason Reason, string Detail) ClassifyOpenFailure(
+        int openError, bool rebindOffered)
+    {
+        CaptureReason reason = openError switch
+        {
+            ERROR_ACCESS_DENIED => CaptureReason.DriverHoldsDevice,
+            ERROR_FILE_NOT_FOUND => CaptureReason.NoWinUsbInterface,
+            _ => CaptureReason.DriverHoldsDevice,
+        };
+
+        if (reason == CaptureReason.NoWinUsbInterface)
+        {
+            return (CaptureState.CaptureUnsupported, reason,
+                $"device interface could not be opened (win32 {openError})");
+        }
+
+        return rebindOffered
+            ? (CaptureState.RebindOffered, reason,
+                $"no WinUSB handle (win32 {openError}); the function driver holds this device and " +
+                "capture.rebind.enabled offers the P2 rebind path: a client attach rebinds it onto " +
+                "the inbox winusb.sys")
+            : (CaptureState.CaptureUnsupported, reason,
+                $"no WinUSB handle (win32 {openError}); the function driver holds this device — " +
+                "set capture.rebind.enabled to offer the P2 rebind path");
+    }
 
     /// <inheritdoc />
     public ValueTask<IReadOnlyList<UsbDevice>> EnumerateAsync(CancellationToken ct) =>
@@ -256,22 +315,10 @@ public sealed class UsbDeviceEnumerator : IDeviceEnumerator
         WinUsbIo? io = WinUsbIo.Open(devicePath, out int openError);
         if (io is null)
         {
-            CaptureReason reason = openError switch
-            {
-                ERROR_ACCESS_DENIED => CaptureReason.DriverHoldsDevice,
-                ERROR_FILE_NOT_FOUND => CaptureReason.NoWinUsbInterface,
-                _ => CaptureReason.DriverHoldsDevice,
-            };
+            (CaptureState state, CaptureReason reason, string detail) =
+                ClassifyOpenFailure(openError, RebindOffered);
 
-            bool rebindOffered = _options.RebindEnabled && _options.CaptureMode is "auto" or "prebound-only";
-
-            return Role(CaptureState.CaptureUnsupported, reason,
-                reason == CaptureReason.DriverHoldsDevice
-                    ? $"no WinUSB handle (win32 {openError}); the function driver holds this device" +
-                      (rebindOffered
-                          ? " and capture.rebind.enabled offers the P2 rebind path"
-                          : " — set capture.rebind.enabled to offer the P2 rebind path")
-                    : $"device interface could not be opened (win32 {openError})");
+            return Role(state, reason, detail);
         }
 
         try

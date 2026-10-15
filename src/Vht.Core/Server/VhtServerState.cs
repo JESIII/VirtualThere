@@ -71,7 +71,9 @@ public sealed class VhtServerState
     /// server cannot claim would just fail every attach — but it is never silently missing
     /// either: the refusal is logged with its reason, and <c>vht list --local</c> and the
     /// control plane's <c>devices.list</c> show it in the operator's view with that reason
-    /// (ARCHITECTURE.md §4.3).
+    /// (ARCHITECTURE.md §4.3). A driver-held device the operator permitted a rebind for
+    /// (<see cref="CaptureState.RebindOffered"/>) <em>is</em> advertised, because it becomes
+    /// claimable the moment the P2 rebind runs at attach.
     /// </remarks>
     public async ValueTask<int> RefreshExportsAsync(CancellationToken ct)
     {
@@ -86,7 +88,10 @@ public sealed class VhtServerState
             UsbDevice applied = Policy.Apply(device);
             seen.Add(applied.Key);
 
-            if (!applied.CaptureState.IsExportable())
+            // A device that cannot be claimed at all is not advertised - but a driver-held device
+            // the operator permitted a rebind for is: the P2 rebind runs when a client attaches,
+            // so it belongs in the export table (CaptureState.RebindOffered).
+            if (!applied.CaptureState.IsClaimable())
             {
                 Exports.Remove(applied.Key, out _);
                 Logger.Write(LogLevel.Detail, LogEvent.DeviceCaptureRefused,
@@ -121,8 +126,16 @@ public sealed class VhtServerState
             if (isNew)
             {
                 Logger.Write(LogLevel.Info, LogEvent.DeviceExportAdded,
-                    $"exporting {applied.BusId} [{applied.VendorId:x4}:{applied.ProductId:x4}] \"{applied.DisplayName}\"",
-                    new Dictionary<string, object?> { ["busid"] = applied.BusId });
+                    $"exporting {applied.BusId} [{applied.VendorId:x4}:{applied.ProductId:x4}] " +
+                    $"\"{applied.DisplayName}\"" +
+                    (applied.CaptureState.OffersRebind()
+                        ? " - the function driver holds it; the P2 rebind runs when a client attaches"
+                        : string.Empty),
+                    new Dictionary<string, object?>
+                    {
+                        ["busid"] = applied.BusId,
+                        ["state"] = applied.CaptureState.ToString(),
+                    });
             }
         }
 
@@ -158,7 +171,7 @@ public sealed class VhtServerState
         UsbDevice applied = Policy.Apply(device);
         long generation = Interlocked.Increment(ref _generation);
 
-        if (present && applied.CaptureState.IsExportable())
+        if (present && applied.CaptureState.IsClaimable())
         {
             Exports.AddOrUpdate(applied, generation);
             Logger.Write(LogLevel.Info, LogEvent.HotplugArrival,

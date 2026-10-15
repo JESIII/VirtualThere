@@ -26,6 +26,14 @@ namespace Vht.Server.Devices;
 ///   <item><b>P3 (refused)</b> — neither worked. The device is reported with its
 ///   <see cref="CaptureReason"/>, never silently dropped and never "taken" anyway.</item>
 /// </list>
+/// <para>
+/// A device the enumerator reported as <see cref="CaptureState.RebindOffered"/> is driver-held
+/// and therefore not exportable yet, so it enters this method already committed to P2: the
+/// claimability gate below accepts it, P1 is still tried first (the binding may have changed
+/// since enumeration), and the rebind runs if P1 fails. A device that is neither exportable nor
+/// rebind-offered is refused here with the reason the enumerator recorded, before any path is
+/// touched.
+/// </para>
 /// </remarks>
 [SupportedOSPlatform("windows")]
 public sealed class WinUsbCaptureProvider : ICaptureProvider
@@ -33,14 +41,14 @@ public sealed class WinUsbCaptureProvider : ICaptureProvider
     private readonly IDeviceEnumerator _enumerator;
     private readonly ServerOptions _options;
     private readonly ILogger _log;
-    private readonly WinUsbRebinder? _rebinder;
+    private readonly IDeviceRebinder? _rebinder;
     private readonly ConcurrentDictionary<DeviceKey, byte> _rebound = new();
 
     public WinUsbCaptureProvider(
         IDeviceEnumerator enumerator,
         ServerOptions options,
         ILogger log,
-        WinUsbRebinder? rebinder = null)
+        IDeviceRebinder? rebinder = null)
     {
         _enumerator = enumerator ?? throw new ArgumentNullException(nameof(enumerator));
         _options = options ?? throw new ArgumentNullException(nameof(options));
@@ -60,8 +68,20 @@ public sealed class WinUsbCaptureProvider : ICaptureProvider
     {
         ArgumentNullException.ThrowIfNull(device);
 
-        if (!device.CaptureState.IsExportable())
+        // The P2 decision comes first, and it is a question about the *offer*, not about the
+        // device being claimable right now. A device the enumerator reported as RebindOffered is
+        // driver-held by definition, so it is not exportable yet - the rebind below is what makes
+        // it exportable. Ordering an IsExportable() bail in front of the P2 block is what made
+        // this whole path unreachable (see CaptureState.RebindOffered).
+        bool offersRebind = device.CaptureState.OffersRebind();
+        bool mayRebind = _options.CaptureMode == "auto" && _options.RebindEnabled && _rebinder is not null;
+
+        if (!device.CaptureState.IsClaimable() || (offersRebind && !mayRebind))
         {
+            // Two honest refusals land here: a device that can never be claimed (unsafe, no
+            // interface, ignored by policy), and a device whose rebind offer has been withdrawn
+            // since it was enumerated (capture.rebind.enabled or capture.mode changed under it).
+            // Both are reported with the reason the enumerator recorded.
             return CaptureOpenResult.Failure(device.CaptureReason,
                 string.IsNullOrEmpty(device.CaptureDetail)
                     ? device.CaptureReason.Describe()
@@ -79,11 +99,10 @@ public sealed class WinUsbCaptureProvider : ICaptureProvider
         if (prebound.Ok) return prebound;
 
         // ---- P2: the rebind attempt, behind explicit opt-in ----------------------------------
-        bool mayRebind = _options.CaptureMode == "auto" && _options.RebindEnabled && _rebinder is not null;
         if (!mayRebind)
             return prebound;
 
-        if (!WinUsbRebinder.CanRebind)
+        if (!_rebinder!.CanRebind)
         {
             _log.Write(LogLevel.Warn, LogEvent.DeviceCaptureRefused,
                 $"{device.BusId}: capture.rebind.enabled is set but this process is not elevated, " +
@@ -92,7 +111,7 @@ public sealed class WinUsbCaptureProvider : ICaptureProvider
             return prebound;
         }
 
-        RebindResult rebind = _rebinder!.Rebind(device.VendorId, device.ProductId);
+        RebindResult rebind = _rebinder.Rebind(device.VendorId, device.ProductId);
         if (!rebind.Ok)
         {
             _log.Write(LogLevel.Warn, LogEvent.DeviceCaptureRefused,

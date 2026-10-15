@@ -118,6 +118,26 @@ Options, in order of preference:
 3. Accept it as a documented limitation (README "Known limitations" 8). A server-side filter driver
    is future work.
 
+### `vht list --local` shows `state=RebindOffered reason=driver_holds_device`
+
+That is the rebind being offered, which is what you asked for with `capture.rebind.enabled` /
+`--rebind`. The device is still driver-held; the rebind runs when a client claims it, so this state
+means "exportable once a client attaches", not "exportable now" (`docs/SERVER.md` §3.1).
+
+If a client then attaches and the rebind does not happen, the log says which of the three outcomes it
+was, and they mean different things:
+
+| Log line | Meaning |
+|---|---|
+| `1-3: rebound onto the inbox winusb.sys (oem42.inf)` | P2 ran and Windows accepted the INF. The device is now on WinUSB. |
+| `1-3: rebound onto the inbox winusb.sys (...); a reboot is required before the binding is effective` | As above, but Windows wants a restart before the new binding takes effect. |
+| `1-3: P2 rebind failed: <detail>` | The INF could not be staged or the driver re-select failed; the Win32 error is in the detail. Nothing was changed. |
+| `1-3: capture.rebind.enabled is set but this process is not elevated, so the P2 rebind path cannot run` | The server is running unelevated. Restart it from an elevated shell (or let the service run it); nothing was changed. |
+
+A held device that states `CaptureUnsupported` instead has **not** been offered the rebind - check
+`capture.rebind.enabled` and `capture.mode` (the rebind is only offered under `auto`; `prebound-only`
+never rebinds) with `vht status`.
+
 ### `the usbip-win2 UDE host-controller driver (GUID_DEVINTERFACE_USBIP_VHCI) is not installed`
 
 Client side: no virtual host controller, so no device can be presented. Install the upstream

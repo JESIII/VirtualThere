@@ -13,6 +13,7 @@ public enum CaptureState
     Capturable,
     UnsafeToExport,
     CaptureUnsupported,
+    RebindOffered,
     AlreadyAttached,
     Ignored,
 }
@@ -84,6 +85,7 @@ public static class CaptureText
         return state switch
         {
             CaptureState.Capturable => "Exportable",
+            CaptureState.RebindOffered => "Exportable after a rebind - " + ShortReason(reason),
             CaptureState.AlreadyAttached => "Exportable (attached elsewhere)",
             CaptureState.UnsafeToExport => "Not exportable - " + ShortReason(reason),
             CaptureState.CaptureUnsupported => "Cannot capture - " + ShortReason(reason),

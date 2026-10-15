@@ -64,6 +64,16 @@ public enum CaptureState
     /// <summary>User-mode capture is not possible for this device (see CaptureReason).</summary>
     CaptureUnsupported,
 
+    /// <summary>
+    /// A function driver holds the device, but the operator opted into the P2 rebind path
+    /// (<c>capture.rebind.enabled</c> with <c>capture.mode = "auto"</c>), so the server may
+    /// claim it by moving it onto the inbox <c>winusb.sys</c> at bind time (ARCHITECTURE.md
+    /// §4.1). Distinct from <see cref="CaptureUnsupported"/> on purpose: that state means
+    /// "never", this one means "only after a rebind the operator has already permitted".
+    /// Carries <see cref="CaptureReason.DriverHoldsDevice"/>.
+    /// </summary>
+    RebindOffered,
+
     /// <summary>Currently bound to a client.</summary>
     AlreadyAttached,
 
@@ -107,6 +117,24 @@ public static class CaptureStates
     /// <summary>True when the device can actually be exported to a client right now.</summary>
     public static bool IsExportable(this CaptureState state) =>
         state is CaptureState.Capturable or CaptureState.AlreadyAttached;
+
+    /// <summary>
+    /// True when the state means "the operator permitted the P2 rebind, so this device can be
+    /// moved onto WinUSB and then claimed". The rebind itself happens at claim time, never
+    /// during enumeration (ARCHITECTURE.md §4.1), so this is a different question from
+    /// <see cref="IsExportable"/>.
+    /// </summary>
+    public static bool OffersRebind(this CaptureState state) =>
+        state is CaptureState.RebindOffered;
+
+    /// <summary>
+    /// True when a client may be given this device: it is exportable now, or the operator
+    /// permitted the rebind that makes it exportable. Every gate between enumeration and the
+    /// capture provider must ask this question, not <see cref="IsExportable"/> - asking the
+    /// latter in the provider is what made the P2 path unreachable.
+    /// </summary>
+    public static bool IsClaimable(this CaptureState state) =>
+        state.IsExportable() || state.OffersRebind();
 
     /// <summary>
     /// The operator-facing explanation for a refusal, in the same vocabulary the

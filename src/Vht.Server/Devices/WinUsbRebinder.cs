@@ -34,8 +34,13 @@ public readonly struct RebindResult
 /// Installs a device-specific INF that binds the inbox <c>winusb.sys</c> to one vid/pid, then
 /// re-selects the driver for the existing devnode.
 /// </summary>
+/// <remarks>
+/// The provider depends on <see cref="IDeviceRebinder"/> rather than on this class, so the P2
+/// decision - "is a rebind attempted at all for this device?" - is testable without a driver
+/// store or an elevated token; this class is the one that actually touches the machine.
+/// </remarks>
 [SupportedOSPlatform("windows")]
-public sealed class WinUsbRebinder
+public sealed class WinUsbRebinder : IDeviceRebinder
 {
     private const int ERROR_ACCESS_DENIED = 5;
 
@@ -52,12 +57,14 @@ public sealed class WinUsbRebinder
     /// <summary>Directory INF files are generated in.</summary>
     public string WorkingDirectory { get; }
 
-    /// <summary>True when this process can change a driver binding at all.</summary>
-    public static bool CanRebind => WindowsServiceManager.IsElevated;
-
     /// <summary>
-    /// Attempts the P2 path for a device whose WinUSB handle could not be opened.
+    /// True when this process can change a driver binding at all. The process token is the only
+    /// thing this can depend on, which is why it is a property of the rebinder rather than a
+    /// constant of the caller.
     /// </summary>
+    public bool CanRebind => WindowsServiceManager.IsElevated;
+
+    /// <inheritdoc />
     public RebindResult Rebind(ushort vendorId, ushort productId)
     {
         if (!CanRebind)

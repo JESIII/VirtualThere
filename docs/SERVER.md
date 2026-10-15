@@ -144,6 +144,50 @@ That is a statement of fact, not a failure of the export path. Options:
   driver holds it. Needs elevation, and it changes which driver owns your device - read
   `docs/TROUBLESHOOTING.md` before using it on a device you depend on.
 
+### 3.1 Capture states, and what each one transitions into
+
+The state a device is reported in is the whole answer to "will this device ever reach a client".
+`IsExportable` and `RebindOffered` are deliberately different states, because they mean different
+things: one says the server holds the device now, the other says the server will have to change
+which driver owns it first.
+
+| State | Meaning | Transition |
+|---|---|---|
+| `Capturable` | A WinUSB handle opens on the interface right now | claim at attach (P1) |
+| `RebindOffered` | A function driver holds it **and** the operator offered the rebind (`capture.rebind.enabled` + `capture.mode = "auto"`) | advertised to clients; the claim rebinds the device onto the inbox `winusb.sys` (P2), then re-enumerates and claims it (P1) |
+| `CaptureUnsupported` | No user-mode path: the rebind was not offered, or the device exposes no interface at all | none. Reported with its reason; never advertised |
+| `UnsafeToExport` | Exporting would damage the running system (system keyboard/mouse, management NIC) | none, rebind or not. Never advertised |
+| `AlreadyAttached` | Bound to a client | released on unbind |
+| `Ignored` | Hidden by policy | removed by `vht unignore` |
+
+The rebind never runs during enumeration - only when a client claims the device - so `RebindOffered`
+devices appear in `vht list` and in the USB/IP device list while still being driver-held. That is
+intentional: P2 is the only path that can export a device Windows already owns, and the claim is the
+only moment at which the server knows the device is actually wanted.
+
+What the operator sees, per outcome:
+
+```
+# rebind offered, device advertised while still driver-held:
+exporting 1-3 [046d:0aaa] "USB Receiver" - the function driver holds it; the P2 rebind runs when a client attaches
+
+# a client attaches, elevated: the rebind runs
+1-3: rebound onto the inbox winusb.sys (oem42.inf)
+1-3: rebound onto the inbox winusb.sys (oem42.inf); a reboot is required before the binding is effective
+1-3: P2 rebind failed: SetupCopyOEMInf failed for C:\ProgramData\VirtualThere\driver\vht-046d0aaa.inf (win32 740: ...)
+
+# a client attaches, not elevated: the refusal names elevation, it is not silent
+1-3: capture.rebind.enabled is set but this process is not elevated, so the P2 rebind path cannot run
+capture of 1-3 failed at bind: driver_holds_device no WinUSB handle (win32 8); ...
+
+# rebind not offered: the device is not advertised at all, and says how to change that
+1-3-252f868a [3151:5029] ... state=CaptureUnsupported reason=driver_holds_device \
+  detail="no WinUSB handle (win32 8); the function driver holds this device — set capture.rebind.enabled to offer the P2 rebind path"
+```
+
+`capture.mode = "prebound-only"` does **not** offer the rebind, whatever `capture.rebind.enabled`
+says: `prebound-only` means "never rebinds", so a held device stays `CaptureUnsupported`.
+
 Devices are re-scanned periodically (about every 3 s) on hosts where device-change notifications are
 not available, which is the hotplug path here.
 

@@ -269,8 +269,10 @@ public sealed class DevicePolicy
         if (allow.Length > 0 && !allow.Any(r => r.Matches(identity, ServerName)))
             return PolicyVerdict.Ignore($"not in the allow list ({identity})");
 
-        // A device the OS will not give us stays reported as unexportable, with its reason.
-        if (!device.CaptureState.IsExportable())
+        // A device the OS will not give us stays reported as unexportable, with its reason -
+        // except a driver-held device the operator permitted a rebind for, which is claimable by
+        // the P2 path at attach time and must not be filtered out here.
+        if (!device.CaptureState.IsClaimable())
         {
             return new PolicyVerdict
             {

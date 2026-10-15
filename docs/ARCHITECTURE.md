@@ -254,6 +254,13 @@ This is the same technique the reference products use for the claim step (the re
 
 The mode is a config key (`capture.mode = auto | winusb-only | prebound-only`), default `auto`.
 
+The rebind runs at **claim** time, not at enumeration: enumeration stays read-only and a device whose
+function driver holds it is advertised as `CaptureState.RebindOffered` (not `CaptureUnsupported`) for
+exactly as long as the operator's config offers the path. The two states must not be collapsed - one
+means "never", the other "only after the rebind the operator permitted" - and every gate between
+enumeration and the capture provider has to let `RebindOffered` through, or the path is unreachable
+whatever the config says (`docs/SERVER.md` §3.1 has the state table and the expected log lines).
+
 ### 4.2 Enumeration
 
 `SetupDiGetClassDevs(GUID_DEVINTERFACE_USB_DEVICE)` → `SetupDiEnumDeviceInterfaces` →
@@ -275,7 +282,7 @@ Hotplug: `CM_Register_Notification` (per-interface-class, `CM_NOTIFY_FILTER`) ra
 | The device hosting the running OS / pagefile | Rebinding removes the running system's disk | Refused; explicit config allow-list override required. |
 | NICs the management link depends on | Exporting it cuts the network the export runs over | Refused by default with a specific message. |
 | Composite/IAD devices where only one interface is wanted | A device-specific INF binds the whole device | v1 exports the whole device or nothing; per-interface export needs a function-level INF (v2). |
-| Devices whose function driver holds exclusive access and refuses to release | No filter driver to interpose | Reported as `CaptureUnsupported: driver_holds_device`. |
+| Devices whose function driver holds exclusive access and refuses to release | No filter driver to interpose | Reported as `CaptureUnsupported: driver_holds_device` when the rebind is not offered, and as `RebindOffered: driver_holds_device` - advertised, claimed through P2 - when `capture.rebind.enabled` is set with `capture.mode = "auto"` (`docs/SERVER.md` §3.1). |
 | Devices with isochronous endpoints above WinUSB's practical limits | See §10 risk 4 | Best-effort; classes affected are named in `client-workstream`'s honest matrix. |
 
 the reference product's answers to these are `AutoAttachToKernel` (`0x1409809bd`), `onPassToKernel`
@@ -741,7 +748,7 @@ deliberate absence of a device-count member):
 
 ```csharp
 public enum BindStatus { Success, Error, Unauthorized, PasswordRequired, DeviceBusy, ClientLimit, Unknown }
-public enum CaptureState { Capturable, UnsafeToExport, CaptureUnsupported, AlreadyAttached, Ignored }
+public enum CaptureState { Capturable, UnsafeToExport, CaptureUnsupported, RebindOffered, AlreadyAttached, Ignored }
 public enum CaptureReason { None, SystemCritical, HostsRunningOs, ManagementNetwork, DriverHoldsDevice, NoWinUsbInterface, IsoUnsupported, Policy }
 ```
 
