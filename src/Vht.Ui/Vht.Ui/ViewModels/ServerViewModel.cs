@@ -97,7 +97,7 @@ public sealed class ServerViewModel : ObservableObject, IServerDeviceActions, ID
 
     public string EmptyStateText => ServiceReachable
         ? "No capturable USB devices are currently enumerated on this machine."
-        : "Waiting for the " + Branding.ProductName + " server service on \\\\.\\pipe\\" + _client.PipeName + ".";
+        : "Not running. Click Start to begin.";
 
     public event EventHandler? MinimizeRequested;
 
@@ -125,7 +125,7 @@ public sealed class ServerViewModel : ObservableObject, IServerDeviceActions, ID
     public bool IsRunning => _status.Running;
 
     public string StateText => !ServiceReachable
-        ? "Service not reachable"
+        ? "Not running"
         : IsRunning ? _status.Describe() : "Stopped";
 
     public string ConnectionText

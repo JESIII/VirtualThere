@@ -93,7 +93,7 @@ public sealed class ClientViewModel : ObservableObject, IDisposable
 
     public string EmptyStateText => ServiceReachable
         ? "No servers have been discovered yet. Use Add server... to connect by address."
-        : "Waiting for the " + Branding.ProductName + " client service on \\\\.\\pipe\\" + _client.PipeName + ".";
+        : "Not running. Click Start to begin.";
 
     public event EventHandler? MinimizeRequested;
 
@@ -155,7 +155,7 @@ public sealed class ClientViewModel : ObservableObject, IDisposable
     public ObservableCollection<RemoteDeviceRowViewModel>? Devices => SelectedPeer?.Devices;
 
     public string StateText => !ServiceReachable
-        ? "Client service not reachable"
+        ? "Not running"
         : Peers.Count == 0 ? "Connected - no servers discovered yet" : "Connected";
 
     public string SummaryText
