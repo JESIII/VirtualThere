@@ -250,7 +250,7 @@ public sealed class ClientViewModel : ObservableObject, IDisposable
             if (!ServiceReachable && _workers is not null)
             {
                 WorkerStartResult result = await _workers.EnsureRunningAsync(_cts.Token).ConfigureAwait(true);
-                Log.AppendLocal(ServerViewModel.DescribeStart(result));
+                ServerViewModel.ReportStart(_workers, result, Log);
             }
 
             await RefreshAsync().ConfigureAwait(true);
@@ -279,7 +279,7 @@ public sealed class ClientViewModel : ObservableObject, IDisposable
         }
 
         WorkerStartResult result = await _workers.EnsureRunningAsync(_cts.Token).ConfigureAwait(true);
-        Log.AppendLocal(ServerViewModel.DescribeStart(result));
+        ServerViewModel.ReportStart(_workers, result, Log);
         if (result is WorkerStartResult.LaunchFailed or WorkerStartResult.TimedOut)
         {
             return false;

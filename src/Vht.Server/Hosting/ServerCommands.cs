@@ -18,6 +18,21 @@ public static class ServerCommands
     /// <summary><c>status</c> — asks the control plane whether a server is live.</summary>
     public static int Status(TextWriter output, string? pipeName = null)
     {
+        // Printed whether or not a server answers, and from the same resolution the server itself
+        // uses: when nothing answers, "where would its log have gone?" is the first question.
+        string logFile = ServerConfigLoader.DefaultLogFile(ServerConfigLoader.Resolve());
+        output.WriteLine($"runtime log:   {logFile}");
+
+        if (File.Exists(logFile))
+        {
+            output.WriteLine($"log written:   {File.GetLastWriteTime(logFile):yyyy-MM-dd HH:mm:ss} " +
+                $"({new FileInfo(logFile).Length} bytes)");
+        }
+        else
+        {
+            output.WriteLine("log written:   never (no server has started from this configuration yet)");
+        }
+
         using var client = new ControlClient(pipeName);
         try
         {

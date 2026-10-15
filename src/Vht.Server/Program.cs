@@ -224,7 +224,13 @@ public static class Program
         // was unzipped into.
         ConfigPaths paths = ServerConfigLoader.Resolve(configPath);
         string path = paths.ConfigFile;
-        var logger = BuildLogger(options);
+
+        // Built before the configuration file is read, and always pointed at a real file. The
+        // window's worker is a windowless WinExe (elevated: ShellExecuteEx with no redirection and
+        // no console to inherit; unelevated: the window drains and discards its stdout), so a
+        // default of "no file" means nothing it writes is ever recoverable - not the refusal, not
+        // the failure, not the lines it got out before it died.
+        var logger = BuildLogger(options, paths, out string defaultLogPath);
 
         if (paths.Source == ConfigSourceKind.Portable)
         {
@@ -243,6 +249,12 @@ public static class Program
         IReadOnlyList<string> configProblems = ServerConfigLoader.Apply(path, options, logger);
         foreach (string problem in configProblems)
             logger.Write(LogLevel.Warn, LogEvent.ConfigurationLoaded, $"configuration: {problem}");
+
+        // A named log file is a *second* destination, never a switch: the default sink is kept, and
+        // it is the only place the lines written before the configuration was read can be read
+        // back from. That ordering is the whole point - those are the lines a worker that dies
+        // before binding the pipe leaves behind.
+        AttachExplicitLogFile(logger, options, defaultLogPath);
 
         // `general.strict = true` in the file (or --strict on the command line) makes a rejected key
         // fatal instead of a warning. Without it a key the loader does not know - including one the
@@ -315,25 +327,85 @@ public static class Program
         }
     }
 
-    private static ILogger BuildLogger(ServerOptions options)
+    /// <summary>
+    /// Builds the server's logger: the console sink plus a file sink that is always attached.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The file is not optional. <c>logging.file = ""</c> (and no <c>--log-file</c>) means "the
+    /// default location", not "no file": <c>&lt;resolved config directory&gt;\logs\server.log</c>,
+    /// which honours <c>portable.marker</c> - a portable build logs into its own folder, beside the
+    /// configuration it is reading, not into <c>%ProgramData%</c>. The server's own config
+    /// directory is the one location rule for the whole product
+    /// (<see cref="ServerConfigLoader.Resolve"/>), so it is used here rather than assembled again.
+    /// </para>
+    /// <para>
+    /// <paramref name="defaultLogPath"/> is handed back because the path is worth reporting and
+    /// worth keeping: <c>vht status</c> prints it, and the last lines before a crash are only in
+    /// this file.
+    /// </para>
+    /// </remarks>
+    private static StructuredLogger BuildLogger(ServerOptions options, ConfigPaths paths, out string defaultLogPath)
     {
         var logger = new StructuredLogger(options.LogLevel, new TextWriterLogSink(Console.Out));
 
-        if (!string.IsNullOrWhiteSpace(options.LogFile))
-        {
-            try
-            {
-                var sink = new RollingFileLogSink(options.LogFile);
-                logger.AddSink(sink);
-            }
-            catch (IOException ex)
-            {
-                logger.Write(LogLevel.Warn, LogEvent.ServerStarting,
-                    $"could not open the log file {options.LogFile}: {ex.Message}");
-            }
-        }
+        defaultLogPath = ServerConfigLoader.DefaultLogFile(paths);
+        AttachFileSink(logger, defaultLogPath, LogEvent.ServerStarting,
+            $"runtime log: {defaultLogPath}");
 
         return logger;
+    }
+
+    /// <summary>
+    /// Attaches a rolling file sink, reporting the path on success and never failing the server on
+    /// a log it cannot open. <see cref="RollingFileLogSink"/> creates the directory and caps the
+    /// file at 8 MiB, rolling one generation to <c>.1</c>.
+    /// </summary>
+    private static void AttachFileSink(
+        StructuredLogger logger,
+        string path,
+        LogEvent evt,
+        string message)
+    {
+        try
+        {
+            logger.AddSink(new RollingFileLogSink(path));
+
+            // Said *after* the sink is attached, so the line proving where the log is lives in it.
+            logger.Write(LogLevel.Info, evt, message,
+                new Dictionary<string, object?> { ["path"] = path });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            logger.Write(LogLevel.Warn, LogEvent.ServerStarting,
+                $"could not open the log file {path}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Adds <c>--log-file</c>, or <c>logging.file</c> from the configuration file, as a second
+    /// destination. Nothing happens when it names the default, and the default is never dropped.
+    /// </summary>
+    private static void AttachExplicitLogFile(
+        StructuredLogger logger,
+        ServerOptions options,
+        string defaultLogPath)
+    {
+        if (string.IsNullOrWhiteSpace(options.LogFile))
+        {
+            return;
+        }
+
+        if (string.Equals(
+                Path.GetFullPath(options.LogFile),
+                Path.GetFullPath(defaultLogPath),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        AttachFileSink(logger, options.LogFile, LogEvent.ConfigurationLoaded,
+            $"logging.file: also writing to {options.LogFile} (the runtime log above is kept)");
     }
 
     private static ServerOptions BuildOptions(string[] args, out string? configPath)

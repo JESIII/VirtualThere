@@ -78,7 +78,14 @@ public sealed class ServerOptions
     /// <summary><c>logging.level</c> — minimum level.</summary>
     public LogLevel LogLevel { get; set; } = LogLevel.Info;
 
-    /// <summary><c>logging.file</c> — structured log path; empty means console/Event Log only.</summary>
+    /// <summary>
+    /// <c>logging.file</c> — an extra structured log path. Empty (or unset) means "the default
+    /// location", <b>not</b> "no file": the server always writes
+    /// <c>&lt;resolved config directory&gt;\logs\server.log</c>, which honours <c>portable.marker</c>.
+    /// A named file is a second destination that the default sink is kept alongside, because the
+    /// lines written before the configuration is read — all a window-launched worker leaves behind
+    /// when it dies before binding the pipe — exist only in the default file.
+    /// </summary>
     public string? LogFile { get; set; }
 
     /// <summary><c>control_plane.enabled</c> — the named-pipe control channel the tray drives.</summary>

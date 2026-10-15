@@ -307,7 +307,7 @@ public sealed class ServerViewModel : ObservableObject, IServerDeviceActions, ID
         try
         {
             WorkerStartResult result = await _workers.EnsureRunningAsync(_cts.Token).ConfigureAwait(true);
-            Log.AppendLocal(DescribeStart(result));
+            ReportStart(_workers, result, Log);
             await RefreshAsync().ConfigureAwait(true);
         }
         finally
@@ -345,6 +345,41 @@ public sealed class ServerViewModel : ObservableObject, IServerDeviceActions, ID
         WorkerStartResult.TimedOut => "the worker did not bind the control pipe in time",
         _ => "worker start returned " + result,
     };
+
+    /// <summary>
+    /// Writes the start outcome to the window log, and - when the worker did not come up - the
+    /// detail and the worker's own last lines underneath it.
+    /// </summary>
+    /// <remarks>
+    /// This is the whole point of keeping the worker's output: "the worker did not bind the control
+    /// pipe in time" is not diagnosable, and an operator staring at a device that never appears has
+    /// nothing else to go on. The lines below it are what the server itself said before it went.
+    /// </remarks>
+    internal static void ReportStart(IWorkerSupervisor? workers, WorkerStartResult result, LogViewModel log)
+    {
+        ArgumentNullException.ThrowIfNull(log);
+        log.AppendLocal(DescribeStart(result));
+
+        if (result is not (WorkerStartResult.TimedOut or WorkerStartResult.LaunchFailed))
+        {
+            return;
+        }
+
+        if (workers?.LastError is { Length: > 0 } detail)
+        {
+            log.AppendLocal(detail);
+        }
+
+        if (workers is null)
+        {
+            return;
+        }
+
+        foreach (string line in workers.LastWorkerOutput)
+        {
+            log.AppendLocal("worker: " + line);
+        }
+    }
 
     public async Task KickAsync(DeviceRowViewModel device)
     {

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Vht.Ui.Services;
@@ -38,6 +39,13 @@ public interface IWorkerSupervisor
 
     /// <summary>Last failure detail, for the window log.</summary>
     string? LastError { get; }
+
+    /// <summary>
+    /// The last lines the worker wrote to its standard output and error, oldest first. Empty for an
+    /// elevated worker, whose handles cannot be redirected: its lines are in the server's runtime
+    /// log, and <see cref="LastError"/> names that file in that case.
+    /// </summary>
+    IReadOnlyList<string> LastWorkerOutput { get; }
 
     /// <summary>
     /// Attaches when a control plane already answers on the pipe; otherwise starts the worker and
@@ -113,6 +121,10 @@ public sealed class WorkerSupervisor : IWorkerSupervisor, IDisposable
     /// <inheritdoc />
     public string? LastError { get; private set; }
 
+    /// <inheritdoc />
+    public IReadOnlyList<string> LastWorkerOutput =>
+        _worker is null ? Array.Empty<string>() : _worker.OutputTail;
+
     /// <summary>The supervisor a server window uses: probe and shutdown both on <c>server.*</c>.</summary>
     public static WorkerSupervisor ForServer(ControlPlane.VhtServiceClient client, AppOptions options)
     {
@@ -172,8 +184,12 @@ public sealed class WorkerSupervisor : IWorkerSupervisor, IDisposable
         bool ready = await WaitForControlPlaneAsync(cancellationToken).ConfigureAwait(false);
         if (!ready)
         {
-            LastError = "the worker did not answer on the control pipe within " +
-                _readyTimeout.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture) + "s";
+            // Not overwritten when the wait already knows something more specific: "the worker exited
+            // before it bound the control pipe" (with its output) is the diagnosis, and replacing it
+            // with the generic "did not answer in time" is what made this undiagnosable.
+            LastError ??= "the worker did not answer on the control pipe within " +
+                _readyTimeout.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture) + "s" +
+                WhereTheOutputIs();
             return WorkerStartResult.TimedOut;
         }
 
@@ -264,7 +280,7 @@ public sealed class WorkerSupervisor : IWorkerSupervisor, IDisposable
             {
                 LastError = "the worker (pid " +
                     _worker.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) +
-                    ") exited before it bound the control pipe";
+                    ") exited before it bound the control pipe" + WhereTheOutputIs();
                 return false;
             }
 
@@ -277,6 +293,23 @@ public sealed class WorkerSupervisor : IWorkerSupervisor, IDisposable
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// The sentence that says where a worker's dying words ended up, appended to both failure
+    /// messages so an operator is never told "it did not come up" without being told where to look.
+    /// </summary>
+    private string WhereTheOutputIs()
+    {
+        if (LastWorkerOutput.Count > 0)
+        {
+            return "; its last output is shown below";
+        }
+
+        return _spec.Elevate
+            ? "; its output went to the server's runtime log (run 'vht status' for the path) - an " +
+              "elevated worker cannot be redirected by this window"
+            : "; it wrote no output";
     }
 
     public void Dispose()

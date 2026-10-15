@@ -30,6 +30,29 @@ public static class ServerConfigLoader
     /// <summary>The file name the server keeps its configuration in.</summary>
     public const string FileName = "server.toml";
 
+    /// <summary>Sub-directory of the resolved config directory the server's runtime log lives in.</summary>
+    public const string LogDirectoryName = "logs";
+
+    /// <summary>The server's runtime log file name, inside <see cref="LogDirectoryName"/>.</summary>
+    public const string LogFileName = "server.log";
+
+    /// <summary>
+    /// Where the server writes its runtime log when nothing names a file: the same resolved
+    /// directory the configuration came from, in <c>logs/server.log</c> - <c>./config/logs</c> in a
+    /// portable folder, <c>%ProgramData%\VirtualThere\logs</c> otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Derived from <see cref="Resolve"/> rather than assembled, so the log cannot end up somewhere
+    /// the marker does not govern. Note that <c>%ProgramData%\VirtualThere\logs</c> is also where
+    /// the setup scripts put <c>portable-setup.log</c>: the server's file is <c>server.log</c>, so
+    /// the two never collide.
+    /// </remarks>
+    public static string DefaultLogFile(ConfigPaths paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        return Path.Combine(paths.Directory, LogDirectoryName, LogFileName);
+    }
+
     /// <summary>
     /// Resolves where <c>server.toml</c> lives, through the product-wide rule
     /// (<see cref="ConfigPathResolver"/>): <c>--config</c>, then <c>VHT_CONFIG</c>, then a
@@ -251,6 +274,7 @@ public static class ServerConfigLoader
                 return true;
 
             case "logging.file":
+                // Empty means "the default location", not "no file" (see ServerOptions.LogFile).
                 options.LogFile = text.Length == 0 ? null : text;
                 return true;
 
@@ -382,6 +406,10 @@ public static class ServerConfigLoader
 
         [logging]
         level = "Info"
+        # "" means the default location, which is not optional: <config dir>\logs\server.log,
+        # i.e. ./config/logs/server.log in a portable folder. Naming a file adds a second
+        # destination; the default is always kept, because the lines the worker writes before it
+        # reads this file only exist there.
         file = ""
 
         [control_plane]
