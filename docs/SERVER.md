@@ -53,8 +53,8 @@ needed for it. The full window semantics - including the notification-area affor
 Default path: `%ProgramData%\VirtualThere\server.toml` - that is the **installed** default, and the
 MSI/service case is unchanged by the rule below. In a **portable** folder (one containing
 `portable.marker` beside the executables) it is `config\server.toml` **in that folder** instead, so
-the shipped `dist/portable/vht-server.exe` keeps its configuration beside itself and writes nothing
-machine-wide. Precedence, highest first:
+the shipped `dist/portable/vht-server.exe` keeps its configuration and state beside itself rather
+than machine-wide. Precedence, highest first:
 
 1. `--config <path>` (a file, or a directory),
 2. `VHT_CONFIG`,
@@ -63,8 +63,25 @@ machine-wide. Precedence, highest first:
 
 The marker's **presence** is the whole test: remove the file and the installed default applies again.
 `vht-client` and the rest of the product resolve the same directory by the same rule, so a portable
-folder holds every file it writes (the client's `config\config.toml`, peers, grants and logs beside
-the server's `config\server.toml`).
+folder holds the whole of what the marker governs - the client's `config\config.toml`, `state.toml`,
+peers, grants and any log it writes into `config\`, beside the server's `config\server.toml` and
+`config\state.toml`.
+
+**What the marker does not govern.** It redirects the config/state directory, not every path the
+product can write. Three privileged paths stay machine-wide even in a portable folder, because they
+need elevation and belong to the machine rather than to the folder:
+
+* `%ProgramData%\VirtualThere\driver\` - the staged `vht-<vid><pid>.inf` files the P2 rebind writes
+  (`WinUsbRebinder`, reached when `capture.rebind.enabled = true` with `capture.mode = "auto"` and the
+  process is elevated; section 3.1);
+* `%ProgramData%\VirtualThere\tls\` - the default certificate directory
+  (`TransportOptions.DefaultCertificateDirectory`), created when the TLS transport is wired to the
+  server. Not reachable in v0.1.0: enabling `transport.tls.enabled` throws rather than serving;
+* `%ProgramData%\VirtualThere\logs\` - `Setup-Portable.ps1`'s default `-LogDirectory`, and the driver
+  install/removal scripts' logs. Pass `-LogDirectory` to keep those in the folder.
+
+Deleting a portable folder therefore removes its configuration, state, peers, grants and logs, not
+the privileged files above.
 
 Write a commented starter file with:
 
@@ -114,7 +131,8 @@ There is no default log file (`logging.file` is `none`): the server logs to the 
 service to the Event Log, unless you name a file. Nothing derives a log path from the config
 location, so no log is written into `%ProgramData%` behind your back. The directory holding the
 config file is created at start-up even when the file is not there yet - that is where the server's
-`state.toml` lands, so a portable folder is self-contained.
+`state.toml` lands, so the folder holds the server's whole configuration and state. (The privileged
+paths in the box above are the exception - they are the machine's, not the folder's.)
 
 Selectors are `vvvv:pppp`, `vvvv:pppp:serial` or `vvvv:pppp:serial@server`, e.g.
 `policy.ignore = ["1050:0407", "0b05:19af"]`.

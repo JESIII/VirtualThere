@@ -25,7 +25,7 @@ manual servers, auto-attach grants, the device identity map) and overlays it. Bo
 
 | Role | Default | Override |
 | --- | --- | --- |
-| Server (service) | `%ProgramData%/VirtualThere/config.toml` | `--config <path>` or `VHT_CONFIG` |
+| Server (service) | `%ProgramData%/VirtualThere/server.toml` | `--config <path>` or `VHT_CONFIG` |
 | Client (window and its worker) | `%LOCALAPPDATA%/VirtualThere/config.toml` | `--config <path>` or `VHT_CONFIG` |
 | Portable | `<directory of the executable>/config/config.toml` (used automatically when a `portable.marker` file sits next to the binary; the client's peers, grants and logs go in the same directory) | - |
 

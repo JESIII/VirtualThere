@@ -80,11 +80,15 @@ instead of half-working.
 
 Server (service): `%ProgramData%\VirtualThere\server.toml`. Client window/worker:
 `%LOCALAPPDATA%\VirtualThere\client\`. Override with `--config <path>` or `VHT_CONFIG`. A portable
-build - a folder containing `portable.marker` beside the executables - keeps what it writes in
-`<folder>\config` instead (`server.toml` for the server, `config.toml`, peers and grants for the
-client), which is also why two portable folders cannot share one configuration file. Remove the
-marker and the machine-wide default above applies again. The keys are in `docs/SERVER.md` and, for the
-full model, `docs/CONFIG.md`.
+build - a folder containing `portable.marker` beside the executables - keeps its **configuration and
+state** in `<folder>\config` instead (`server.toml` and `state.toml` for the server, `config.toml`,
+peers and grants for the client), which is also why two portable folders cannot share one
+configuration file. That is all the marker governs, though: the privileged paths stay machine-wide in
+a portable folder too (staged rebind INFs under `%ProgramData%\VirtualThere\driver`, TLS keys under
+`%ProgramData%\VirtualThere\tls`, the setup scripts' log under `%ProgramData%\VirtualThere\logs`), so
+deleting the folder removes its configuration and state, not those. Remove the marker and the
+machine-wide default above applies again. The keys are in `docs/SERVER.md` and, for the full model,
+`docs/CONFIG.md`.
 
 ### Why is the config documentation in two places?
 

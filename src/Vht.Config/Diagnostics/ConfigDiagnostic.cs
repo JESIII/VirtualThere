@@ -1,7 +1,10 @@
 namespace Vht.Config.Diagnostics;
 
-/// <summary>Where a value came from. Precedence, lowest to highest:
-/// Defaults &lt; File (config.toml) &lt; Overlay (state.toml) &lt; Environment &lt; CommandLine.</summary>
+/// <summary>Where a value came from. For the value layers, precedence lowest to highest:
+/// Defaults &lt; File (config.toml) &lt; Overlay (state.toml) &lt; Environment &lt; CommandLine.
+/// <see cref="Portable"/> is not a layer in that order - it names the <i>location</i> a
+/// <c>portable.marker</c> beside the executable redirects the directory to, and it is only ever
+/// reported when neither the command line nor <c>VHT_CONFIG</c> named a path.</summary>
 public enum ConfigSourceKind
 {
     Defaults = 0,
@@ -11,7 +14,8 @@ public enum ConfigSourceKind
     CommandLine = 4,
 
     /// <summary>A <c>portable.marker</c> beside the executable - config and state stay in
-    /// <c>./config</c> in that folder.</summary>
+    /// <c>./config</c> in that folder. A location, not a precedence layer: it loses to
+    /// <see cref="CommandLine"/> and <see cref="Environment"/>.</summary>
     Portable = 5,
 }
 

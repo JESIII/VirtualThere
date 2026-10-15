@@ -162,10 +162,14 @@ internal static class PortableCommand
         BuildContext.EnsureDirectory(target);
 
         // portable.marker: Vht.Config/Vht.Client/Vht.Server look for this file next to the executable
-        // and keep their files in ./config instead of %ProgramData% (the server's server.toml) or
-        // %LOCALAPPDATA% (the client's config.toml, peers.json, grants and logs). The server resolves
-        // server.toml through the same rule, which is what makes a portable folder self-contained and
-        // keeps two copies unzipped to two places from sharing one machine-wide file.
+        // and resolve their config/state directory to ./config instead of %ProgramData% (the server's
+        // server.toml and state.toml) or %LOCALAPPDATA% (the client's config.toml, peers.json, grants
+        // and logs). The server resolves server.toml through the same rule, which is what makes a
+        // portable folder self-contained and keeps two copies unzipped to two places from sharing one
+        // machine-wide file. The marker governs that one directory only - the privileged paths that
+        // need elevation (staged rebind INFs under %ProgramData%\VirtualThere\driver, TLS keys under
+        // %ProgramData%\VirtualThere\tls, the setup scripts' log under %ProgramData%\VirtualThere\logs)
+        // stay machine-wide even here; docs/SERVER.md section 2 lists them.
         File.WriteAllText(
             Path.Combine(target, "portable.marker"),
             "VirtualThere portable build marker: config lives in ./config next to these executables.\n",

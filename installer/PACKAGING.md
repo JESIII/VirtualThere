@@ -265,10 +265,18 @@ step above is skipped. Logs: `%ProgramData%\VirtualThere\logs\driver-uninstall.l
    `%LOCALAPPDATA%\VirtualThere\client` (client) hold configuration, peers, grants and logs. Removing
    them is not the uninstaller's job (silently deleting user data is worse than leaving it), and the
    uninstall acceptance test only requires the service, driver, firewall rules and binaries to go.
-   A **portable** folder is the exception that makes the "delete the folder" story true: while
-   `portable.marker` is present, both executables keep everything they write in `<folder>\config`
-   (`server.toml` for the server, `config.toml`, peers and grants for the client) and touch neither
-   `%ProgramData%` nor `%LOCALAPPDATA%`. See section 1's layout listing.
+   A **portable** folder is the exception that makes the "delete the folder" story true for its own
+   files: while `portable.marker` is present, both executables keep their **configuration and state**
+   in `<folder>\config` (`server.toml` and `state.toml` for the server, `config.toml`, peers and
+   grants for the client) instead of `%ProgramData%\VirtualThere` / `%LOCALAPPDATA%\VirtualThere\client`,
+   so deleting the folder removes them. The marker governs that one directory and nothing else. The
+   **privileged paths stay machine-wide** in a portable folder too, because they need elevation and
+   belong to the machine rather than to the folder: the staged rebind INFs under
+   `%ProgramData%\VirtualThere\driver` (`capture.rebind.enabled`, elevated - section 1's layout
+   listing), the TLS key material under `%ProgramData%\VirtualThere\tls` (the default certificate
+   directory, once the TLS transport is wired to the server), and the setup scripts' own log
+   (`portable-setup.log`, and the driver scripts' logs) under `%ProgramData%\VirtualThere\logs`.
+   Those survive deleting a portable folder. See section 1's layout listing.
 6. **No icons or branding artwork** in the package: the icon set lives in the UI card's scope.
    Shortcuts therefore use the role executables' default icon.
 

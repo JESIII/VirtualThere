@@ -66,11 +66,16 @@ been run on a clean machine yet - the packaging document says exactly what was a
 
 The **portable folder** is used in place: copy `dist/portable/` anywhere and run `vht-server.exe`,
 `vht-client.exe` or `vht.exe` from it. That folder contains `portable.marker`, so both executables
-keep everything they write in `config\` beside themselves - `server.toml` for the server,
-`config.toml`, peers and grants for the client - and never touch `%ProgramData%` or `%LOCALAPPDATA%`.
-Two portable copies therefore cannot share one configuration file, and removing the folder removes
-everything it wrote. Delete `portable.marker` and the installed defaults apply again (server
-`%ProgramData%\VirtualThere\server.toml`, client `%LOCALAPPDATA%\VirtualThere\client`).
+keep their **configuration and state** in `config\` beside themselves - `server.toml` and `state.toml`
+for the server, `config.toml`, peers and grants for the client - instead of `%ProgramData%` or
+`%LOCALAPPDATA%`. Two portable copies therefore cannot share one configuration file, and deleting the
+folder removes its configuration, state and anything else it wrote there. The marker governs that one
+directory, not every path the product can write: the privileged paths that need elevation, and
+therefore belong to the machine rather than to the folder, stay machine-wide in a portable folder too
+(staged rebind INFs under `%ProgramData%\VirtualThere\driver`, TLS keys under
+`%ProgramData%\VirtualThere\tls`, the setup scripts' own log under `%ProgramData%\VirtualThere\logs` -
+`docs/SERVER.md` section 2 lists them). Delete `portable.marker` and the installed defaults apply
+again (server `%ProgramData%\VirtualThere\server.toml`, client `%LOCALAPPDATA%\VirtualThere\client`).
 
 **From source**
 

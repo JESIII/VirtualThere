@@ -85,9 +85,12 @@ public static class ConfigPathResolver
         executableDirectory ??= AppContext.BaseDirectory;
         configFileName = string.IsNullOrWhiteSpace(configFileName) ? ConfigFileName : configFileName!;
 
-        // 3. portable marker next to the binary. The marker redirects the directory to ./config, so a
-        //    portable build never touches %ProgramData%/%LOCALAPPDATA% - not for config, not for
-        //    state. Vht.Client/ClientPaths resolves the same directory for the client role.
+        // 3. portable marker next to the binary. The marker redirects the directory to ./config, which
+        //    is what keeps a portable build's config and state out of %ProgramData%/%LOCALAPPDATA%. What
+        //    it governs is the directory and nothing else - the privileged paths (staged rebind INFs,
+        //    TLS keys, the setup scripts' log) are not resolved here and stay machine-wide; see
+        //    docs/SERVER.md section 2. Vht.Client/ClientPaths resolves the same directory for the client
+        //    role.
         string? portableMarker = null;
         string? portableDirectory = null;
         if (!string.IsNullOrWhiteSpace(executableDirectory))

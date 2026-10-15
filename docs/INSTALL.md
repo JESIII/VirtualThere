@@ -36,12 +36,17 @@ msiexec /x VirtualThere-0.1.0-x64.msi /qn          # uninstall: service, driver,
 
 The portable folder is used in place: copy `dist/portable/` anywhere (it is not under
 `%ProgramFiles%` and is not registered with the SCM) and run `vht-server.exe`, `vht-client.exe` or
-`vht.exe` from there. Configuration stays in `./config` next to the binaries, because the folder
-contains `portable.marker`: the server reads and writes `config\server.toml` there, the client its
-own `config\config.toml`, peers and grants. Nothing in a portable folder goes to `%ProgramData%` or
-`%LOCALAPPDATA%`, so two copies unzipped to two places cannot share one configuration file, and
-deleting the folder really does remove everything the folder wrote. Remove `portable.marker` and the
-executables fall back to the installed defaults (server `%ProgramData%\VirtualThere\server.toml`,
+`vht.exe` from there. Configuration and state stay in `./config` next to the binaries, because the
+folder contains `portable.marker`: the server reads and writes `config\server.toml` and
+`config\state.toml` there, the client its own `config\config.toml`, peers and grants - instead of
+`%ProgramData%` and `%LOCALAPPDATA%`. Two copies unzipped to two places therefore cannot share one
+configuration file, and deleting the folder removes the configuration, state and anything else it
+wrote there. The marker governs that one directory, not every path the product can write: the
+privileged paths that need elevation, and therefore belong to the machine rather than to the folder,
+stay machine-wide in a portable folder too (staged rebind INFs under `%ProgramData%\VirtualThere\driver`,
+TLS keys under `%ProgramData%\VirtualThere\tls`, the setup scripts' own log under
+`%ProgramData%\VirtualThere\logs`; `docs/SERVER.md` section 2 lists them). Remove `portable.marker` and
+the executables fall back to the installed defaults (server `%ProgramData%\VirtualThere\server.toml`,
 client `%LOCALAPPDATA%\VirtualThere\client`).
 
 Everything below was exercised on Windows 11 (build 26300) with .NET SDK 10.0.402.

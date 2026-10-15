@@ -605,8 +605,11 @@ Build system details:
   (`server.toml` is the service's file name), `%LOCALAPPDATA%\VirtualThere\config.toml` for the
   client/tray. One rule for all of them (`Vht.Config` `ConfigPathResolver`): `--config <path>`, then
   `VHT_CONFIG`, then a `portable.marker` beside the executable (which keeps config and state in
-  `./config` in that folder - the server included, so a portable folder writes nothing machine-wide),
-  then the per-role default. Without the marker the installed default stands.
+  `./config` in that folder - the server included), then the per-role default. Without the marker the
+  installed default stands. The marker governs that directory and nothing else: the privileged paths
+  it cannot redirect (staged rebind INFs under `%ProgramData%\VirtualThere\driver`, TLS key material
+  under `%ProgramData%\VirtualThere\tls`, the setup scripts' log under `%ProgramData%\VirtualThere\logs`)
+  stay machine-wide in a portable folder too - see `docs/SERVER.md` section 2.
 - **Versioning:** one version for all binaries from `Vht.Core` `AssemblyInformationalVersion`;
   auto-update = manual for v1, stated plainly in the README (`packaging-workstream` deliverable 6).
 
