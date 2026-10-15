@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tests for the UI host: the supervision of the privileged worker a window starts. They live under
+    tests/ beside the other test projects; the subject is src/Vht.Ui, which is where the worker
+    lifecycle (start, attach, stop, no orphan) is implemented.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>Vht.Ui.Tests</RootNamespace>
+    <AssemblyName>Vht.Ui.Tests</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- WFO0003: inherited from the Vht.Ui subtree this project references (WPF + NotifyIcon). -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- UseWindowsForms replaces the SDK's implicit-using set; System.IO is used here. -->
+    <Using Include="System.IO" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Vht.Ui\Vht.Ui\Vht.Ui.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

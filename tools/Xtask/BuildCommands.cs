@@ -65,7 +65,7 @@ internal static class TestCommand
     }
 }
 
-/// <summary>`xtask portable` — the four self-contained single-file executables plus their support files.</summary>
+/// <summary>`xtask portable` — the self-contained single-file executables plus their support files.</summary>
 internal static class PortableCommand
 {
     internal static async Task<int> RunAsync(BuildContext context, Program.Options options)

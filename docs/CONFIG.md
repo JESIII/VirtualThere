@@ -26,7 +26,7 @@ manual servers, auto-attach grants, the device identity map) and overlays it. Bo
 | Role | Default | Override |
 | --- | --- | --- |
 | Server (service) | `%ProgramData%/VirtualThere/config.toml` | `--config <path>` or `VHT_CONFIG` |
-| Client / tray | `%LOCALAPPDATA%/VirtualThere/config.toml` | `--config <path>` or `VHT_CONFIG` |
+| Client (window and its worker) | `%LOCALAPPDATA%/VirtualThere/config.toml` | `--config <path>` or `VHT_CONFIG` |
 | Portable | `<directory of the executable>/config.toml` (used automatically when a `virtualthere.portable` marker file sits next to the binary) | - |
 
 `state.toml` always lives next to `config.toml` - it belongs to the same installation. Precedence for
@@ -105,7 +105,7 @@ key:s-1050-0407-0123456789AB   the stable device key (strongest, survives string
 | `transport.tls.port` | integer | `3241` | yes | the reference product's `SSLPort`; 3240+1 so both listeners coexist. Must differ from the plaintext port when both are enabled. |
 | `transport.tls.certificate` | string | (empty) | yes | PEM/PFX path. Empty means generate/use the per-machine self-signed certificate. |
 | `transport.tls.lz4_enabled` | boolean | `true` | no | the reference product's compression switch: negotiate LZ4 on the TLS listener. |
-| `transport.tls.lz4_threshold_bytes` | integer | `1024` | no | the reference product's `CompressionLimit`: payloads smaller than this are never compressed. |
+| `transport.tls.lz4_threshold_bytes` | integer | `65536` | no | the reference product's `CompressionLimit`: payloads smaller than this are never compressed. 64 KiB is the smallest payload size at which LZ4 was measured to beat plain TLS on compressible data on this host — see the transport card's payload-size sweep (`docs/TRANSPORT.md` §6.1, §9.4). The reference product's default (1024) was measured to lose 1–32 KiB payloads to plain TLS. |
 
 ### security
 

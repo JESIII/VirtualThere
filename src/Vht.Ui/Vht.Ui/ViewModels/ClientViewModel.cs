@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Threading;
 using Vht.Ui.ControlPlane;
+using Vht.Ui.Hosting;
 using Vht.Ui.Model;
 using Vht.Ui.Mvvm;
 
@@ -18,11 +19,13 @@ public sealed class ClientViewModel : ObservableObject, IDisposable
 {
     private readonly VhtServiceClient _client;
     private readonly IPromptService _prompts;
+    private readonly IWorkerSupervisor? _workers;
     private readonly CancellationTokenSource _cts = new();
     private readonly DispatcherTimer? _timer;
     private bool _polling;
     private bool _disposed;
     private bool _serviceReachable;
+    private bool _workerBusy;
     private PeerRowViewModel? _selectedPeer;
     private RemoteDeviceRowViewModel? _selectedDevice;
     private string _connectionText = "Contacting the " + Branding.ProductName + " client service...";
@@ -30,10 +33,12 @@ public sealed class ClientViewModel : ObservableObject, IDisposable
     public ClientViewModel(
         VhtServiceClient client,
         IPromptService prompts,
-        TimeSpan? pollInterval = null)
+        TimeSpan? pollInterval = null,
+        IWorkerSupervisor? workers = null)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _prompts = prompts ?? throw new ArgumentNullException(nameof(prompts));
+        _workers = workers;
 
         Log = new LogViewModel(client);
 
@@ -44,7 +49,11 @@ public sealed class ClientViewModel : ObservableObject, IDisposable
             () => DetachAsync(SelectedDevice),
             () => CanControl && SelectedDevice is { Attached: true });
         AddPeerCommand = new AsyncRelayCommand(AddPeerAsync, () => CanControl);
-        RefreshCommand = new AsyncRelayCommand(() => RefreshAsync(), () => CanControl);
+
+        // Refresh is the client window's way in when nothing answers on the pipe: it is the only
+        // control that stays enabled with no service, and pressing it starts the elevated worker
+        // the same way the server window's Start does.
+        RefreshCommand = new AsyncRelayCommand(RefreshWithWorkerAsync, () => !_workerBusy);
         MinimizeCommand = new RelayCommand(() => MinimizeRequested?.Invoke(this, EventArgs.Empty));
         AboutCommand = new RelayCommand(() => AboutRequested?.Invoke(this, EventArgs.Empty));
         ExitCommand = new RelayCommand(() => ExitRequested?.Invoke(this, EventArgs.Empty));
@@ -191,7 +200,6 @@ public sealed class ClientViewModel : ObservableObject, IDisposable
         {
             return;
         }
-
         _polling = true;
         try
         {
@@ -227,6 +235,58 @@ public sealed class ClientViewModel : ObservableObject, IDisposable
         {
             _polling = false;
         }
+    }
+
+    /// <summary>
+    /// Refresh pressed by the user (window button or the notification-area Start item): brings the
+    /// privileged worker up first when nothing answers on the pipe.
+    /// </summary>
+    private async Task RefreshWithWorkerAsync()
+    {
+        _workerBusy = true;
+        RaiseCanExecute();
+        try
+        {
+            if (!ServiceReachable && _workers is not null)
+            {
+                WorkerStartResult result = await _workers.EnsureRunningAsync(_cts.Token).ConfigureAwait(true);
+                Log.AppendLocal(ServerViewModel.DescribeStart(result));
+            }
+
+            await RefreshAsync().ConfigureAwait(true);
+        }
+        finally
+        {
+            _workerBusy = false;
+            RaiseCanExecute();
+        }
+    }
+
+    /// <summary>
+    /// True when a control plane answers; starts the elevated worker when it does not. Used by the
+    /// device and server actions so "attach this device" also works from a cold window.
+    /// </summary>
+    private async Task<bool> EnsureServiceAsync()
+    {
+        if (ServiceReachable)
+        {
+            return true;
+        }
+
+        if (_workers is null)
+        {
+            return false;
+        }
+
+        WorkerStartResult result = await _workers.EnsureRunningAsync(_cts.Token).ConfigureAwait(true);
+        Log.AppendLocal(ServerViewModel.DescribeStart(result));
+        if (result is WorkerStartResult.LaunchFailed or WorkerStartResult.TimedOut)
+        {
+            return false;
+        }
+
+        await RefreshAsync().ConfigureAwait(true);
+        return ServiceReachable;
     }
 
     private void MarkUnreachable(string? reason)
@@ -313,6 +373,12 @@ public sealed class ClientViewModel : ObservableObject, IDisposable
             return;
         }
 
+        if (!await EnsureServiceAsync().ConfigureAwait(true))
+        {
+            Log.AppendLocal("clients.attach " + device.DisplayName + " - no client service is available");
+            return;
+        }
+
         ControlPlaneResponse response = await _client
             .SetAttachmentAsync(device.PeerId, device.BusId, attach: true, _cts.Token)
             .ConfigureAwait(true);
@@ -324,6 +390,12 @@ public sealed class ClientViewModel : ObservableObject, IDisposable
     {
         if (device is null)
         {
+            return;
+        }
+
+        if (!await EnsureServiceAsync().ConfigureAwait(true))
+        {
+            Log.AppendLocal("clients.detach " + device.DisplayName + " - no client service is available");
             return;
         }
 
@@ -340,6 +412,12 @@ public sealed class ClientViewModel : ObservableObject, IDisposable
     /// </summary>
     public async Task SetAutoAttachAsync(RemoteDeviceRowViewModel device, bool enabled)
     {
+        if (!await EnsureServiceAsync().ConfigureAwait(true))
+        {
+            Log.AppendLocal("clients.attach (auto) " + device.DisplayName + " - no client service is available");
+            return;
+        }
+
         ControlPlaneResponse response = await _client
             .SetAutoAttachAsync(device.PeerId, device.BusId, enabled, _cts.Token)
             .ConfigureAwait(true);
@@ -355,6 +433,12 @@ public sealed class ClientViewModel : ObservableObject, IDisposable
 
         if (string.IsNullOrWhiteSpace(input))
         {
+            return;
+        }
+
+        if (!await EnsureServiceAsync().ConfigureAwait(true))
+        {
+            Log.AppendLocal("peers.add " + input + " - no client service is available");
             return;
         }
 

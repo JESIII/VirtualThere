@@ -1,8 +1,113 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// vht-client process entry point. Kept deliberately thin: everything testable lives in the
-// libraries under this project, so the tests never need to spawn a process.
+// vht-client process entry point: one visible executable that opens the VirtualThere Client
+// window, plus the client itself and the console verbs that address it.
+//
+// Three ways in, decided by the command line:
+//   vht-client                     open the VirtualThere Client window (this file, GUI path)
+//   vht-client <verb> [options]    the console verbs, unchanged (ClientCli)
+//   vht-client --worker ...        the privileged half the window starts: the client runtime,
+//                                  foreground, no window and no console
+//
+// The worker is not tied to the window that started it: a worker whose window is gone keeps
+// serving (and keeps attached devices attached), and the next launch of the window attaches to it.
+// The window stops its worker on Exit, over the control pipe (clients.detachAll) and then the
+// process itself. See docs/UI.md section 1.
 
+using System;
 using Vht.Client.Cli;
+using Vht.Ui;
+using Vht.Ui.Hosting;
 
-return await ClientCli.RunAsync(args, Console.Out, Console.Error).ConfigureAwait(false);
+namespace Vht.Client;
+
+/// <summary>Process entry point for <c>vht-client</c>.</summary>
+internal static class Program
+{
+    [STAThread]
+    internal static int Main(string[] args)
+    {
+        if (UiHost.IsWorkerInvocation(args))
+        {
+            return RunBlocking(
+                ClientCli.RunAsync(WithoutWorkerFlag(args), Console.Out, Console.Error),
+                worker: true);
+        }
+
+        // A bare first word is a verb, exactly as before: an unknown one is still reported as an
+        // unknown command rather than silently opening a window.
+        string? verb = args.Length > 0 && !args[0].StartsWith('-') ? args[0] : null;
+        if (verb is not null)
+        {
+            HostConsole.EnsureForVerbs();
+            return RunBlocking(ClientCli.RunAsync(args, Console.Out, Console.Error), worker: false);
+        }
+
+        bool helpWanted = HasFlag(args, "--help") || HasFlag(args, "-h") || HasFlag(args, "/?");
+
+        if (HasFlag(args, "--version"))
+        {
+            HostConsole.EnsureForVerbs();
+            Console.WriteLine(Branding.ProductName + " " + Branding.VersionText);
+            return 0;
+        }
+
+        if (helpWanted)
+        {
+            // With a console (a shell, or a redirect) the usage goes there; with none - a
+            // double-click with --help - it is shown in a dialog rather than vanishing.
+            if (!HostConsole.EnsureForVerbs())
+            {
+                return UiHost.Run(UiRole.Client, args);
+            }
+
+            return RunBlocking(ClientCli.RunAsync(["--help"], Console.Out, Console.Error), worker: false);
+        }
+
+        return UiHost.Run(UiRole.Client, args);
+    }
+
+    /// <summary>Clients run a long-lived bridge; the console path has to be driven to completion here.</summary>
+    private static int RunBlocking(System.Threading.Tasks.Task<int> run, bool worker)
+    {
+        try
+        {
+            return run.GetAwaiter().GetResult();
+        }
+        catch (OperationCanceledException) when (worker)
+        {
+            // The window went away and asked us to stop: a clean exit, not a failure.
+            return 0;
+        }
+    }
+
+    /// <summary>Drops <c>--worker</c> before the verb parses its own options.</summary>
+    private static string[] WithoutWorkerFlag(string[] args)
+    {
+        var kept = new System.Collections.Generic.List<string>(args.Length);
+        foreach (string argument in args)
+        {
+            if (string.Equals(argument, UiHost.WorkerSwitch, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            kept.Add(argument);
+        }
+
+        return kept.ToArray();
+    }
+
+    private static bool HasFlag(string[] args, string flag)
+    {
+        foreach (string argument in args)
+        {
+            if (string.Equals(argument, flag, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}

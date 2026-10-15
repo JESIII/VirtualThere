@@ -1,16 +1,53 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <!--
+      WinExe: double-clicking vht-server.exe opens the VirtualThere Server window and never a
+      console. The console verbs (serve, status, list, install, ...) are still served by the same
+      binary and are unchanged - they are reached by passing a verb explicitly, and they write to
+      the console the caller already has.
+    -->
+    <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>Vht.Server</RootNamespace>
     <AssemblyName>vht-server</AssemblyName>
+    <ApplicationManifest>..\Vht.Ui\Vht.Ui\app.manifest</ApplicationManifest>
+    <!--
+      WFO0003 wants DPI settings out of the manifest in a WinForms project. This is a WPF window
+      that merely has WinForms available for the notification-area icon (as Vht.Ui did before), so
+      the manifest is the correct and only mechanism that applies; the ApplicationHighDpiMode
+      property is consumed by ApplicationConfiguration.Initialize(), which a WPF entry point never
+      calls.
+    -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
+    <!--
+      InvariantGlobalization must be OFF in a process that hosts a WPF window. WPF resolves
+      xml:lang (every FrameworkElement defaults to "en-US") through CultureInfo, and in invariant
+      mode only the invariant culture exists, so the window fails to construct with
+      "Cannot find non-neutral culture related to 'en-us'" - the whole GUI path dies before the
+      first frame. Found by running vht-ui-driver against the published vht-server.exe. The CLI
+      (vht.exe) keeps the root's invariant setting: it has no window to fail in.
+    -->
+    <InvariantGlobalization>false</InvariantGlobalization>
     <Description>VirtualThere USB/IP server: enumerates local USB devices, claims them user-mode via WinUSB, exports them over USB/IP with no device-count limit.</Description>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Vht.Core\Vht.Core.csproj" />
     <ProjectReference Include="..\Vht.Interop\Vht.Interop.csproj" />
+
+    <!-- The management window this executable hosts (Hosting/UiHost). -->
+    <ProjectReference Include="..\Vht.Ui\Vht.Ui\Vht.Ui.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      UseWindowsForms replaces the SDK's implicit-using set (System.IO among others). This puts
+      System.IO back, so the console verbs and the logger keep compiling unchanged.
+    -->
+    <Using Include="System.IO" />
   </ItemGroup>
 
 </Project>

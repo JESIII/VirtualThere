@@ -67,6 +67,10 @@ public static class Program
               soak                sustained run over N devices with memory/throughput sampling
                                     --devices <n>       default 8
                                     --seconds <s>       default 120
+                                    --gc-sample <s>     also sample retained (post-forced-GC) MiB
+                                                        every <s> seconds; default 0 = off
+                                    --out <file>        transcript name under artifacts/acceptance/
+                                                        (default soak.txt)
               perf                1-device vs N-device throughput, and plain/TLS/TLS+LZ4 overhead
               perf-sweep          URB-size sweep (4 KiB..1 MiB) for the LZ4 threshold decision, with the
                                   server session's own LZ4 frame counters
@@ -375,11 +379,30 @@ public static class Program
     {
         int deviceCount = IntFlag(args, "--devices", 8);
         int seconds = IntFlag(args, "--seconds", 120);
+        // Opt-in instrumentation for the retained-memory investigation (card t_9b590ee0): a blocking
+        // full collection every N seconds, so the same soak prints retained (not "managed including
+        // uncollected garbage") at t=0, every N seconds, and at the end. Off by default so the
+        // published soak.txt transcript stays the plain 120 s run.
+        int gcSampleSeconds = IntFlag(args, "--gc-sample", 0);
+        string outName = StringFlag(args, "--out", "soak.txt");
 
-        using var t = new Transcript(Path.Combine(ArtifactDir, "soak.txt"));
+        using var t = new Transcript(Path.Combine(ArtifactDir, outName));
         t.Line("VirtualThere acceptance - soak");
         t.Line($"devices={deviceCount}  duration={seconds}s  transport=plain TCP");
         t.Line("Same hardware caveat as multi.txt: synthetic devices, production software path.");
+        if (gcSampleSeconds > 0)
+        {
+            t.Line();
+            t.Line($"retained sampling  : ON - blocking full collection every {gcSampleSeconds}s");
+            t.Line("                     retained MiB = GC.GetTotalMemory(forceFullCollection: true), i.e. the");
+            t.Line("                     live heap after a forced gen2 collection. The harness's own per-URB");
+            t.Line("                     garbage cannot appear in it, so it is the product's retention plus the");
+            t.Line("                     harness's own live objects (bounded: one client and one pending-URB map");
+            t.Line("                     per device). allocated GiB = GC.GetTotalAllocatedBytes(precise: true),");
+            t.Line("                     the whole process's churn, for comparison with the retained column.");
+            t.Line("                     pending URB tasks = the server sessions' unfinished-transfer count,");
+            t.Line("                     which is what a teardown barrier should hold: bounded by concurrency.");
+        }
         t.Line();
 
         var devices = BuildDevices(deviceCount);
@@ -427,6 +450,16 @@ public static class Program
         int tick = 0;
         long firstSampleMbps = 0;
         long lastSampleMbps = 0;
+        int lastRetainedTick = 0;
+
+        if (gcSampleSeconds > 0)
+        {
+            t.Line();
+            t.Line("  t(s)   retained MiB   working MiB   allocated GiB   pending URB tasks");
+            t.Line("  -----  ------------  ------------  --------------  -----------------");
+            t.Line(RetainedRow(0, rig));
+            lastRetainedTick = 0;
+        }
 
         while (!stop.IsCancellationRequested && started.Elapsed < TimeSpan.FromSeconds(seconds))
         {
@@ -450,6 +483,12 @@ public static class Program
                 ProcessMetrics.WorkingSetBytes / (1024.0 * 1024.0), failed));
 
             if (failed > 0) disconnects = failed;
+
+            if (gcSampleSeconds > 0 && tick - lastRetainedTick >= gcSampleSeconds)
+            {
+                lastRetainedTick = tick;
+                t.Line(RetainedRow(tick, rig));
+            }
         }
 
         try
@@ -514,6 +553,33 @@ public static class Program
                 double seconds = Math.Max(clock.Elapsed.TotalSeconds, 0.001);
                 return new WindowSnapshot(live.Bytes, seconds, live.Failures);
             });
+    }
+
+    /// <summary>
+    /// One retained-memory sample for the soak: a blocking full collection first, then the live
+    /// heap, the working set, the process's cumulative allocation churn and the server sessions'
+    /// unfinished-transfer count.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="GC.GetTotalMemory(bool)"/> with <c>forceFullCollection: true</c> is the measurement
+    /// that separates retention from GC lag: everything the run allocated and then dropped is
+    /// collected before the number is read, so what is left is what the process is still holding.
+    /// </remarks>
+    private static string RetainedRow(int tick, AcceptanceRig rig)
+    {
+        long retained = GC.GetTotalMemory(forceFullCollection: true);
+        long allocated = GC.GetTotalAllocatedBytes(precise: true);
+        long working = ProcessMetrics.WorkingSetBytes;
+        int pending = rig.State.Connections.Snapshot().Sum(c => c.PendingTransfers);
+
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "  {0,5}  {1,12:0.0}  {2,12:0.0}  {3,14:0.00}  {4,17}",
+            tick,
+            retained / (1024.0 * 1024.0),
+            working / (1024.0 * 1024.0),
+            allocated / (1024.0 * 1024.0 * 1024.0),
+            pending);
     }
 
     // =====================================================================================
@@ -1092,6 +1158,16 @@ public static class Program
         {
             if (!string.Equals(args[i], name, StringComparison.OrdinalIgnoreCase)) continue;
             if (int.TryParse(args[i + 1], CultureInfo.InvariantCulture, out int value)) return value;
+        }
+        return fallback;
+    }
+
+    private static string StringFlag(string[] args, string name, string fallback)
+    {
+        for (int i = 0; i < args.Length - 1; i++)
+        {
+            if (!string.Equals(args[i], name, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!string.IsNullOrWhiteSpace(args[i + 1])) return args[i + 1];
         }
         return fallback;
     }

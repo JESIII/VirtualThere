@@ -40,7 +40,7 @@ fails closed here on purpose: it will not attach through some other path.
 
 The client refuses to attach a device to a remote host directly, because that would put plain USB/IP
 on the wire and bypass the transport layer entirely. Run `vht-client serve` (which starts the
-loopback bridge on `127.0.0.1:3240`) and attach through it, or use `vht-tray --mode client`.
+loopback bridge on `127.0.0.1:3240`) and attach through it, or use the client window (`vht-client.exe`).
 
 ### `attach` refused: peer is not on `127.0.0.1`
 
@@ -101,12 +101,20 @@ DNS-SD browsing is not wired into the client in v0.1.0; the client reports disco
 you add peers manually (`vht-client peers add host:port`). The service type is `_vht._tcp` and
 deliberately not the reference product's type, so the two products never see each other's clients.
 
-### The tray window is blank, or a dialog never appears
+### The management window is blank, or a dialog never appears
 
-The tray is a separate process talking to the service over the pipe. If the server is not running,
-the window shows an empty list rather than a protocol window. Start the server first
-(`vht serve` or `vht start`), then re-open the tray cut. If a prompt dialog does not appear, check
-that the service is answering: `vht status`.
+The window is a separate process talking to the privileged side over the pipe. If nothing is serving
+the pipe, the window shows an empty list rather than an error. Press **Start** in the server window
+(one consent prompt; the worker it starts binds the pipe), start the service with `vht start`, or run
+`vht serve`; then press Refresh. If a prompt dialog does not appear, check that the control plane is
+answering: `vht status`.
+
+### Closing the server window did not stop the server
+
+That is the designed behaviour: closing the window hides it to the notification area and the
+privileged worker keeps serving. Use **Exit** (window button, or the notification-area icon's Exit
+item) to stop the worker this window started, or, if the window process is gone, `vht-server
+stop-server --pipe vht-server`. See `docs/UI.md` section 1.
 
 ### Something is attached and I cannot reconnect to it
 

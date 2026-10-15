@@ -27,8 +27,8 @@ internal static class Program
 {
     private static readonly List<JsonObject> Steps = new();
 
-    /// <summary>PID of the tray process currently under test, for dialog diagnostics.</summary>
-    private static int _activeTrayPid;
+    /// <summary>PID of the window process currently under test, for dialog diagnostics.</summary>
+    private static int _activeWindowPid;
 
     private static async System.Threading.Tasks.Task<int> Main(string[] args)
     {
@@ -50,18 +50,21 @@ internal static class Program
             return 2;
         }
 
-        Process? serverTray = null;
-        Process? clientTray = null;
+        Process? serverWindowProcess = null;
+        Process? clientWindowProcess = null;
+        Process? standAloneWindow = null;
 
         try
         {
             // ---------------- server mode ----------------
-            serverTray = StartProcess(options.TrayExecutable, $"--mode server --pipe {options.ServerPipe}", waitForReadyLine: false);
-            _activeTrayPid = serverTray?.Id ?? 0;
+            // Each role is its own executable now: no --mode argument, and the window is what the
+            // process starts with. The mock serves the pipe, so the window attaches to it.
+            serverWindowProcess = StartProcess(options.ServerExecutable, $"--pipe {options.ServerPipe}", waitForReadyLine: false);
+            _activeWindowPid = serverWindowProcess?.Id ?? 0;
             // Matched on the product name only: a window restored at the Win32 level reports its
             // caption to UI Automation, while a freshly created one reports the automation name
             // from XAML ("VirtualThere Server window"). Both contain this prefix.
-            AutomationElement serverWindow = WaitForWindow("VirtualThere Server", TimeSpan.FromSeconds(25), _activeTrayPid);
+            AutomationElement serverWindow = WaitForWindow("VirtualThere Server", TimeSpan.FromSeconds(25), _activeWindowPid);
             Step("server.window", true, "found the server window");
 
             AutomationElement? statusBefore = FindById(serverWindow, "server-state", TimeSpan.FromSeconds(5));
@@ -105,14 +108,14 @@ internal static class Program
             // the window element: the pre-minimize reference is detached from the automation tree.
             NativeMethods.ShowWindow(serverHandle, NativeMethods.SwRestore);
             NativeMethods.SetForegroundWindow(serverHandle);
-            serverWindow = WaitForWindow("VirtualThere Server", TimeSpan.FromSeconds(15), _activeTrayPid);
+            serverWindow = WaitForWindow("VirtualThere Server", TimeSpan.FromSeconds(15), _activeWindowPid);
             WaitFor(() => NativeMethods.IsWindowVisible(serverHandle), TimeSpan.FromSeconds(5), "server window visible again after restore");
             Step("server.restore-from-tray", NativeMethods.IsWindowVisible(serverHandle), ReadText(FindById(serverWindow, "server-state", TimeSpan.FromSeconds(5))));
 
             // ---------------- client mode ----------------
-            clientTray = StartProcess(options.TrayExecutable, $"--mode client --pipe {options.ClientPipe}", waitForReadyLine: false);
-            _activeTrayPid = clientTray?.Id ?? 0;
-            AutomationElement clientWindow = WaitForWindow("VirtualThere Client", TimeSpan.FromSeconds(25), _activeTrayPid);
+            clientWindowProcess = StartProcess(options.ClientExecutable, $"--pipe {options.ClientPipe}", waitForReadyLine: false);
+            _activeWindowPid = clientWindowProcess?.Id ?? 0;
+            AutomationElement clientWindow = WaitForWindow("VirtualThere Client", TimeSpan.FromSeconds(25), _activeWindowPid);
             Step("client.window", true, "found the client window");
 
             WaitFor(() => FindById(clientWindow, "toggle:workshop-pi:1-3") is not null, TimeSpan.FromSeconds(10), "peer devices appear");
@@ -145,6 +148,12 @@ internal static class Program
             WaitFor(() => true, TimeSpan.FromSeconds(2), "log refresh");
             Capture(clientWindow, Path.Combine(options.OutputDirectory, "client-log.png"), "client-log.png");
 
+            // ---------------- stand-alone pass: the window starts its own worker ----------------
+            if (!options.SkipWorkerPass)
+            {
+                WorkerPass(options, ref standAloneWindow);
+            }
+
             Step("driver.complete", true, "all steps executed");
         }
         catch (Exception ex)
@@ -159,7 +168,7 @@ internal static class Program
 
             if (!options.KeepOpen)
             {
-                foreach (Process? process in new[] { serverTray, clientTray, mock })
+                foreach (Process? process in new[] { serverWindowProcess, clientWindowProcess, standAloneWindow, mock })
                 {
                     TryKill(process);
                 }
@@ -169,6 +178,194 @@ internal static class Program
         int failures = Steps.Count(s => !(s["ok"]?.GetValue<bool>() ?? false));
         Console.WriteLine("steps=" + Steps.Count + " failures=" + failures);
         return failures == 0 ? 0 : 1;
+    }
+
+    // ------------------------------------------------------------------ stand-alone pass
+
+    /// <summary>
+    /// Starts the real server executable with nothing serving its pipe, presses Start, closes the
+    /// window, restores it and then Exits - measuring what the card claims: that the window brings
+    /// its own privileged worker up (exactly one extra process), that no console window exists for
+    /// either process, that closing the window hides it and leaves the worker serving (docs/UI.md
+    /// section 1), and that Exit is the one path that stops the worker, leaving nothing behind.
+    /// </summary>
+    /// <remarks>
+    /// The worker is started with <c>--no-elevate</c> because nothing here can answer a consent
+    /// prompt. That changes who authorises the process, not what is measured: the same executable,
+    /// the same worker switch, the same supervisor and the same shutdown path. The elevated run
+    /// differs only in the one prompt the user clicks.
+    /// </remarks>
+    private static void WorkerPass(DriverOptions options, ref Process? standAloneWindow)
+    {
+        var baseline = ProcessIds(ServerImageName(options.ServerExecutable));
+
+        standAloneWindow = StartProcess(
+            options.ServerExecutable,
+            $"--pipe {options.WorkerPipe} --port {options.WorkerPort} --no-elevate",
+            waitForReadyLine: false);
+        _activeWindowPid = standAloneWindow?.Id ?? 0;
+
+        AutomationElement window = WaitForWindow("VirtualThere Server", TimeSpan.FromSeconds(25), _activeWindowPid);
+        Step("standalone.window", true,
+            "the server executable opened its window with no command-line verb");
+
+        // A console window would be a top-level window of class ConsoleWindowClass owned by this
+        // process. Enumerate the process's windows and say what is there, rather than asserting.
+        Step("standalone.no-console-window", !HasConsoleWindow(_activeWindowPid), DescribeProcessWindows(_activeWindowPid));
+
+        Invoke(window, "start-server", "server.start (starts the worker the window owns)");
+        WaitFor(
+            () => ReadText(FindById(window, "server-state")) is { } text && text.Contains("Running", StringComparison.Ordinal),
+            TimeSpan.FromSeconds(45),
+            "the worker bound the control pipe and the server reports Running");
+        Step("standalone.worker-running", true, ReadText(FindById(window, "server-state")));
+
+        // The device list comes from the real server, over the real pipe: rows mean the window is
+        // attached to the process it started, not to the mock.
+        WaitFor(() => FindById(window, "kick:1-4") is not null || HasDeviceRows(window),
+            TimeSpan.FromSeconds(20),
+            "the device list populated from the real server");
+        Capture(window, Path.Combine(options.OutputDirectory, "server-worker.png"), "server-worker.png");
+
+        WaitFor(() => true, TimeSpan.FromSeconds(2), "settle before measuring the worker");
+        int[] withWindow = ProcessIds(ServerImageName(options.ServerExecutable));
+        int[] extra = withWindow.Where(id => id != _activeWindowPid && !baseline.Contains(id)).ToArray();
+        Step("standalone.worker-spawned", extra.Length == 1,
+            "process ids named " + ServerImageName(options.ServerExecutable) + ": [" +
+            string.Join(", ", withWindow) + "], window pid " + _activeWindowPid +
+            ", worker pid(s) [" + string.Join(", ", extra) + "]");
+
+        // ---- closing the window: hide to the notification area, worker keeps serving ----
+        // (docs/UI.md section 1, and the binding decision on this card: only Exit stops the worker.)
+        int workerPid = extra.Length > 0 ? extra[0] : 0;
+        nint standaloneHandle = Handle(window);
+        NativeMethods.PostMessage(standaloneHandle, NativeMethods.WmClose, 0, 0);
+        WaitFor(() => !NativeMethods.IsWindowVisible(standaloneHandle), TimeSpan.FromSeconds(10),
+            "the window hid itself instead of closing");
+        WaitFor(() => true, TimeSpan.FromSeconds(2), "settle after the close");
+
+        bool windowStillAlive = standAloneWindow is { HasExited: false };
+        bool workerStillAlive = workerPid != 0 && IsProcessRunning(workerPid);
+        Step("standalone.close-hides-and-worker-survives",
+            !NativeMethods.IsWindowVisible(standaloneHandle) && windowStillAlive && workerStillAlive,
+            "window hidden=" + !NativeMethods.IsWindowVisible(standaloneHandle) +
+            ", window process alive=" + windowStillAlive +
+            ", worker pid " + workerPid + " alive=" + workerStillAlive);
+
+        // Restore the way the notification-area icon does, then re-acquire the window element: a
+        // hidden WPF window leaves the automation tree.
+        NativeMethods.ShowWindow(standaloneHandle, NativeMethods.SwRestore);
+        NativeMethods.SetForegroundWindow(standaloneHandle);
+        window = WaitForWindow("VirtualThere Server", TimeSpan.FromSeconds(15), _activeWindowPid);
+        Step("standalone.restored-after-close", NativeMethods.IsWindowVisible(standaloneHandle),
+            ReadText(FindById(window, "server-state", TimeSpan.FromSeconds(5))));
+
+        Invoke(window, "exit", "exit the window (the worker it started must go with it)");
+
+        bool windowExited = standAloneWindow is not null && standAloneWindow.WaitForExit(30000);
+        Step("standalone.window-exited", windowExited, "window pid " + _activeWindowPid + " exited=" + windowExited);
+
+        // Exit is the one path that stops the worker: the supervisor stops the worker it owns
+        // (graceful verb, then the process). A worker whose window died keeps serving - measured
+        // above with the close step, which left it running.
+        DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+        int[] after = ProcessIds(ServerImageName(options.ServerExecutable));
+        while (DateTime.UtcNow < deadline && after.Any(id => id != _activeWindowPid && !baseline.Contains(id)))
+        {
+            Thread.Sleep(500);
+            after = ProcessIds(ServerImageName(options.ServerExecutable));
+        }
+
+        int[] leftover = after.Where(id => id != _activeWindowPid && !baseline.Contains(id)).ToArray();
+        Step("standalone.no-orphan-worker", leftover.Length == 0,
+            "after exit, process ids named " + ServerImageName(options.ServerExecutable) + ": [" +
+            string.Join(", ", after) + "]; orphans [" + string.Join(", ", leftover) + "]");
+    }
+
+    /// <summary>The image name of an executable path, without its directory or extension.</summary>
+    private static string ServerImageName(string executablePath) =>
+        Path.GetFileNameWithoutExtension(executablePath);
+
+    /// <summary>True while a process with that id is alive.</summary>
+    private static bool IsProcessRunning(int pid)
+    {
+        try
+        {
+            using Process process = Process.GetProcessById(pid);
+            return !process.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Process ids of every running process with that image name.</summary>
+    private static int[] ProcessIds(string imageName)
+    {
+        var ids = new System.Collections.Generic.List<int>();
+        foreach (Process process in Process.GetProcessesByName(imageName))
+        {
+            try
+            {
+                ids.Add(process.Id);
+            }
+            catch (InvalidOperationException)
+            {
+                // Exited between enumeration and inspection.
+            }
+            finally
+            {
+                process.Dispose();
+            }
+        }
+
+        return ids.ToArray();
+    }
+
+    /// <summary>
+    /// True when the process owns a window of class <c>ConsoleWindowClass</c> - i.e. when a console
+    /// window really exists for it. The measurement, not the project property.
+    /// </summary>
+    private static bool HasConsoleWindow(int pid)
+    {
+        bool found = false;
+        NativeMethods.EnumWindows(
+            (hwnd, _) =>
+            {
+                NativeMethods.GetWindowThreadProcessId(hwnd, out uint windowPid);
+                if (windowPid == (uint)pid &&
+                    string.Equals(NativeMethods.GetClassNameOf(hwnd), "ConsoleWindowClass", StringComparison.Ordinal))
+                {
+                    found = true;
+                    return false;
+                }
+
+                return true;
+            },
+            nint.Zero);
+
+        return found;
+    }
+
+    private static bool HasDeviceRows(AutomationElement window)
+    {
+        try
+        {
+            AutomationElementCollection rows = window.FindAll(
+                TreeScope.Descendants,
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.DataItem));
+            if (rows.Count > 0)
+            {
+                return true;
+            }
+        }
+        catch (Exception ex) when (IsTransient(ex))
+        {
+            // Window rebuilding; the caller retries.
+        }
+
+        return false;
     }
 
     // ------------------------------------------------------------------ steps
@@ -300,7 +497,7 @@ internal static class Program
 
     private static void CompleteTextDialog(string title, string value)
     {
-        AutomationElement? dialog = WaitForDialog(title, TimeSpan.FromSeconds(8), _activeTrayPid);
+        AutomationElement? dialog = WaitForDialog(title, TimeSpan.FromSeconds(8), _activeWindowPid);
         if (dialog is null)
         {
             Step("dialog:" + title, false, "dialog did not appear");
@@ -332,7 +529,7 @@ internal static class Program
 
     private static void CompleteSecretDialog(string title, string secret)
     {
-        AutomationElement? dialog = WaitForDialog(title, TimeSpan.FromSeconds(8), _activeTrayPid);
+        AutomationElement? dialog = WaitForDialog(title, TimeSpan.FromSeconds(8), _activeWindowPid);
         if (dialog is null)
         {
             Step("dialog:" + title, false, "dialog did not appear");
@@ -932,7 +1129,11 @@ internal static class Program
 
 internal sealed class DriverOptions
 {
-    public string TrayExecutable { get; private set; } = string.Empty;
+    /// <summary>The server executable under test: <c>vht-server.exe</c>.</summary>
+    public string ServerExecutable { get; private set; } = string.Empty;
+
+    /// <summary>The client executable under test: <c>vht-client.exe</c>.</summary>
+    public string ClientExecutable { get; private set; } = string.Empty;
 
     public string MockExecutable { get; private set; } = string.Empty;
 
@@ -941,6 +1142,20 @@ internal sealed class DriverOptions
     public string ServerPipe { get; private set; } = "vht-ui-driver-server";
 
     public string ClientPipe { get; private set; } = "vht-ui-driver-client";
+
+    /// <summary>
+    /// Pipe for the stand-alone pass: nothing serves it, so the window has to start its own worker.
+    /// </summary>
+    public string WorkerPipe { get; private set; } = "vht-ui-driver-worker";
+
+    /// <summary>Plaintext listener port handed to that worker (not the shipped default).</summary>
+    public int WorkerPort { get; private set; } = 33240;
+
+    /// <summary>
+    /// True to skip the stand-alone pass. The pass starts a real worker process and exits the
+    /// window, which is what the orphan assertion measures, so it is on by default.
+    /// </summary>
+    public bool SkipWorkerPass { get; private set; }
 
     public string DemoPassword { get; private set; } = "device-secret";
 
@@ -955,8 +1170,11 @@ internal sealed class DriverOptions
         {
             switch (args[i])
             {
-                case "--tray":
-                    options.TrayExecutable = args[++i];
+                case "--server":
+                    options.ServerExecutable = args[++i];
+                    break;
+                case "--client":
+                    options.ClientExecutable = args[++i];
                     break;
                 case "--mock":
                     options.MockExecutable = args[++i];
@@ -970,6 +1188,15 @@ internal sealed class DriverOptions
                 case "--client-pipe":
                     options.ClientPipe = args[++i];
                     break;
+                case "--worker-pipe":
+                    options.WorkerPipe = args[++i];
+                    break;
+                case "--worker-port":
+                    options.WorkerPort = int.Parse(args[++i], System.Globalization.CultureInfo.InvariantCulture);
+                    break;
+                case "--skip-worker-pass":
+                    options.SkipWorkerPass = true;
+                    break;
                 case "--password":
                     options.DemoPassword = args[++i];
                     break;
@@ -982,10 +1209,10 @@ internal sealed class DriverOptions
             }
         }
 
-        if (string.IsNullOrEmpty(options.TrayExecutable) || string.IsNullOrEmpty(options.MockExecutable) ||
-            string.IsNullOrEmpty(options.OutputDirectory))
+        if (string.IsNullOrEmpty(options.ServerExecutable) || string.IsNullOrEmpty(options.ClientExecutable) ||
+            string.IsNullOrEmpty(options.MockExecutable) || string.IsNullOrEmpty(options.OutputDirectory))
         {
-            throw new ArgumentException("--tray, --mock and --out are required.");
+            throw new ArgumentException("--server, --client, --mock and --out are required.");
         }
 
         return options;
@@ -995,6 +1222,13 @@ internal sealed class DriverOptions
 internal static partial class NativeMethods
 {
     internal const int SwRestore = 9;
+
+    /// <summary>WM_CLOSE: what the window's X button sends. The window decides what it means.</summary>
+    internal const uint WmClose = 0x0010;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool PostMessage(nint hWnd, uint message, nint wParam, nint lParam);
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct Rect

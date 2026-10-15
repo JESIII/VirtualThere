@@ -22,7 +22,7 @@ Environment this was decided on (verified on this machine, 2026-10-14):
 
 | # | Question | Decision |
 |---|---|---|
-| 1 | Component map | `vht-server`, `vht-client`, `vht-tray` + shared `vht-core` (+ `vht-config`, `vht-transport`, `vht-interop`) — §1 |
+| 1 | Component map | `vht-server`, `vht-client` (each hosting its own window) + shared `vht-core` (+ `vht-config`, `vht-transport`, `vht-interop`) — §1 |
 | 2 | Language/runtime | **C# / .NET 10 (LTS)**; WPF for UI — §2 |
 | 3 | Client virtual-device plumbing | **Reuse `usbip-win2`'s UDE driver, BSD-2-Clause, pinned prebuilt**; no driver of our own in v1 — §3 |
 | 4 | Server device capture | **User-mode WinUSB claim + rebind**; no VirtualThere kernel driver in v1; documented capture gaps — §4 |
@@ -44,7 +44,7 @@ after another vendor.
 |---|---|---|---|
 | `vht-server` | Windows service (`Vht.Server`), also runnable as a console app for portable/debug use | Enumerate local USB devices, claim them user-mode (WinUSB), export them over USB/IP, run policy hooks, serve discovery | `server-workstream` |
 | `vht-client` | Windows service or user process (`Vht.Client`) | Connect to remote servers, list exports, attach/detach through the virtual host controller, auto-attach policy, loopback transport bridge | `client-workstream` |
-| `vht-tray` | One WPF executable, two modes (`Vht.Ui`) | Tray icon + management windows for *both* server and client; it drives the services over a local IPC channel, it does not implement protocol | `ui-workstream` |
+| `Vht.Ui` | The management windows, as a library (`Vht.Ui`) | One window per role, hosted by `vht-server.exe` / `vht-client.exe`: device/peer management, notification-area icon, log viewer. It drives the privileged worker over a local IPC channel and implements no protocol | `ui-workstream` |
 | `Vht.Core` | Library | USB/IP codec, URB model, device model, policy (allow/ignore/nickname/password), hook runner, structured logging | `server-workstream` |
 | `Vht.Config` | Library | Config schema + validation, persistence, device identity, DNS-SD discovery | `config-workstream` |
 | `Vht.Transport` | Library | `ITransport` and its three implementations (plain TCP, TLS, TLS+LZ4) | `transport-workstream` |
@@ -65,8 +65,8 @@ network ──▶ Vht.Client loopback bridge (TLS + LZ4 termination) ──▶ 1
                                                                               └─▶ device driver / app
 ```
 
-`vht-tray` talks to `vht-server`/`vht-client` over a **named pipe** (`\\.\pipe\vht-server`,
-`\\.\pipe\vht-client`) with a JSON-lines control protocol; the tray never touches WinUSB or the
+Each management window talks to `vht-server`/`vht-client` over a **named pipe** (`\\.\pipe\vht-server`,
+`\\.\pipe\vht-client`) with a JSON-lines control protocol; the management window never touches WinUSB or the
 driver directly. That keeps the security-sensitive privilege boundary in the services and lets the
 UI run unelevated.
 
@@ -523,7 +523,10 @@ the plaintext listener has no handshake to negotiate with.**
 - **Vocabulary parity:** the reference product exposes `CompressionLimit` (`0x1409804d3`) server-side
   and `=Compression Threshold :` / `=bytes` (`0x1409d336a` / `0x1409d3397`) client-side, i.e. a
   byte-count threshold below which it does not bother. VirtualThere keeps the same semantic under
-  `transport.tls.lz4_threshold_bytes` (default `1024`).
+  `transport.tls.lz4_threshold_bytes`, but **not** the reference product's default: that wording implies
+  1024, and a measured sweep (`docs/TRANSPORT.md` §6.1, §9.4) shows LZ4 is a net loss on compressible
+  payload below 64 KiB on this host, so the default is 64 KiB — the smallest size at which compression
+  was measured to win. The semantic is parity; the constant is measurement.
 - **Scope:** only the data payload of `USBIP_CMD_SUBMIT` (OUT) and `USBIP_RET_SUBMIT` (IN) frames on
   bulk and interrupt endpoints. Control transfers are small and latency-critical; compressing them
   costs more than it saves. Headers are never compressed (the codec must be able to route a frame
@@ -561,7 +564,7 @@ VirtualThere/
     Vht.Interop/               # SetupAPI, CfgMgr32, WinUSB, SCM, DNSAPI, UDE IOCTL bindings                 [server-workstream, additive-only]
     Vht.Server/                # Windows service + capture + USB/IP server + pipe control plane               [server-workstream]
     Vht.Client/                # loopback bridge + attach/detach via UDE + auto-attach + pipe control plane  [client-workstream]
-    Vht.Ui/                    # WPF tray + server/client management windows, consumes the pipe API           [ui-workstream]
+    Vht.Ui/                    # WPF management windows (library), hosted by vht-server.exe / vht-client.exe     [ui-workstream]
     Vht.Cli/                   # `vht` verbs: serve, attach, detach, list, add, kick, ignore, nickname…
   src/Vht.*/Interop/           # P/Invoke kept in these folders only, so unsafe surface is greppable
   tests/
@@ -588,7 +591,7 @@ Build system details:
 - **Packages:** centrally pinned in `Directory.Packages.props`; every entry must appear in
   `third_party/notices/THIRD_PARTY_NOTICES` with its licence (Appendix D).
 - **Portable build:** `Xtask portable` publishes self-contained single-file `vht-server.exe`,
-  `vht-client.exe`, `vht-tray.exe` + `vht.exe` into `dist/portable/`; no installer, no service
+  `vht-client.exe` + `vht.exe` into `dist/portable/`; no installer, no service
   registration — the server runs as a console app, which is the documented "portable Windows server"
   parity item (`packaging-workstream`).
 - **Config location:** `%ProgramData%\VirtualThere\config.toml` for the service,

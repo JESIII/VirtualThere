@@ -38,7 +38,7 @@ body:
       options:
         - vht-server / vht (server, service, CLI)
         - vht-client (attach, peers, bridge)
-        - vht-tray (UI)
+        - vht-server (UI)
         - Vht.Transport (TLS / LZ4 / auth library)
         - Vht.Config (config, discovery, identity - config parsing, discovery, device identity)
         - Build / CI / packaging

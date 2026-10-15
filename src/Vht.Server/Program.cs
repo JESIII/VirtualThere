@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Threading.Tasks;
 using Vht.Core;
 using Vht.Core.Logging;
 using Vht.Core.Server;
@@ -6,29 +10,114 @@ using Vht.Interop.Services;
 using Vht.Server.Config;
 using Vht.Server.Hosting;
 using Vht.Server.Logging;
+using Vht.Ui.Hosting;
 
 namespace Vht.Server;
 
 /// <summary>
-/// <c>vht-server</c>: the USB/IP server, as a Windows service or as a console application.
+/// <c>vht-server</c>: one visible executable that opens the VirtualThere Server window, plus the
+/// USB/IP server that window manages and the console verbs that address it.
 /// </summary>
 /// <remarks>
-/// The SCM starts the binary with a single argument, <c>serve</c> (see
-/// <see cref="WindowsServiceManager.Install"/>), so every runtime setting has to come from the
-/// configuration file rather than the command line — which is why
-/// <see cref="ServerConfigLoader"/> exists. When the process was not launched by the SCM the
-/// same <c>serve</c> verb runs it in the foreground, which is what the acceptance test uses.
+/// <para>
+/// Three ways in, decided by the command line:
+/// </para>
+/// <list type="number">
+/// <item>
+/// <c>--worker</c> - the privileged half, started by the window (elevated and hidden). It runs the
+/// server runtime in the foreground, binds the control pipe, and keeps serving until it is asked to
+/// stop: the window's Exit, or <c>vht-server stop-server</c> over the pipe. It does **not** follow
+/// the window it came from - a worker whose window is gone keeps serving and is adopted by the next
+/// launch of the window (<see cref="WorkerLifetime"/>). No window, no console.
+/// </item>
+/// <item>
+/// An explicit verb - <c>vht-server serve</c>, <c>status</c>, <c>list</c>, <c>install</c>, ... The
+/// verb set is unchanged, and this is the form the service control manager uses
+/// (<see cref="WindowsServiceManager.Install"/> registers the binary with <c>serve</c>).
+/// </item>
+/// <item>
+/// Anything else, including no arguments - the management window (docs/UI.md section 1).
+/// </item>
+/// </list>
+/// <para>
+/// The SCM starts the binary with a single argument, <c>serve</c>, so every runtime setting has to
+/// come from the configuration file rather than the command line - which is why
+/// <see cref="ServerConfigLoader"/> exists. When the process was not launched by the SCM the same
+/// <c>serve</c> verb runs it in the foreground, which is what the acceptance test uses.
+/// </para>
 /// </remarks>
 public static class Program
 {
     private const string ServiceName = ServiceControl.DefaultServiceName;
 
-    public static async Task<int> Main(string[] args)
+    [STAThread]
+    public static int Main(string[] args)
     {
-        Console.OutputEncoding = System.Text.Encoding.UTF8;
+        // The window's privileged half: never a window, never a console.
+        if (UiHost.IsWorkerInvocation(args))
+        {
+            return RunWorker(args);
+        }
 
-        string verb = args.Length > 0 && !args[0].StartsWith('-') ? args[0] : "serve";
-        var rest = args.Length > 0 && !args[0].StartsWith('-') ? args[1..] : args;
+        string? verb = VerbOf(args);
+        if (verb is not null)
+        {
+            return RunVerb(verb, args);
+        }
+
+        if (HasFlag(args, "--version"))
+        {
+            HostConsole.EnsureForVerbs();
+            Console.WriteLine(VhtVersion.Banner);
+            return 0;
+        }
+
+        if (HasFlag(args, "--help") || HasFlag(args, "-h") || HasFlag(args, "/?"))
+        {
+            // With a console (a shell, or a redirect) the usage goes there; with none - a
+            // double-click with --help - it is shown in a dialog rather than vanishing.
+            if (!HostConsole.EnsureForVerbs())
+            {
+                return UiHost.Run(UiRole.Server, args);
+            }
+
+            PrintHelp(Console.Out);
+            return 0;
+        }
+
+        // No verb: this is the server, so this is the server window.
+        return UiHost.Run(UiRole.Server, args);
+    }
+
+    /// <summary>The verb, when one was given explicitly. No verb means "open the window".</summary>
+    private static string? VerbOf(string[] args) =>
+        args.Length > 0 && !args[0].StartsWith('-') ? args[0] : null;
+
+    /// <summary>Runs the worker a window started: the server runtime, foreground, no window.</summary>
+    private static int RunWorker(string[] args) => RunVerb("serve", WithoutWorkerFlag(args));
+
+    /// <summary>Drops <c>--worker</c> before the verb parses its own options.</summary>
+    private static string[] WithoutWorkerFlag(string[] args)
+    {
+        var kept = new List<string>(args.Length);
+        foreach (string argument in args)
+        {
+            if (string.Equals(argument, UiHost.WorkerSwitch, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            kept.Add(argument);
+        }
+
+        return kept.ToArray();
+    }
+
+    private static int RunVerb(string verb, string[] args)
+    {
+        HostConsole.EnsureForVerbs();
+
+        string[] rest = args.Length > 0 && !args[0].StartsWith('-') ? args[1..] : args;
 
         if (HasFlag(rest, "--help") || HasFlag(rest, "-h") || verb is "help")
         {
@@ -48,7 +137,7 @@ public static class Program
         {
             case "serve":
             case "run":
-                return await ServeAsync(options, configPath, rest).ConfigureAwait(false);
+                return ServeAsync(options, configPath, rest).GetAwaiter().GetResult();
 
             case "config-template":
                 return ServerCommands.WriteConfigTemplate(Console.Out,
@@ -113,7 +202,16 @@ public static class Program
         return action(value);
     }
 
-    private static async Task<int> ServeAsync(ServerOptions options, string? configPath, string[] args)
+    /// <summary>
+    /// Runs the server runtime: as a service when the SCM started this process, otherwise in the
+    /// foreground - which is the form the window's worker takes, and the form the acceptance suite
+    /// uses. Nothing here ties the runtime's lifetime to any other process: it stops when the SCM
+    /// says so, when Ctrl+C is pressed, or when the control pipe receives <c>server.stop</c>.
+    /// </summary>
+    private static async Task<int> ServeAsync(
+        ServerOptions options,
+        string? configPath,
+        string[] args)
     {
         if (HasFlag(args, "--template") && configPath is not null)
             ServerCommands.WriteConfigTemplate(Console.Out, configPath);
@@ -124,6 +222,11 @@ public static class Program
         IReadOnlyList<string> configProblems = ServerConfigLoader.Apply(path, options, logger);
         foreach (string problem in configProblems)
             logger.Write(LogLevel.Warn, LogEvent.ConfigurationLoaded, $"configuration: {problem}");
+
+        // --pipe applies after the configuration file so it wins: the window passes it to the worker
+        // and both ends have to agree on one pipe even when the file names another.
+        if (FlagValue(args, "--pipe") is { Length: > 0 } pipeName)
+            options.ControlPlanePipeName = pipeName;
 
         logger.Write(LogLevel.Info, LogEvent.ConfigurationLoaded,
             configPath is null && !File.Exists(path)
@@ -145,7 +248,7 @@ public static class Program
             return 1;
         }
 
-        // Console mode.
+        // Foreground mode: a console invocation, or the window's worker.
         using var cancel = new CancellationTokenSource();
         Console.CancelKeyPress += (_, e) =>
         {
@@ -250,10 +353,12 @@ public static class Program
     {
         output.WriteLine(VhtVersion.Banner);
         output.WriteLine();
-        output.WriteLine("usage: vht-server <verb> [options]");
+        output.WriteLine("usage: vht-server [verb] [options]");
         output.WriteLine();
-        output.WriteLine("  serve                 run the server (default); as a service under the SCM,");
-        output.WriteLine("                        otherwise in the foreground");
+        output.WriteLine("  (no verb)             open the VirtualThere Server window");
+        output.WriteLine();
+        output.WriteLine("  serve                 run the server without a window: under the service control");
+        output.WriteLine("                        manager as a service, otherwise in the foreground");
         output.WriteLine("  status                ask a running server for its state");
         output.WriteLine("  list [--local]        list exported devices (--local enumerates without a server)");
         output.WriteLine("  kick <busid>          force-detach the client holding a device");
@@ -266,7 +371,10 @@ public static class Program
         output.WriteLine("  config-template [--out <path>]");
         output.WriteLine("  version");
         output.WriteLine();
-        output.WriteLine("serve options: --config <path> --port <n> --capture-mode auto|winusb-only|prebound-only");
+        output.WriteLine("serve options: --config <path> --pipe <name> --port <n>");
+        output.WriteLine("               --capture-mode auto|winusb-only|prebound-only");
         output.WriteLine("               --rebind --log-level <level> --log-file <path> --name <text>");
+        output.WriteLine();
+        output.WriteLine("window options: --pipe <name> --port <n> --minimized --no-elevate --help");
     }
 }

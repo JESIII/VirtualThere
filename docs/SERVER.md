@@ -24,6 +24,30 @@ vht uninstall
 Service name defaults to `vht-server`; override with `--service <name>`. The service has no command
 line, so its policy must come from the config file.
 
+### The server window, and who owns the server process
+
+`vht-server.exe` with **no argument** is the same executable's other face: it opens the VirtualThere
+Server window instead of running the server in the console (`vht-server serve`). The window is
+unelevated and drives the server over `\\.\pipe\vht-server`; the privileged half is a separate
+process.
+
+- **Start** probes the pipe. If a server already answers - the installed service, or a worker an
+  earlier window started - the window attaches to it and spawns nothing (no second server, no consent
+  prompt). Only when nothing answers does it start its own `vht-server.exe --worker` elevated: exactly
+  one UAC prompt, hidden, no console.
+- **Closing the window** (X) hides it to the notification area. It does **not** stop the server: the
+  worker keeps serving, and connected clients and in-flight transfers are unaffected.
+- **Exit** (window button, or notification-area menu) stops the worker that window started, over the
+  pipe (`server.stop`) and, if that does not take, by ending the process. A server it only attached to
+  is left running.
+- A worker whose window process is gone - a crash, an End task - **keeps serving**. Nothing reaps it.
+  Stop it explicitly with `vht-server stop-server --pipe vht-server` (or `vht stop-server --pipe
+  vht-server`), or open `vht-server.exe` again: the window adopts the live worker and its Exit stops it.
+
+The service remains the unattended option: `vht install` registers it and nothing about the window is
+needed for it. The full window semantics - including the notification-area affordances - are in
+`docs/UI.md` section 1.
+
 ## 2. Config file: the `server.toml` subset
 
 Default path: `%ProgramData%\VirtualThere\server.toml`. Write a commented starter file with:
@@ -133,7 +157,8 @@ anything that can write there can run code as the service.
 | Control plane | `\\.\pipe\vht-server` | Windows ACL (Administrators + interactive user) | JSON lines, one request/response pair per connection, local only |
 
 Anything that can write to the control pipe can control the service without elevation. That is by
-design (the tray runs unelevated), which is why the pipe is not world-writable.
+design (the management window runs unelevated and the worker it starts owns the pipe), which is why
+the pipe is not world-writable.
 
 ## 7. Security notes
 

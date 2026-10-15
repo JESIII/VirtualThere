@@ -36,7 +36,7 @@ msiexec /x VirtualThere-0.1.0-x64.msi /qn          # uninstall: service, driver,
 
 The portable folder is used in place: copy `dist/portable/` anywhere (it is not under
 `%ProgramFiles%` and is not registered with the SCM) and run `vht-server.exe`, `vht-client.exe`,
-`vht-tray.exe` or `vht.exe` from there. Configuration stays in `./config` next to the binaries,
+`vht-server.exe`, `vht-client.exe` or `vht.exe` from there. Configuration stays in `./config` next to the binaries,
 because the folder contains `portable.marker`.
 
 Everything below was exercised on Windows 11 (build 26300) with .NET SDK 10.0.402.
@@ -45,7 +45,7 @@ Everything below was exercised on Windows 11 (build 26300) with .NET SDK 10.0.40
 
 | Requirement | Why | Check |
 |---|---|---|
-| Windows 10/11 x64 | `vht-server`, `vht-client`, `vht-tray` target `net10.0-windows` | `winver` |
+| Windows 10/11 x64 | `vht-server`, `vht-client`, `vht` target `net10.0-windows` | `winver` |
 | .NET SDK 10.0 | builds and runs everything | `dotnet --version` -> `10.0.x` |
 | Git | cloning | `git --version` |
 | **Client only:** the `usbip-win2` virtual USB host controller driver | presents a remote device to Windows; it is a kernel-mode driver, so installing it needs an elevated shell | step 4 below |
@@ -72,7 +72,7 @@ Executables:
 | `vht.exe` (CLI, and the service-mode entry point) | `src/Vht.Cli/bin/Release/net10.0-windows/vht.exe` |
 | `vht-server.exe` | `src/Vht.Server/bin/Release/net10.0-windows/vht-server.exe` |
 | `vht-client.exe` | `src/Vht.Client/bin/Release/net10.0-windows/vht-client.exe` |
-| `vht-tray.exe` | `src/Vht.Ui/Vht.Ui/bin/Release/net10.0-windows/vht-tray.exe` |
+| `vht-server.exe` / `vht-client.exe` | `src/Vht.Server/bin/Release/.../vht-server.exe`, `src/Vht.Client/bin/Release/.../vht-client.exe` |
 
 Put `vht.exe`'s directory on `PATH` for convenience, or call the binaries by full path.
 
@@ -159,7 +159,7 @@ vht-client attach 1-3-252f868a             # attach it; Ctrl+C detaches
 vht-client attached                        # what the virtual controller has imported
 ```
 
-Or use the tray app (`vht-tray --mode client`). Both are described in `docs/CLIENT.md`.
+Or use the client window (`vht-client.exe`). Both are described in `docs/CLIENT.md`.
 
 **Before you point this at a network you do not control:** v0.1.0 speaks plain USB/IP with no
 encryption and no authentication. Keep it on a trusted LAN, or tunnel it. See the security notes in
@@ -176,7 +176,7 @@ vht stop-service
 vht uninstall
 # then delete the config/state directories if you want them gone:
 #   %ProgramData%\VirtualThere     (service config + state)
-#   %LOCALAPPDATA%\VirtualThere    (client/tray config + state)
+#   %LOCALAPPDATA%\VirtualThere    (client window/worker config + state)
 ```
 
 If you installed the UDE driver, remove it with the upstream package's uninstaller. VirtualThere

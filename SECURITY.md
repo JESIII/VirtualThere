@@ -8,7 +8,7 @@ Use GitHub's **private vulnerability reporting**: repository -> *Security* -> *A
 Please do not open a public issue for a security problem until a fix or mitigation is available.
 
 Include: what the issue is, how to reproduce it, which component (`vht-server`, `vht-client`,
-`vht-tray`, `vht`, or a library), the version/commit, and what an attacker gains. We aim to
+`vht-server`, `vht-client`, `vht`, or a library), the version/commit, and what an attacker gains. We aim to
 acknowledge within a few days and to agree a disclosure timeline with you before publishing anything.
 
 ## Supported versions

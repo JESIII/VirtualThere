@@ -1,0 +1,33 @@
+mock: READY server=vht-ui-driver-server client=vht-ui-driver-client
+ok   server.window - found the server window
+ok   server.state.initial - Stopped
+ok   server.start - invoked automation id start-server
+ok   server.start - Running (plaintext :3240, TLS :3241)
+ok   devices.nickname (label printer) - invoked automation id nickname:1-5
+ok   dialog:Device nickname.handle - window found by HWND enumeration; driving it through UIA
+ok   dialog:Device nickname - typed 'Front-desk label printer' and confirmed
+ok   devices.ignore (USB-to-serial adapter) - invoked automation id ignore:1-10
+ok   devices.password (conference microphone) - invoked automation id password:1-6
+ok   dialog:Device password.handle - window found by HWND enumeration; driving it through UIA
+ok   dialog:Device password - typed password and confirmed
+ok   devices.kick (barcode scanner) - invoked automation id kick:1-4
+ok   screenshot:server-devices.png - docs/ui-shots\server-devices.png (1425x825)
+ok   show log viewer - invoked automation id toggle-log
+ok   screenshot:server-log.png - docs/ui-shots\server-log.png (1425x825)
+ok   hide log viewer - invoked automation id toggle-log
+ok   minimize to tray - invoked automation id minimize
+ok   server.minimize-to-tray - window hidden; tray icon and process still alive
+ok   server.restore-from-tray - 
+ok   client.window - found the client window
+ok   clients.attach (industrial camera) - invoked automation id toggle:workshop-pi:1-3
+ok   clients.attach (GPS receiver) - invoked automation id toggle:workshop-pi:1-4
+ok   clients.attach auto=true (auto-attach grant) - toggled automation id auto:workshop-pi:1-4
+ok   clients.detach (GPS receiver) - invoked automation id toggle:workshop-pi:1-4
+ok   clients.attach (GPS receiver, re-attach) - invoked automation id toggle:workshop-pi:1-4
+ok   peers.add (manual server) - invoked automation id add-server
+ok   dialog:Add a server.handle - window found by HWND enumeration; driving it through UIA
+ok   dialog:Add a server - typed '10.0.0.9:3241' and confirmed
+ok   screenshot:client-devices.png - docs/ui-shots\client-devices.png (1425x850)
+ok   show log viewer - invoked automation id toggle-log
+ok   screenshot:client-log.png - docs/ui-shots\client-log.png (1425x850)
+EXIT=1

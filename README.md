@@ -16,9 +16,10 @@ contains no third-party product's code (`LEGAL.md`).
 | Server | `vht-server.exe`, driven by `vht.exe` | Enumerates this machine's USB devices, claims them in user mode (WinUSB), exports them over USB/IP, applies policy (nicknames, allow/ignore, per-device password, script hooks) |
 | Client | `vht-client.exe` | Connects to peers, lists their exports, attaches/detaches devices through the virtual host controller, hotplug + reconnect, auto-attach policy |
 | CLI | `vht.exe` | Operator surface for the server: `serve`, `status`, `list`, `kick`, `ignore`, `nickname`, `password`, service install/start/stop |
-| Tray / manager UI | `vht-tray.exe` | One WPF executable, two modes (`--mode server`, `--mode client`): tray icon plus device/peer management windows, driving the services over a local named pipe |
+| Server window | `vht-server.exe` | The USB/IP server **and** its management window: start it with no arguments and the window opens, with a notification-area icon, device/peer lists and the log viewer. Clicking Start launches the same executable as a hidden, elevated worker (one consent prompt) that binds the control pipe |
+| Client window | `vht-client.exe` | The client **and** its management window: same shape, for attaching remote devices. The window itself stays unelevated and reaches the privileged worker over a local named pipe |
 
-Status: **v0.1.0.** It builds clean, every suite the solution covers passes, and the server, CLI, client and tray
+Status: **v0.1.0.** It builds clean, every suite the solution covers passes, and the server, CLI and client windows
 run for real on Windows 11 with .NET 10 - but it has not yet been through real hardware attach. One
 command (`./build.ps1 release`) produces an MSI installer and a no-install portable folder; both are
 **unsigned**, and neither has been exercised on a clean machine here. Read
@@ -89,7 +90,7 @@ dotnet test  VirtualThere.slnx -c Release     # expect 0 failed, every suite in 
 Executables land in `src/Vht.Cli/bin/Release/net10.0-windows/vht.exe`,
 `src/Vht.Server/bin/Release/net10.0-windows/vht-server.exe`,
 `src/Vht.Client/bin/Release/net10.0-windows/vht-client.exe` and
-`src/Vht.Ui/Vht.Ui/bin/Release/net10.0-windows/vht-tray.exe`. Add the directory holding `vht.exe`
+`src/Vht.Server/bin/Release/<tfm>/vht-server.exe`. Add the directory holding `vht.exe`
 to `PATH`, or use full paths.
 
 ## Use
@@ -139,14 +140,14 @@ vht-client attached                        # what the controller has imported
 vht-client detach --all
 vht-client capacity                        # measure the driver's per-controller port ceiling
 vht-client status                          # one-line health
-vht-client serve                           # long-running mode (service/tray use this)
+vht-client serve                           # long-running mode (the service and the window's worker use this)
 ```
 
-Or use the tray app, which drives both sides over a named pipe:
+Or use the two management windows, which drive both sides over a named pipe:
 
 ```bash
-vht-tray --mode server      # server manager window
-vht-tray --mode client      # client device manager window
+vht-server                  # server manager window (and the server worker behind it)
+vht-client                  # client device manager window
 ```
 
 Full walkthrough with screenshots of both windows: [`docs/CLIENT.md`](docs/CLIENT.md) and
@@ -178,7 +179,7 @@ Stated plainly - these are the honest boundaries of v0.1.0:
    folder, but the clean-machine install path (run installer -> export a device -> attach it) has not
    been run here; see [`installer/PACKAGING.md`](installer/PACKAGING.md) sections 4 and 8.
 2. **Windows only.** `Vht.Core`, `Vht.Config` and `Vht.Transport` are platform-neutral libraries,
-   but the server, client and tray are Windows-only.
+   but the two management executables and the CLI are Windows-only.
 3. **Traffic is unencrypted in the shipped binaries.** `Vht.Transport` implements TLS 1.3, pinning,
    LZ4 and authentication, with its own test suite - but it is **not wired into `vht-server` or
    `vht-client` yet**, so the executables speak plain USB/IP. USB/IP has no authentication of its

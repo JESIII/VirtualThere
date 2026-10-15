@@ -71,13 +71,14 @@ does not redistribute the third-party one - you install it from upstream after v
 ### Does it need Administrator rights?
 
 For the server: yes to claim devices and to install the service. For the client: yes to load the
-virtual host controller driver (a one-off install); after that the tray UI runs unelevated and drives
-the services over a named pipe. Commands fail with a clear message when unelevated instead of
-half-working.
+virtual host controller driver (a one-off install); after that the management window runs unelevated
+and drives the privileged worker over a named pipe - the window asks for elevation once, for the
+hidden worker it starts, and never for itself. Commands fail with a clear message when unelevated
+instead of half-working.
 
 ### Where are the config and state files?
 
-Server (service): `%ProgramData%\VirtualThere\server.toml`. Client/tray:
+Server (service): `%ProgramData%\VirtualThere\server.toml`. Client window/worker:
 `%LOCALAPPDATA%\VirtualThere\`. Override with `--config <path>` or `VHT_CONFIG`. Portable builds use
 a file next to the binary when a `virtualthere.portable` marker is present. The keys are in
 `docs/SERVER.md` and, for the full model, `docs/CONFIG.md`.
@@ -106,7 +107,8 @@ driver you install and for how you expose USB devices.
 ### Is Linux/macOS supported?
 
 Not as a server or client in v0.1.0. `Vht.Core`, `Vht.Config` and `Vht.Transport` are platform-neutral
-libraries, but the server, client and tray are Windows-only (`net10.0-windows` plus Win32 P/Invoke).
+libraries, but the two management windows, the client and the CLI are Windows-only (`net10.0-windows`
+plus Win32 P/Invoke).
 A stock Linux `usbip` client *can* attach to the plaintext listener, which is what protocol
 compatibility buys you.
 

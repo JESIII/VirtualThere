@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Threading;
 using Vht.Ui.ControlPlane;
+using Vht.Ui.Hosting;
 using Vht.Ui.Mvvm;
 
 namespace Vht.Ui.ViewModels;
@@ -32,26 +33,32 @@ public sealed class ServerViewModel : ObservableObject, IServerDeviceActions, ID
 
     private readonly VhtServiceClient _client;
     private readonly IPromptService _prompts;
+    private readonly IWorkerSupervisor? _workers;
     private readonly CancellationTokenSource _cts = new();
     private readonly DispatcherTimer? _timer;
     private bool _polling;
     private bool _disposed;
     private bool _serviceReachable;
+    private bool _workerBusy;
     private ServerStatusSnapshot _status = new();
     private string _connectionText = "Contacting the " + Branding.ProductName + " service...";
 
     public ServerViewModel(
         VhtServiceClient client,
         IPromptService prompts,
-        TimeSpan? pollInterval = null)
+        TimeSpan? pollInterval = null,
+        IWorkerSupervisor? workers = null)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _prompts = prompts ?? throw new ArgumentNullException(nameof(prompts));
+        _workers = workers;
 
         Log = new LogViewModel(client);
 
-        StartCommand = new AsyncRelayCommand(StartAsync, () => CanControl && !IsRunning);
-        StopCommand = new AsyncRelayCommand(StopAsync, () => CanControl && IsRunning);
+        // Start is offered whenever the server is not up - including when nothing answers on the
+        // pipe yet, which is the portable case: pressing it starts the elevated worker.
+        StartCommand = new AsyncRelayCommand(StartAsync, () => !IsRunning && !_workerBusy);
+        StopCommand = new AsyncRelayCommand(StopAsync, () => IsRunning || (_workers?.OwnsWorker ?? false));
         RefreshCommand = new AsyncRelayCommand(() => RefreshAsync(), () => CanControl);
         MinimizeCommand = new RelayCommand(() => MinimizeRequested?.Invoke(this, EventArgs.Empty));
         AboutCommand = new RelayCommand(() => AboutRequested?.Invoke(this, EventArgs.Empty));
@@ -279,17 +286,65 @@ public sealed class ServerViewModel : ObservableObject, IServerDeviceActions, ID
 
     private async Task StartAsync()
     {
-        ControlPlaneResponse response = await _client.StartServerAsync(_cts.Token).ConfigureAwait(true);
-        Report("server.start", response);
-        await RefreshAsync().ConfigureAwait(true);
+        if (ServiceReachable)
+        {
+            // Something already serves this pipe - the installed service, or a worker another
+            // instance started. Attach to it and let it do the starting; nothing is spawned, so
+            // this window owns nothing to stop later.
+            ControlPlaneResponse response = await _client.StartServerAsync(_cts.Token).ConfigureAwait(true);
+            Report("server.start", response);
+            await RefreshAsync().ConfigureAwait(true);
+            return;
+        }
+
+        if (_workers is null)
+        {
+            return;
+        }
+
+        _workerBusy = true;
+        RaiseCanExecute();
+        try
+        {
+            WorkerStartResult result = await _workers.EnsureRunningAsync(_cts.Token).ConfigureAwait(true);
+            Log.AppendLocal(DescribeStart(result));
+            await RefreshAsync().ConfigureAwait(true);
+        }
+        finally
+        {
+            _workerBusy = false;
+            RaiseCanExecute();
+        }
     }
 
     private async Task StopAsync()
     {
-        ControlPlaneResponse response = await _client.StopServerAsync(_cts.Token).ConfigureAwait(true);
-        Report("server.stop", response);
-        await RefreshAsync().ConfigureAwait(true);
+        if (ServiceReachable)
+        {
+            ControlPlaneResponse response = await _client.StopServerAsync(_cts.Token).ConfigureAwait(true);
+            Report("server.stop", response);
+            await RefreshAsync().ConfigureAwait(true);
+            return;
+        }
+
+        // No control plane answers, but this window started a worker: stop that worker.
+        if (_workers is not null)
+        {
+            bool stopped = await _workers.StopOwnedWorkerAsync(_cts.Token).ConfigureAwait(true);
+            Log.AppendLocal(stopped ? "worker stopped" : "no worker of this window's to stop");
+            await RefreshAsync().ConfigureAwait(true);
+        }
     }
+
+    /// <summary>Wording for the window log; never claims something happened that did not.</summary>
+    internal static string DescribeStart(WorkerStartResult result) => result switch
+    {
+        WorkerStartResult.AlreadyRunning => "a control plane already answered on the pipe; attached to it",
+        WorkerStartResult.Started => "started the elevated worker; it bound the control pipe",
+        WorkerStartResult.LaunchFailed => "the worker could not be started",
+        WorkerStartResult.TimedOut => "the worker did not bind the control pipe in time",
+        _ => "worker start returned " + result,
+    };
 
     public async Task KickAsync(DeviceRowViewModel device)
     {

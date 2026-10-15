@@ -1,24 +1,74 @@
-# VirtualThere UI (`vht-tray`) - affordance map, branding scope, accessibility
+# VirtualThere UI - one window per role: affordance map, branding scope, accessibility
 
 This document covers the UI card (`ui-workstream`), which owns `src/Vht.Ui/**` and this file.
-The stack (C#/.NET 10 + WPF, tray via the in-box `System.Windows.Forms.NotifyIcon`) and the
-control-plane vocabulary are frozen by `docs/ARCHITECTURE.md` (sections 1 and 2.2, Appendix C)
-and are not re-opened here.
+The stack (C#/.NET 10 + WPF, notification-area icon via the in-box `System.Windows.Forms.NotifyIcon`)
+and the control-plane vocabulary are frozen by `docs/ARCHITECTURE.md` (sections 1 and 2.2,
+Appendix C) and are not re-opened here.
 
-## 1. One executable, two modes
+## 1. One executable per role, one window each
 
-`vht-tray.exe` presents the server management window (`--mode server`, default) or the client
-device manager (`--mode client`). The mode selects only which control pipe is spoken to and
-which window is shown:
+There is no separate tray executable. `Vht.Ui` is a **library** of windows, and the two role
+executables host it:
 
-| mode | pipe (default) | window |
+| executable | window | control pipe (default) | privileged worker |
+| --- | --- | --- | --- |
+| `vht-server.exe` | `VirtualThere Server` | `\\.\pipe\vht-server` | `vht-server.exe --worker` |
+| `vht-client.exe` | `VirtualThere Client` | `\\.\pipe\vht-client` | `vht-client.exe --worker` |
+
+Starting either executable with **no verb** opens its window; no `--mode` argument exists any more
+(it is still accepted and ignored, so a shortcut written for the old single tray executable keeps
+working, but it cannot change the role of the binary it points at).
+
+`--pipe <name>` overrides the pipe (used by the harness), `--port <n>` sets the server worker's
+plaintext port, `--minimized` starts hidden in the notification area, `--no-elevate` starts the
+worker without a consent prompt (automation only), `--help` prints the usage.
+
+### The window stays unelevated; the worker does not
+
+The window never touches WinUSB or the USB/IP driver: every action is one JSON request line on the
+control pipe. The privileged half is a **separate process** started from the window:
+
+1. **Start** (or, in the client window, **Refresh**) probes the pipe first.
+2. If a control plane already answers - the installed service, a worker an earlier window started, or
+   another instance's worker - the window **attaches** and starts nothing. Whatever it attached to is
+   not its to stop. This is a hard requirement, not an optimisation: **adopting a live pipe never
+   spawns a second worker and never raises a consent prompt**, and it is idempotent - open the window
+   N times and there is still exactly one worker.
+3. Only when nothing answers does the window start **its own executable** with `--worker` (nothing
+   else travels with it), elevated with `Verb=runas`: Windows raises **exactly one** consent prompt,
+   and the worker runs hidden with no console. It binds the pipe, and the window then attaches to it.
+
+### Closing the window, and what happens to the worker
+
+| The operator does | The window process | The worker |
 | --- | --- | --- |
-| server | `\\.\pipe\vht-server` | `VirtualThere Server` |
-| client | `\\.\pipe\vht-client` | `VirtualThere Client` |
+| Closes the window (X), or minimises it | hides to the notification area; still running | untouched: it keeps serving, and connected clients and in-flight transfers are unaffected |
+| Picks **Exit** (window button, or the notification-area menu item) | exits for real | the worker *this* window started is stopped: the role's own shutdown exchange over the pipe (`server.stop`, or `clients.detachAll` for the client), then the process is ended. A worker it merely attached to is left running |
+| Does nothing; the window process is killed or crashes | gone | keeps serving. Nothing reaps it: the worker is deliberately **not** tied to the window that started it |
+| Runs the executable again while a worker is live | opens and attaches | unchanged - no second worker, no consent prompt |
 
-`--pipe <name>` overrides the pipe (used by the harness), `--minimized` starts hidden in the
-notification area, `--help` prints usage. The tray runs unelevated and never touches WinUSB or
-the USB/IP driver: every action is one JSON request line on the control pipe.
+The notification-area icon is the operator's persistent affordance while the window process lives:
+double-click restores the window; right-click offers Open / Start / Stop / Show log / About / Exit.
+
+**When the window process is killed outright** there is no icon left to click, and the worker keeps
+serving - by design. That becomes the operator's explicit call:
+
+```bash
+vht-server stop-server --pipe vht-server      # server: clean stop over the frozen pipe verb
+vht-client                                    # client: opens the window, adopts the live worker,
+                                              #   then Exit stops it
+```
+
+For the client with no window open there is no shutdown verb on its control plane, so the remaining
+route is ending the process from an elevated shell (`taskkill /IM vht-client.exe /F`) - which is why
+Exit is the documented way out: it is the one path that detaches cleanly and ends only the worker
+belonging to that window.
+
+`tests/Vht.Ui.Tests` asserts the lifetime rules by name: start, attach-instead-of-start (spawning no
+second worker), declined consent, timeout, the graceful stop, the fallback end, "not ours to stop",
+the case where the window may not end an elevated worker, a real child process that really goes away,
+**closing the window does not stop the worker**, and **Exit does**. `vht-ui-driver` asserts the same
+against the shipped executables (see section 7).
 
 ## 2. Affordance map (frozen verbs from Appendix C)
 
@@ -129,7 +179,7 @@ The About box, window titles, tray tooltips, prompt captions and the log header 
 
 ## 7. How the acceptance claim is evidenced
 
-`src/Vht.Ui/harness/` contains two test-only projects that are not referenced by the tray and
+`src/Vht.Ui/harness/` contains two test-only projects that are not referenced by the windows and
 are not shipped:
 
 - `Vht.Ui.MockService` (`vht-mock-control-plane`) - a stand-in for both control pipes. It speaks
@@ -138,22 +188,33 @@ are not shipped:
 - `Vht.Ui.UiDriver` (`vht-ui-driver`) - drives the real windows through UI Automation: it finds
   controls by automation id, invokes them (`InvokePattern`, `TogglePattern`, `ValuePattern`),
   types into the prompt dialogs, checks that the window really hides and comes back for
-  tray-minimize/restore, and captures PNGs of the real window rectangles.
+  tray-minimize/restore, and captures PNGs of the real window rectangles. It also runs a
+  **stand-alone pass**: it starts the shipped `vht-server.exe` against a pipe nothing serves,
+  presses Start, and measures what the card claims - the window appears, no `ConsoleWindowClass`
+  window exists for the process, a second process with the same image name appears (the worker the
+  window started), the device list populates from the real server, and after Exit no process of that
+  image is left over.
 
 ```
-vht-ui-driver.exe --tray <vht-tray.exe> --mock <vht-mock-control-plane.exe> --out <dir>
+vht-ui-driver.exe --server <vht-server.exe> --client <vht-client.exe> \
+                  --mock <vht-mock-control-plane.exe> --out <dir>
 ```
 
-Result of the run that produced the attached screenshots: **32 steps, 0 failures**, and all
-twelve frozen verbs exercised against the mock (`server.status`, `server.start`, `devices.list`,
-`devices.nickname`, `devices.ignore`, `devices.password`, `devices.kick`, `log.tail`,
-`peers.list`, `peers.add`, `clients.attach`, `clients.detach`). The driver's step log, the
-mock's verb summary and the raw request transcript are written next to the screenshots.
+Optional: `--worker-pipe <name>`, `--worker-port <n>`, `--skip-worker-pass`.
+
+Result of the run that produced the attached screenshots: **32 steps, 0 failures** for the two
+mock-driven windows (all twelve frozen verbs exercised against the mock: `server.status`,
+`server.start`, `devices.list`, `devices.nickname`, `devices.ignore`, `devices.password`,
+`devices.kick`, `log.tail`, `peers.list`, `peers.add`, `clients.attach`, `clients.detach`), plus the
+stand-alone pass (`standalone.*`). The driver's step log, the mock's verb summary and the raw
+request transcript are written next to the screenshots.
 
 Notes on what the driver does *not* prove: it restores the window after minimize-to-tray by
 showing the real window handle (`ShowWindow(SW_RESTORE)`) and then re-acquiring the window
 through UI Automation, because the notification-area popup menu is owned by Explorer, not by the
 application - so the menu item itself is not clicked. The window-hide half is measured on the
-real window handle, and both halves use the same window the tray icon would show. Everything
+real window handle, and both halves use the same window the icon would show. Everything
 else (device actions, attach/detach, rename, ignore/unignore, passwords, the manual-server add)
-is an automation invocation on a control in the shipped window.
+is an automation invocation on a control in the shipped window. The stand-alone pass starts its
+worker with `--no-elevate`, because nothing in an automated run can answer a consent prompt: the
+elevated run differs in who authorises the same process, not in the code path.

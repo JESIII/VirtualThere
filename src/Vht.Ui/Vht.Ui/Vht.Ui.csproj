@@ -1,22 +1,40 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!--
+    Vht.Ui is the GUI *library* the two role executables host: vht-server.exe presents
+    Views/ServerWindow and vht-client.exe presents Views/ClientWindow, both through
+    Hosting/UiHost.Run(role, args). There is no tray executable any more (docs/UI.md section 1):
+    the role is decided by which executable was launched, not by a mode argument.
+  -->
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
+    <OutputType>Library</OutputType>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>Vht.Ui</RootNamespace>
-    <AssemblyName>vht-tray</AssemblyName>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>Vht.Ui</AssemblyName>
     <Product>VirtualThere</Product>
     <AssemblyTitle>VirtualThere</AssemblyTitle>
-    <Description>VirtualThere tray application and device manager.</Description>
+    <Description>VirtualThere management windows, hosted by the role executables.</Description>
     <NeutralLanguage>en</NeutralLanguage>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <!--
-    No NuGet dependencies. The tray is System.Windows.Forms.NotifyIcon (MIT, in-box);
-    the control plane is System.IO.Pipes + System.Text.Json (in-box). See docs/UI.md.
+    No NuGet dependencies. The notification-area icon is System.Windows.Forms.NotifyIcon (MIT,
+    in-box); the control plane is System.IO.Pipes + System.Text.Json (in-box). See docs/UI.md.
+
+    ApplicationManifest is deliberately NOT set here: a library has no PE of its own. The
+    app.manifest in this folder is the single source both role executables point their
+    <ApplicationManifest> at, so the two windows cannot drift apart at 125%-200% scaling.
   -->
+
+  <ItemGroup>
+    <!--
+      The host internals (AppOptions.ResolveDefaultPipe, the session) are internal on purpose: they
+      are not a public API surface. The test project is the one legitimate consumer, so it gets
+      access explicitly rather than the code being made public to satisfy a test.
+    -->
+    <InternalsVisibleTo Include="Vht.Ui.Tests" />
+  </ItemGroup>
 
 </Project>

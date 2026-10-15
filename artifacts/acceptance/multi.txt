@@ -6,7 +6,7 @@ are synthesised by the acceptance rig and driven through the production server s
 production USB/IP wire codec and a real TCP connection. This proves the software holds N
 devices concurrently; it is NOT a claim about N physical devices, and is reported as such.
 
-server listening on 127.0.0.1:1777 (real UsbIpTcpServer accept loop)
+server listening on 127.0.0.1:1034 (real UsbIpTcpServer accept loop)
 
 phase 0 - enumeration : server advertised 12 device(s) over OP_REP_DEVLIST
 
@@ -31,22 +31,22 @@ phase 2 - exercising all 12 devices concurrently for 6s
 
   busid     class             MB/s     MiB     URBs   failed
   --------  ----------------  -------  ------  -----  ------
-  1-1       mass-storage        374.5  2251.5  36024       0
-  1-2       hid                 374.7  2256.4  36103       0
-  1-3       communications      382.5  2299.5  36792       0
-  1-4       vendor-specific     399.4  2401.1  38417       0
-  1-5       mass-storage        353.4  2124.4  33990       0
-  1-6       hid                 372.9  2241.3  35861       0
-  1-7       communications      340.9  2053.0  32848       0
-  1-8       vendor-specific     385.9  2323.8  37181       0
-  1-9       mass-storage        366.6  2203.6  35257       0
-  1-10      hid                 343.7  2066.1  33057       0
-  1-11      communications      344.5  2070.9  33135       0
-  1-12      vendor-specific     369.2  2219.2  35507       0
-  TOTAL     12 devices         4408.3  26510.8
+  1-1       mass-storage        322.8  1939.3  31029       0
+  1-2       hid                 333.3  2005.0  32080       0
+  1-3       communications      330.2  1983.6  31738       0
+  1-4       vendor-specific     324.0  1948.5  31176       0
+  1-5       mass-storage        331.6  1992.1  31874       0
+  1-6       hid                 342.1  2055.1  32882       0
+  1-7       communications      337.0  2024.1  32385       0
+  1-8       vendor-specific     339.4  2038.9  32622       0
+  1-9       mass-storage        319.3  1917.8  30684       0
+  1-10      hid                 338.5  2033.6  32538       0
+  1-11      communications      332.3  1996.2  31939       0
+  1-12      vendor-specific     330.9  1987.8  31804       0
+  TOTAL     12 devices         3981.5  23921.9
 
-aggregate throughput : 4408.3 MB/s
-per-device mean      : 367.4 MB/s
+aggregate throughput : 3981.5 MB/s
+per-device mean      : 331.8 MB/s
 failed URBs          : 0
 
 phase 3 - one connection importing every device (no per-connection device cap)

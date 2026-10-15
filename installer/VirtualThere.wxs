@@ -79,13 +79,13 @@
     <Property Id="SKIPDRIVERUNINSTALL" Value="0" Secure="yes" />
 
     <!--
-      Close a running tray or client before their files are replaced. Without this, a major upgrade
-      with the tray running would need a reboot; with it the processes are closed (no message, no
-      prompt) and terminated after 15 s. TerminateProcess carries the exit code used when a process
-      will not go away, and requires RebootPrompt="no".
+      Close a running window before its file is replaced. Without this, a major upgrade with a window
+      open would need a reboot; with it the processes are closed (no message, no prompt) and
+      terminated after 15 s. TerminateProcess carries the exit code used when a process will not go
+      away, and requires RebootPrompt="no".
     -->
-    <util:CloseApplication Id="CloseRunningTray"
-                           Target="vht-tray.exe"
+    <util:CloseApplication Id="CloseRunningServer"
+                           Target="vht-server.exe"
                            CloseMessage="no" PromptToContinue="no" RebootPrompt="no"
                            Timeout="15" TerminateProcess="1" />
     <util:CloseApplication Id="CloseRunningClient"
@@ -144,22 +144,17 @@
           <File Id="VhtClientExe" Source="$(var.BinDir)\vht-client.exe" KeyPath="yes" Vital="yes" />
         </Component>
 
-        <Component Id="TrayExeComponent" Guid="058611CA-86EB-4958-8673-A238F9A2C113">
-          <File Id="VhtTrayExe" Source="$(var.BinDir)\vht-tray.exe" KeyPath="yes" Vital="yes" />
-        </Component>
-
         <Component Id="CliExeComponent" Guid="53B7807D-2CCA-452B-9C37-413641EB2094">
           <File Id="VhtCliExe" Source="$(var.BinDir)\vht.exe" KeyPath="yes" Vital="yes" />
         </Component>
 
-        <Component Id="RunKeyComponent" Guid="399A69E6-19BA-4D31-A266-25C931471F76">
-          <!-- The tray is a viewer/controller for the service; it runs unelevated. -->
-          <RegistryValue Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
-                         Name="VirtualThereTray"
-                         Type="string"
-                         Value="&quot;[INSTALLFOLDER]vht-tray.exe&quot; --mode server --minimized"
-                         KeyPath="yes" />
-        </Component>
+        <!--
+          There is no logon entry any more. It used to register the tray viewer at logon
+          (vht-tray.exe, with the server mode and the minimised flag); the management window is now
+          vht-server.exe, which a user opens when they want it, and nothing of VirtualThere's runs in
+          the session unless the user asks for it. The optional service (installed by
+          Setup-Portable.ps1 or `vht install`) is what runs unattended.
+        -->
 
         <Directory Id="ScriptsFolder" Name="scripts">
           <Component Id="ScriptsComponent" Guid="138D130A-C54D-4967-ABE9-A0D5F4B5E883">
@@ -193,17 +188,15 @@
     <StandardDirectory Id="ProgramMenuFolder">
       <Directory Id="ProgramMenuVirtualThereFolder" Name="VirtualThere">
         <Component Id="StartMenuComponent" Guid="259F7341-129E-43AE-A605-640FB5594365">
-          <Shortcut Id="ShortcutServerTray"
+          <Shortcut Id="ShortcutServerWindow"
                     Name="VirtualThere Server"
                     Description="Manage the VirtualThere USB/IP server (devices, clients, log)."
-                    Target="[INSTALLFOLDER]vht-tray.exe"
-                    Arguments="--mode server"
+                    Target="[INSTALLFOLDER]vht-server.exe"
                     WorkingDirectory="INSTALLFOLDER" />
-          <Shortcut Id="ShortcutClientTray"
+          <Shortcut Id="ShortcutClientWindow"
                     Name="VirtualThere Client"
                     Description="Manage attached remote USB devices."
-                    Target="[INSTALLFOLDER]vht-tray.exe"
-                    Arguments="--mode client"
+                    Target="[INSTALLFOLDER]vht-client.exe"
                     WorkingDirectory="INSTALLFOLDER" />
           <Shortcut Id="ShortcutCli"
                     Name="VirtualThere Command Line"

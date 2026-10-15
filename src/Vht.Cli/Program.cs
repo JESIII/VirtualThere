@@ -55,9 +55,10 @@ public static class Program
                 return 0;
 
             // Serving is the service binary's job: one implementation of the runtime, no fork.
+            // The verb path is synchronous, so the window never opens from here.
             case "serve":
             case "run":
-                return await Vht.Server.Program.Main(["serve", .. rest]).ConfigureAwait(false);
+                return Vht.Server.Program.Main(["serve", .. rest]);
 
             case "status":
                 return ServerCommands.Status(output, pipe);

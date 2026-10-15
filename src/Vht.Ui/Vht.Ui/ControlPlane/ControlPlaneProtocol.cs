@@ -24,6 +24,15 @@ public static class ControlPlaneVerbs
     public const string LogTail = "log.tail";
     public const string ClientsAttach = "clients.attach";
     public const string ClientsDetach = "clients.detach";
+
+    /// <summary>
+    /// <c>clients.detachAll</c> is served by the client's control plane and is used by the client
+    /// window when it stops the worker it started: every attached device is released before the
+    /// worker process ends. It is not part of <see cref="All"/> - that list is the twelve verbs the
+    /// affordance map and the harness document.
+    /// </summary>
+    public const string ClientsDetachAll = "clients.detachAll";
+
     public const string PeersAdd = "peers.add";
     public const string PeersList = "peers.list";
 
@@ -209,6 +218,15 @@ public static class JsonRead
             int.TryParse(value.GetValue<string>(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed))
         {
             return parsed;
+        }
+
+        // vht-server writes vid/pid as hex strings ("0x046d"), the mock writes integers. Both
+        // shapes have to arrive at the same number or the device list shows [0000:0000].
+        string text = value.GetValueKind() == JsonValueKind.String ? value.GetValue<string>() : string.Empty;
+        if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase) &&
+            int.TryParse(text[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int hex))
+        {
+            return hex;
         }
 
         return fallback;

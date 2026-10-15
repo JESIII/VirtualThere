@@ -1,0 +1,35 @@
+﻿VirtualThere acceptance - URB-size sweep for the LZ4 threshold decision
+loopback, single process, 4s per case, 5 repeats per case (median reported; range in brackets)
+Synthetic devices; production transport code (Vht.Transport) and production USB/IP codec.
+One device per case, 8 in-flight URBs, bulk-IN reads of the swept URB size.
+`compressed` is the server session's own LZ4 frame counter: a non-zero value is proof
+compression engaged on the wire; zero means the TlsLz4 column paid framing with no saving.
+Lz4Options.ThresholdBytes in effect in this rig: 65536 (product default).
+
+Tls      incompressible  4 KiB        206.7 [   193.9-   209.2]  frames       0  compressed       0  wire/payload -
+TlsLz4   incompressible  4 KiB        186.8 [   171.0-   191.8]  frames  383845  compressed       0  wire/payload 1.003
+Tls      compressible    4 KiB        217.6 [   184.2-   224.4]  frames       0  compressed       0  wire/payload -
+TlsLz4   compressible    4 KiB        188.6 [   185.5-   197.4]  frames  387399  compressed       0  wire/payload 1.003
+Tls      incompressible  64 KiB       763.7 [   734.4-   777.7]  frames       0  compressed       0  wire/payload -
+TlsLz4   incompressible  64 KiB       492.1 [   483.9-   500.5]  frames   94528  compressed       0  wire/payload 1.000
+Tls      compressible    64 KiB       801.5 [   760.5-   818.4]  frames       0  compressed       0  wire/payload -
+TlsLz4   compressible    64 KiB       981.0 [   939.0-   988.8]  frames  188756  compressed   62917  wire/payload 0.009
+Tls      incompressible  256 KiB      819.6 [   801.0-   823.6]  frames       0  compressed       0  wire/payload -
+TlsLz4   incompressible  256 KiB      557.8 [   516.7-   568.9]  frames   26838  compressed       0  wire/payload 1.000
+Tls      compressible    256 KiB      818.8 [   702.1-   830.9]  frames       0  compressed       0  wire/payload -
+TlsLz4   compressible    256 KiB      979.7 [   956.8-  1011.8]  frames   47132  compressed   15709  wire/payload 0.005
+Tls      incompressible  1 MiB        954.5 [   915.8-   970.6]  frames       0  compressed       0  wire/payload -
+TlsLz4   incompressible  1 MiB        629.8 [   624.3-   653.8]  frames    7598  compressed       0  wire/payload 1.000
+Tls      compressible    1 MiB        978.2 [   952.3-  1014.5]  frames       0  compressed       0  wire/payload -
+TlsLz4   compressible    1 MiB       1317.1 [  1295.7-  1361.3]  frames   15842  compressed    5279  wire/payload 0.004
+
+LZ4 vs TLS at equal URB size and payload shape (positive = LZ4 faster):
+
+URB       compressible       incompressible      compressible frames compressed   incompressible frames compressed
+--------  -----------------  -----------------   ---------------------   -----------------------
+4 KiB        -13.4%             -9.7%          387399 / 0                      383845 / 0
+64 KiB       +22.4%            -35.6%          188756 / 62917                   94528 / 0
+256 KiB      +19.6%            -31.9%           47132 / 15709                   26838 / 0
+1 MiB        +34.7%            -34.0%           15842 / 5279                     7598 / 0
+
+Compression engaged in at least one TlsLz4 case; see the columns above for which.

@@ -59,11 +59,22 @@ public abstract class TrayWindow : Window
         RestoredFromTray?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// True once the Exit affordance was used. From then on closing the window really closes it
+    /// instead of hiding it.
+    /// </summary>
+    public bool ExitRequested => _exitRequested;
+
     /// <summary>Exits the application for real (tray menu "Exit", Exit button, Alt+F4 policy).</summary>
+    /// <remarks>
+    /// The exit flag is set before the application is asked to shut down, and the application is
+    /// reached through <c>?</c> so a window with no <see cref="Application"/> (a unit test) still
+    /// records the decision instead of throwing.
+    /// </remarks>
     public void ExitApplication()
     {
         _exitRequested = true;
-        Application.Current.Shutdown();
+        Application.Current?.Shutdown();
     }
 
     protected override void OnClosing(CancelEventArgs e)

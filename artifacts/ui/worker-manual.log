@@ -1,0 +1,9 @@
+{"ts":"2026-10-15T04:34:00.3950674\u002B00:00","level":"Info","event":"ConfigurationLoaded","message":"no configuration file at C:\\ProgramData\\VirtualThere\\server.toml; running with defaults","path":"C:\\ProgramData\\VirtualThere\\server.toml"}
+{"ts":"2026-10-15T04:34:00.4498297\u002B00:00","level":"Info","event":"ServerStarting","message":"running in the foreground (not launched by the service control manager); Ctrl\u002BC to stop"}
+{"ts":"2026-10-15T04:34:00.4536236\u002B00:00","level":"Info","event":"ServerStarting","message":"starting VirtualThere 0.1.0 (USB/IP 1.1.1)","version":"0.1.0","capture_mode":"auto","rebind":false,"elevated":false}
+{"ts":"2026-10-15T04:34:00.5318860\u002B00:00","level":"Warn","event":"HotplugArrival","message":"device-interface notifications could not be registered (CR 31); falling back to a periodic rescan","cr":31}
+{"ts":"2026-10-15T04:34:00.5404681\u002B00:00","level":"Info","event":"ListenerStarted","message":"listening for USB/IP on 0.0.0.0:3240 (PlainTcp)","address":"0.0.0.0","port":3240,"transport":"PlainTcp"}
+{"ts":"2026-10-15T04:34:00.5405982\u002B00:00","level":"Info","event":"ServerStarted","message":"VirtualThere 0.1.0 (USB/IP 1.1.1) is serving 0 device(s) with no device limit; listeners: 0.0.0.0:3240 (PlainTcp)","exported":0,"listeners":1,"device_limit":null}
+{"ts":"2026-10-15T04:34:00.5407888\u002B00:00","level":"Info","event":"ControlPlaneStarted","message":"control plane listening on \\\\.\\pipe\\vht-manual","pipe":"\\\\.\\pipe\\vht-manual"}
+{"ts":"2026-10-15T04:34:15.8726946\u002B00:00","level":"Info","event":"ServerStopping","message":"stopping"}
+{"ts":"2026-10-15T04:34:15.8752020\u002B00:00","level":"Info","event":"ServerStopped","message":"stopped"}

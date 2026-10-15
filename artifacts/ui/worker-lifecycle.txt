@@ -1,0 +1,26 @@
+== tasklist BEFORE (vht-server.exe) ==
+(none)
+
+== started: vht-server.exe --worker --pipe vht-manual (the same command line the window builds) ==
+
+== server status over the control pipe (vht.exe status --pipe vht-manual) ==
+control plane: \\.\pipe\vht-manual
+banner:        VirtualThere 0.1.0 (USB/IP 1.1.1)
+server name:   ZUAN
+exported:      0 device(s)
+attached:      0 device(s)
+connections:   0
+capture mode:  auto
+device limit:  null (no cap)
+licence:       none: VirtualThere has no licence file, no activation and no paid tier
+listeners:
+  0.0.0.0:3240 (PlainTcp)
+
+== tasklist DURING ==
+vht-server.exe               32160 Console                    1     77,776 K
+
+== stopping it the documented way when no window is open: vht.exe stop-server --pipe vht-manual ==
+stop requested
+
+== tasklist AFTER ==
+(none)

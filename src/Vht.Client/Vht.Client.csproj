@@ -8,10 +8,21 @@
     later, the properties below still win (Directory.Build.props is imported before this body).
   -->
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>Vht.Client</RootNamespace>
     <AssemblyName>vht-client</AssemblyName>
+    <ApplicationManifest>..\Vht.Ui\Vht.Ui\app.manifest</ApplicationManifest>
+    <!--
+      WFO0003 wants DPI settings out of the manifest in a WinForms project. This is a WPF window
+      that merely has WinForms available for the notification-area icon (as Vht.Ui did before), so
+      the manifest is the correct and only mechanism that applies; the ApplicationHighDpiMode
+      property is consumed by ApplicationConfiguration.Initialize(), which a WPF entry point never
+      calls.
+    -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
@@ -19,7 +30,15 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    <InvariantGlobalization>true</InvariantGlobalization>
+    <!--
+      InvariantGlobalization must be OFF in a process that hosts a WPF window. WPF resolves
+      xml:lang (every FrameworkElement defaults to "en-US") through CultureInfo, and in invariant
+      mode only the invariant culture exists, so the window fails to construct with
+      "Cannot find non-neutral culture related to 'en-us'" - the whole GUI path dies before the
+      first frame. Found by running vht-ui-driver against the published vht-client.exe. The CLI
+      (vht.exe) keeps the root's invariant setting: it has no window to fail in.
+    -->
+    <InvariantGlobalization>false</InvariantGlobalization>
     <Deterministic>true</Deterministic>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CA1416</NoWarn>
@@ -38,6 +57,23 @@
     -->
     <Compile Remove="Tests/**/*.cs" />
     <None Remove="Tests/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      UseWindowsForms replaces the SDK's implicit-using set (System.IO among others). This puts
+      System.IO back, so the client's own code keeps compiling unchanged.
+    -->
+    <Using Include="System.IO" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      The management window this executable hosts (Hosting/UiHost) is the only project reference:
+      everything else the client needs is compiled into this project on purpose (its own
+      Usbip/Interop sources), which is why there were no references here before.
+    -->
+    <ProjectReference Include="..\Vht.Ui\Vht.Ui\Vht.Ui.csproj" />
   </ItemGroup>
 
   <ItemGroup>

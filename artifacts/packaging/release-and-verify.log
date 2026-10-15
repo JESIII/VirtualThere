@@ -1,111 +1,32 @@
-=== xtask release (from clean) ===
-clean: removed G:\Repos\VirtualThere\dist
 release: VirtualThere 0.1.0 (win-x64) from G:\Repos\VirtualThere
 test: running the test projects
 test: tests/Vht.Core.Tests/Vht.Core.Tests.csproj
   A total of 1 test files matched the specified pattern.
-  Passed!  - Failed:     0, Passed:   159, Skipped:     0, Total:   159, Duration: 570 ms - Vht.Core.Tests.dll (net10.0)
+  Passed!  - Failed:     0, Passed:   160, Skipped:     0, Total:   160, Duration: 536 ms - Vht.Core.Tests.dll (net10.0)
 test: tests/Vht.Config.Tests/Vht.Config.Tests.csproj
   A total of 1 test files matched the specified pattern.
-  Passed!  - Failed:     0, Passed:    77, Skipped:     0, Total:    77, Duration: 160 ms - Vht.Config.Tests.dll (net10.0)
+  Passed!  - Failed:     0, Passed:    77, Skipped:     0, Total:    77, Duration: 144 ms - Vht.Config.Tests.dll (net10.0)
 test: tests/Vht.Transport.Tests/Vht.Transport.Tests.csproj
   A total of 1 test files matched the specified pattern.
-  Passed!  - Failed:     0, Passed:    69, Skipped:     0, Total:    69, Duration: 513 ms - Vht.Transport.Tests.dll (net10.0)
+  Passed!  - Failed:     0, Passed:    69, Skipped:     0, Total:    69, Duration: 340 ms - Vht.Transport.Tests.dll (net10.0)
+test: tests/Vht.Ui.Tests/Vht.Ui.Tests.csproj
+  A total of 1 test files matched the specified pattern.
+  Passed!  - Failed:     0, Passed:    24, Skipped:     0, Total:    24, Duration: 896 ms - Vht.Ui.Tests.dll (net10.0)
 test: src/Vht.Client/Tests/Vht.Client.Tests.csproj
   A total of 1 test files matched the specified pattern.
   Passed!  - Failed:     0, Passed:    49, Skipped:     0, Total:    49, Duration: 2 s - Vht.Client.Tests.dll (net10.0)
-portable: publishing 4 products for win-x64, self-contained=true, single file, compressed
+portable: publishing 3 products for win-x64, self-contained=true, single file, compressed
   $ dotnet publish src/Vht.Server/Vht.Server.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=None -p:DebugSymbols=false -o G:\Repos\VirtualThere\dist\publish\vht-server
     |   Determining projects to restore...
-    |   Restored G:\Repos\VirtualThere\src\Vht.Core\Vht.Core.csproj (in 247 ms).
-    |   Restored G:\Repos\VirtualThere\src\Vht.Interop\Vht.Interop.csproj (in 247 ms).
-    |   Restored G:\Repos\VirtualThere\src\Vht.Server\Vht.Server.csproj (in 247 ms).
-    |   Vht.Core -> G:\Repos\VirtualThere\src\Vht.Core\bin\Release\net10.0\Vht.Core.dll
+    |   Restored G:\Repos\VirtualThere\src\Vht.Core\Vht.Core.csproj (in 412 ms).
+    |   Restored G:\Repos\VirtualThere\src\Vht.Ui\Vht.Ui\Vht.Ui.csproj (in 412 ms).
+    |   2 of 4 projects are up-to-date for restore.
     |   Vht.Interop -> G:\Repos\VirtualThere\src\Vht.Interop\bin\Release\net10.0-windows\Vht.Interop.dll
-    |   Vht.Server -> G:\Repos\VirtualThere\src\Vht.Server\bin\Release\net10.0-windows\win-x64\vht-server.dll
-    |   Vht.Server -> G:\Repos\VirtualThere\dist\publish\vht-server\
-  vht-server.exe  36.0 MiB
-  $ dotnet publish src/Vht.Client/Vht.Client.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=None -p:DebugSymbols=false -o G:\Repos\VirtualThere\dist\publish\vht-client
-    |   Determining projects to restore...
-    |   Restored G:\Repos\VirtualThere\src\Vht.Client\Vht.Client.csproj (in 249 ms).
-    |   Vht.Client -> G:\Repos\VirtualThere\src\Vht.Client\bin\Release\net10.0-windows\win-x64\vht-client.dll
-    |   Vht.Client -> G:\Repos\VirtualThere\dist\publish\vht-client\
-  vht-client.exe  35.9 MiB
-  $ dotnet publish src/Vht.Ui/Vht.Ui/Vht.Ui.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=None -p:DebugSymbols=false -o G:\Repos\VirtualThere\dist\publish\vht-tray
-    |   Determining projects to restore...
-    |   All projects are up-to-date for restore.
-    |   Vht.Ui -> G:\Repos\VirtualThere\src\Vht.Ui\Vht.Ui\bin\Release\net10.0-windows\win-x64\vht-tray.dll
-    |   Vht.Ui -> G:\Repos\VirtualThere\dist\publish\vht-tray\
-  vht-tray.exe  66.2 MiB
-  $ dotnet publish src/Vht.Cli/Vht.Cli.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=None -p:DebugSymbols=false -o G:\Repos\VirtualThere\dist\publish\vht
-    |   Determining projects to restore...
-    |   All projects are up-to-date for restore.
     |   Vht.Core -> G:\Repos\VirtualThere\src\Vht.Core\bin\Release\net10.0\Vht.Core.dll
-    |   Vht.Interop -> G:\Repos\VirtualThere\src\Vht.Interop\bin\Release\net10.0-windows\Vht.Interop.dll
-    |   Vht.Server -> G:\Repos\VirtualThere\src\Vht.Server\bin\Release\net10.0-windows\win-x64\vht-server.dll
-    |   Vht.Cli -> G:\Repos\VirtualThere\src\Vht.Cli\bin\Release\net10.0-windows\win-x64\vht.dll
-    |   Vht.Cli -> G:\Repos\VirtualThere\dist\publish\vht\
-  vht.exe  36.0 MiB
-portable: third_party/usbip-win2-driver verified against its SHA256SUMS
-portable: G:\Repos\VirtualThere\dist\portable
-
-portable artifacts
-----------------------------------------------------------------------------------------------------
-artifact                                                                size  sha256
-dist/portable/PACKAGING.md                                          25.7 KiB  0dd12e1ba3b5ccca…
-dist/portable/Setup-Portable.ps1                                    13.4 KiB  2b8136ddfc159559…
-dist/portable/driver/LICENSE.txt                                     1.3 KiB  723572b1487231ed…
-dist/portable/driver/SHA256SUMS                                        439 B  744ab8bb384d7f8a…
-dist/portable/driver/USBip-0.9.8.1-x64.exe                          24.9 MiB  38cad6d4432b52d5…
-dist/portable/portable.marker                                           88 B  907efe5c0f50fb0a…
-dist/portable/scripts/Install-ClientTask.ps1                         5.9 KiB  673e7e520f89402e…
-dist/portable/scripts/Install-Driver.ps1                             8.9 KiB  a0b69fb6f1ceb12a…
-dist/portable/scripts/Remove-ClientTask.ps1                          2.8 KiB  ef36b34d4db87533…
-dist/portable/scripts/Setup-Portable.ps1                            13.4 KiB  2b8136ddfc159559…
-dist/portable/scripts/Uninstall-Driver.ps1                           8.1 KiB  05dda2ef9380bf4e…
-dist/portable/vht-client.exe                                        35.9 MiB  30a4dd50d98fe5c6…
-dist/portable/vht-server.exe                                        36.0 MiB  d0c8a06a6d64c0dd…
-dist/portable/vht-tray.exe                                          66.2 MiB  db0f094022e9148c…
-dist/portable/vht.exe                                               36.0 MiB  436c492b40348174…
-----------------------------------------------------------------------------------------------------
-15 files, 199.0 MiB total under G:\Repos\VirtualThere\dist
-installer: WiX 5.0.2 from installer/dotnet-tools.json
-  $ dotnet tool restore
-    | Tool 'wix' (version '5.0.2') was restored. Available commands: wix
-    | 
-    | Restore was successful.
-  $ dotnet wix build VirtualThere.wxs -arch x64 -o G:\Repos\VirtualThere\dist\installer\VirtualThere-0.1.0-x64.msi -pdbtype none -d Version=0.1.0 -d BinDir=G:/Repos/VirtualThere/dist/portable -d DriverDir=G:/Repos/VirtualThere/third_party/usbip-win2-driver -d ScriptDir=G:/Repos/VirtualThere/installer/scripts -d DocDir=G:/Repos/VirtualThere/installer -ext WixToolset.Firewall.wixext -ext WixToolset.Util.wixext
-installer: dist\installer\VirtualThere-0.1.0-x64.msi  174.3 MiB
-hash: 16 artifacts, 373.3 MiB
-
-release artifacts
-----------------------------------------------------------------------------------------------------
-artifact                                                                size  sha256
-dist/installer/VirtualThere-0.1.0-x64.msi                          174.3 MiB  fdfa05f9630ac50c…
-dist/portable/PACKAGING.md                                          25.7 KiB  0dd12e1ba3b5ccca…
-dist/portable/Setup-Portable.ps1                                    13.4 KiB  2b8136ddfc159559…
-dist/portable/driver/LICENSE.txt                                     1.3 KiB  723572b1487231ed…
-dist/portable/driver/SHA256SUMS                                        439 B  744ab8bb384d7f8a…
-dist/portable/driver/USBip-0.9.8.1-x64.exe                          24.9 MiB  38cad6d4432b52d5…
-dist/portable/portable.marker                                           88 B  907efe5c0f50fb0a…
-dist/portable/scripts/Install-ClientTask.ps1                         5.9 KiB  673e7e520f89402e…
-dist/portable/scripts/Install-Driver.ps1                             8.9 KiB  a0b69fb6f1ceb12a…
-dist/portable/scripts/Remove-ClientTask.ps1                          2.8 KiB  ef36b34d4db87533…
-dist/portable/scripts/Setup-Portable.ps1                            13.4 KiB  2b8136ddfc159559…
-dist/portable/scripts/Uninstall-Driver.ps1                           8.1 KiB  05dda2ef9380bf4e…
-dist/portable/vht-client.exe                                        35.9 MiB  30a4dd50d98fe5c6…
-dist/portable/vht-server.exe                                        36.0 MiB  d0c8a06a6d64c0dd…
-dist/portable/vht-tray.exe                                          66.2 MiB  db0f094022e9148c…
-dist/portable/vht.exe                                               36.0 MiB  436c492b40348174…
-----------------------------------------------------------------------------------------------------
-16 files, 373.3 MiB total under G:\Repos\VirtualThere\dist
-
-release: manifest  G:\Repos\VirtualThere\dist\release-manifest.txt
-release: hashes    G:\Repos\VirtualThere\dist\SHA256SUMS
-release: next step is `xtask verify`, which decompiles the MSI and greps every artifact.
-release exit=0
-
-=== xtask verify ===
+    |   Vht.Ui -> G:\Repos\VirtualThere\src\Vht.Ui\Vht.Ui\bin\Release\net10.0-windows\Vht.Ui.dll
+    | C:\Program Files\dotnet\sdk\10.0.402\Sdks\Microsoft.NET.Sdk\targets\Microsoft.NET.Sdk.targets(308,5): error NETSDK1047: Assets file 'G:\Repos\VirtualThere\src\Vht.Server\obj\project.assets.json' doesn't have a target for 'net10.0-windows/win-x64'. Ensure that restore has run and that you have included 'net10.0-windows' in the TargetFrameworks for your project. You may also need to include 'win-x64' in your project's RuntimeIdentifiers. [G:\Repos\VirtualThere\src\Vht.Server\Vht.Server.csproj]
+xtask: dotnet exited with 1
+RELEASE_EXIT=1
 verify: decompiling dist\installer\VirtualThere-0.1.0-x64.msi with WiX 5.0.2
   $ dotnet wix msi decompile G:\Repos\VirtualThere\dist\installer\VirtualThere-0.1.0-x64.msi -o G:\Repos\VirtualThere\dist\verify\VirtualThere-0.1.0.decompiled.wxs -x G:\Repos\VirtualThere\dist\verify\binary
     | G:\Repos\VirtualThere\dist\installer\VirtualThere-0.1.0-x64.msi : warning WIX1060: The Wix4CloseApplication table is being decompiled as a custom table.
@@ -117,7 +38,7 @@ verify: decompiling dist\installer\VirtualThere-0.1.0-x64.msi with WiX 5.0.2
      [ok] start-menu shortcut, server tray  ('VirtualThere Server')
      [ok] start-menu shortcut, client tray  ('VirtualThere Client')
      [ok] start-menu shortcut, command line  ('VirtualThere Command Line')
-     [ok] tray logon entry  ('VirtualThereTray')
+     [MISSING] tray logon entry  ('VirtualThereTray')
      [ok] driver install custom action  ('Install-Driver.ps1')
      [ok] driver uninstall custom action  ('Uninstall-Driver.ps1')
      [ok] client logon task custom action  ('Install-ClientTask.ps1')
@@ -131,20 +52,13 @@ verify: decompiling dist\installer\VirtualThere-0.1.0-x64.msi with WiX 5.0.2
      [ok] absent: install-directory wizard binding  ('WIXUI_INSTALLDIR')
      [ok] msi: none of 12 tokens present
      [ok] decompiled-msi-source: none of 12 tokens present
-     [ok] vht-server.exe: none of 5 tokens present
-     [ok] vht-client.exe: none of 5 tokens present
-     [ok] vht-tray.exe: none of 5 tokens present
-     [ok] vht.exe: none of 5 tokens present
      [ok] msi: 0 occurrence(s), all in the shipped notice
      [ok] decompiled-msi-source: 0 occurrence(s), all in the shipped notice
-     [info] vht-server.exe: not text-scanned for prose (binary; the token scan in step 2 covers it)
-     [info] vht-client.exe: not text-scanned for prose (binary; the token scan in step 2 covers it)
-     [info] vht-tray.exe: not text-scanned for prose (binary; the token scan in step 2 covers it)
-     [info] vht.exe: not text-scanned for prose (binary; the token scan in step 2 covers it)
      [ok] 'VirtualThere USB/IP (TCP 3240)'
      [ok] 'VirtualThere USB/IP TLS (TCP 3241)'
      [ok] portable script scopes its rules to the server binary and the inbound direction
 
 verify: report written to dist\verify\verify-report.txt
-verify: PASS
-verify exit=0
+verify: expected structure missing from the MSI: tray logon entry ('VirtualThereTray')
+xtask: verification failed with 1 problem(s)
+VERIFY_EXIT=1

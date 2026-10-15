@@ -31,7 +31,7 @@ remote peer ──IClientTransport (plain TCP stub | TLS | TLS+LZ4)──▶ Loo
 | 2 | USB/IP client: connect, list, attach, detach | `Peers/{PeerStore,RemoteDeviceCatalog}.cs`, `Usbip/{UsbipProtocol,UsbipOp,UsbipOpWriter,UsbipDeviceRecord}.cs`, `Bridge/LoopbackBridge.cs` | Implemented (`OP_REQ_DEVLIST`, `OP_REQ_IMPORT`, version check 0x0111, reply validation). |
 | 3 | Multi-device, no cap | `Attach/AttachManager.cs`, `Attach/IDeviceController.cs` | Implemented as a property of the data structures: `ConcurrentDictionary` keyed per device, one IOCTL/port per attach, no counter, no slots, no maximum anywhere in `Vht.Client`. |
 | 4 | Transfer support + honest class matrix | driver executes URBs; client relays the byte stream. Matrix below. | control/bulk/interrupt: required path, unverified on hardware here. **Isochronous: unsupported by default.** |
-| 5 | Hotplug UX + clean degrade on network loss | `Attach/AttachManager.cs` (`ReconcileAsync`), `Bridge/LoopbackBridge.cs` (relay-ended events), `Control/ClientControlServer.cs` (events for the tray) | Implemented: 4 reconcile cases (port vanished, peer unreachable, peer stopped exporting, transport ended) each detach locally and queue a re-attach with a retry window; no reboot, no restart. |
+| 5 | Hotplug UX + clean degrade on network loss | `Attach/AttachManager.cs` (`ReconcileAsync`), `Bridge/LoopbackBridge.cs` (relay-ended events), `Control/ClientControlServer.cs` (events for the client window) | Implemented: 4 reconcile cases (port vanished, peer unreachable, peer stopped exporting, transport ended) each detach locally and queue a re-attach with a retry window; no reboot, no restart. |
 | 6 | Auto-attach policy with allow/deny | `Policy/AutoAttachPolicy.cs` | Implemented: ignore list (deny), allow list (restrict), per-device grant recorded **only after** a successful attach; attach delay + retry delay configurable. |
 | 7 | Per-device password | `Credentials/CredentialCache.cs` (`CredentialHandshake`), `Transport/IClientTransport.cs` | Implemented: password is looked up per device and passed into the transport handshake; plaintext transports **fail closed** rather than no-op. Prompt UI is `ui-workstream`; the real handshake is `transport-workstream`. |
 
@@ -147,7 +147,7 @@ wsk_events 1129, stride 1132`. The `plugin_hardware` (1120), `plugout_hardware` 
    driver of our own in v1).
 2. Isochronous device classes (USB audio streaming, UVC video) do not work; see §3.
 3. A one-shot `attach` holds the device until Ctrl+C — the device must be held by a running client
-   process (service or tray) for it to stay enumerated.
+   process (the service, or the worker the client window starts) for it to stay enumerated.
 4. The credential cache is the client's own JSON store at this stage; the architecture intends
    `Vht.Config`'s store to replace it (`Config/ClientPaths.cs` documents the swap).
 5. The `GET_IMPORTED_DEVICES` reply layout is inferred and validated against two candidate layouts;

@@ -15,8 +15,8 @@ across the whole solution) as of 2026-10-14, and is checked in CI by
 | Component | Version | Licence | Used as | Distributed? |
 |---|---|---|---|---|
 | .NET 10 runtime and BCL (`System.*`, `SslStream`/Schannel, `System.IO.Pipes`, `System.Text.Json`) | 10.0.x | MIT | language runtime, TLS, IPC, JSON | linked into every executable |
-| Windows Presentation Foundation (WPF) | .NET 10 | MIT | `vht-tray` management windows | linked into `vht-tray` |
-| Windows Forms (`System.Windows.Forms.NotifyIcon`) | .NET 10 | MIT | tray icon | linked into `vht-tray` |
+| Windows Presentation Foundation (WPF) | .NET 10 | MIT | the management windows hosted by `vht-server` / `vht-client` | linked into `vht-server` and `vht-client` |
+| Windows Forms (`System.Windows.Forms.NotifyIcon`) | .NET 10 | MIT | notification-area icon | linked into `vht-server` and `vht-client` |
 
 ## 2. Third-party packages in the build
 
@@ -33,8 +33,8 @@ across the whole solution) as of 2026-10-14, and is checked in CI by
 | `Microsoft.TestPlatform.ObjectModel`, `Microsoft.TestPlatform.TestHost` | 17.14.1 | MIT | test platform | tests only |
 | `Newtonsoft.Json` | 13.0.3 | MIT | transitive of `Microsoft.NET.Test.Sdk` | tests only |
 
-> **Note on the `Distributed?` column.** At v0.1.0 the `vht-server`, `vht-client`, `vht-tray`,
-> `vht` and `vht-client` executables link **no third-party NuGet package at all** - their only
+> **Note on the `Distributed?` column.** At v0.1.0 the three shipped executables - `vht-server`,
+> `vht-client` and `vht` - link **no third-party NuGet package at all** - their only
 > dependencies are Microsoft's own BCL/WPF assemblies plus this repository's own libraries. `Tomlyn`
 > and `K4os.Compression.LZ4` are used by `Vht.Config` and `Vht.Transport`, which are not yet wired
 > into the executables (see "Known limitations" in `README.md`). They are listed here because they

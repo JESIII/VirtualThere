@@ -37,9 +37,8 @@ by hand):
 ```
 dist/
   portable/
-    vht-server.exe            server, self-contained single file (no .NET install needed)
-    vht-client.exe            client
-    vht-tray.exe              tray / management UI (server and client modes)
+    vht-server.exe            server (and the VirtualThere Server window; self-contained single file)
+    vht-client.exe            client (and the VirtualThere Client window)
     vht.exe                   operator command line
     portable.marker           config and state stay in this folder
     driver/                   pinned third-party driver package + its licence + its SHA256SUMS
@@ -54,7 +53,7 @@ dist/
 
 Two reasons the MSI carries the **self-contained** build rather than a small framework-dependent one:
 a clean Windows machine has no .NET 10 desktop runtime, and the card's acceptance test is "run
-installer → both apps present" with **no manual configuration**. The cost is size (~174 MB of
+installer → both apps present" with **no manual configuration**. The cost is size (~140 MB of
 executables plus the 26 MB driver package), which `xtask release` reports honestly rather than hides.
 `xtask portable --framework-dependent` produces the small variant for size-sensitive cases; it then
 requires the .NET 10 Desktop Runtime and is not what `release` builds.
@@ -63,13 +62,12 @@ requires the .NET 10 Desktop Runtime and is not what `release` builds.
 
 | Item | Where / what |
 |---|---|
-| `vht-server.exe`, `vht-client.exe`, `vht-tray.exe`, `vht.exe` | `%ProgramFiles%\VirtualThere` |
+| `vht-server.exe`, `vht-client.exe`, `vht.exe` | `%ProgramFiles%\VirtualThere` |
 | `vht-server` service | display name **VirtualThere USB Server**, `LocalSystem`, automatic start, description "Shares this machine's USB devices over USB/IP. Free and unlimited." |
 | Virtual host controller driver | the pinned upstream package, installed through its own silent switches by `scripts\Install-Driver.ps1` (section 4) |
 | Windows Firewall | two inbound TCP rules — `VirtualThere USB/IP (TCP 3240)` and `VirtualThere USB/IP TLS (TCP 3241)` — scoped to `vht-server.exe`, all profiles; Windows Installer removes them on uninstall |
 | Client logon task | scheduled task **VirtualThere Client**, at logon, highest run level, runs `vht-client.exe serve` (section 3) |
-| Tray logon entry | `HKLM\...\CurrentVersion\Run` value `VirtualThereTray` → `vht-tray.exe --mode server --minimized` |
-| Start menu | folder **VirtualThere**: "VirtualThere Server", "VirtualThere Client", "VirtualThere Command Line" |
+| Start menu | folder **VirtualThere**: "VirtualThere Server" (`vht-server.exe`, no arguments → its window), "VirtualThere Client" (`vht-client.exe`), "VirtualThere Command Line" |
 | Add/Remove Programs | product **VirtualThere**, publisher VirtualThere, version from the single version source (section 6), comment "Free and unlimited, Apache-2.0. No licence key and no device limit." |
 | Registry | `HKLM\SOFTWARE\VirtualThere` — `InstallDir` |
 | Docs | `%ProgramFiles%\VirtualThere\docs\PACKAGING.md` (this file) |
@@ -90,7 +88,7 @@ The privilege boundary is deliberate and each half fails loudly rather than half
 |---|---|---|
 | `vht-server` service | `LocalSystem`, automatic start | claiming USB devices through WinUSB and binding the listening ports |
 | `vht-client` process | Administrator (via the logon task) | the UDE host controller's device interface is opened with `GENERIC_READ|GENERIC_WRITE` and the driver enforces Administrator; `Vht.Client.Interop.Ude.UdeNative.OpenForIoctl` fails with an explicit message naming that requirement |
-| `vht-tray` (both modes) | unelevated | it only speaks the control pipe; the privileged work lives in the services |
+| window half of `vht-server.exe` / `vht-client.exe` | unelevated | it only speaks the control pipe. The privileged work is the `--worker` process it starts - exactly one UAC prompt - or the installed service |
 | installer | elevated once (UAC) | service registration, driver package, firewall rules, logon task |
 | portable setup | elevated once, by hand | same three machine-wide items, see section 5 |
 
@@ -216,7 +214,7 @@ step above is skipped. Logs: `%ProgramData%\VirtualThere\logs\driver-uninstall.l
 ## 6. Versioning and the update story
 
 * **One version for everything.** `<Version>` in the repository's `Directory.Build.props` is the
-  single source: it flows into the four assemblies (with `AssemblyVersion`/`FileVersion`/
+  single source: it flows into the three shipped assemblies (with `AssemblyVersion`/`FileVersion`/
   `InformationalVersion`), into the MSI `ProductVersion`, into the artifact file name
   (`VirtualThere-<version>-x64.msi`) and into the release manifest. Bumping one line moves the whole
   release. `0.1.0` today.
@@ -224,13 +222,13 @@ step above is skipped. Logs: `%ProgramData%\VirtualThere\logs\driver-uninstall.l
   and must never change; component GUIDs are explicit and stable, so a major upgrade reuses the same
   components and the same service object instead of leaking duplicates.
 * **Upgrade path.** `<MajorUpgrade AllowSameVersionUpgrades="yes">` — installing a newer MSI over an
-  older one stops the service, closes the tray and the client process
+  older one stops the service, closes the two management windows and the client process
   (`util:CloseApplication`), replaces the files, restarts the service and re-creates the driver only
   if it is missing. Same-version reinstall is allowed (repair). Downgrades are refused with an
   explicit message; uninstall first if a downgrade is genuinely needed.
 * **Auto-update: manual for v1 — stated, not implied.** VirtualThere 0.1.0 ships **no updater**. The
   documented procedure is: run the newer `VirtualThere-<version>-x64.msi` (it upgrades in place), or
-  for a portable folder replace the executables (close the tray first; the client task keeps running
+  for a portable folder replace the executables (close the windows first; the client task keeps running
   the old path until it is replaced). There is no phone-home, no update service and no version check
   client — which also means no network dependency and nothing to disable.
 * A future updater would need: an update feed (signed manifest), signature verification of the MSI
@@ -256,18 +254,19 @@ step above is skipped. Logs: `%ProgramData%\VirtualThere\logs\driver-uninstall.l
 3. **Reboot-pending is not forced.** If the vendor package reports that a restart is needed, the
    install still succeeds and the log says so; the client reports the driver as unavailable until the
    restart.
-4. **The tray runs unelevated while the client runs elevated.** Whether an unelevated process can
-   write to a named pipe created by an elevated one under the default security descriptor is
-   process-integrity dependent; the architecture assumes it works (§1: "lets the UI run unelevated").
-   It is **not verified on this machine** (it needs an elevated client). If it turns out to be
-   blocked, the tray's client mode needs the pipe's DACL set explicitly, or the tray has to be started
-   elevated — whichever the UI card prefers.
+4. **The management window runs unelevated while the client it drives runs elevated.** Whether an
+   unelevated process can write to a named pipe created by an elevated one under the default security
+   descriptor is process-integrity dependent; the architecture assumes it works (§1: "lets the UI run
+   unelevated"). The window attaches to an elevated client worker over `\\.\pipe\vht-client` - so this
+   is the same question. It is **not verified on this machine** (it needs an elevated client). If it
+   turns out to be blocked, the client worker's pipe needs its DACL set explicitly, or the window has
+   to be started elevated - whichever the UI card prefers.
 5. **Config is left in place on uninstall.** `%ProgramData%\VirtualThere` (server) and
    `%LOCALAPPDATA%\VirtualThere\client` (client) hold configuration, peers, grants and logs. Removing
    them is not the uninstaller's job (silently deleting user data is worse than leaving it), and the
    uninstall acceptance test only requires the service, driver, firewall rules and binaries to go.
 6. **No icons or branding artwork** in the package: the icon set lives in the UI card's scope.
-   Shortcuts therefore use the tray executable's default icon.
+   Shortcuts therefore use the role executables' default icon.
 
 ## 8. Verification: what was run, and what needs an elevated shell
 

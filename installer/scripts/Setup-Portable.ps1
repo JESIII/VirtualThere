@@ -10,7 +10,7 @@
 
         .\vht-server.exe serve          server in the foreground
         .\vht-client.exe serve          client (needs the driver, and Administrator - see below)
-        .\vht-tray.exe --mode server    management UI
+        .\vht-server.exe               server window (management UI)
 
     Three things are machine-wide and therefore privileged, and only those need this script:
       1. the virtual host controller driver (client side) - scripts\Install-Driver.ps1;
@@ -199,7 +199,7 @@ try {
         Get-FirewallState
         Get-ServiceState
         Get-TaskState
-        Write-Log "binaries: vht-server.exe=$(Test-Path -LiteralPath $ServerExe) vht-client.exe=$(Test-Path -LiteralPath $ClientExe) vht-tray.exe=$(Test-Path -LiteralPath (Join-Path $PortableRoot 'vht-tray.exe')) vht.exe=$(Test-Path -LiteralPath (Join-Path $PortableRoot 'vht.exe'))"
+        Write-Log "binaries: vht-server.exe=$(Test-Path -LiteralPath $ServerExe) vht-client.exe=$(Test-Path -LiteralPath $ClientExe) vht.exe=$(Test-Path -LiteralPath (Join-Path $PortableRoot 'vht.exe'))"
         Write-Log 'Status is read-only and needs no elevation. Use -Action Install / -Action Uninstall (elevated) to change the machine-wide parts.'
         exit 0
     }

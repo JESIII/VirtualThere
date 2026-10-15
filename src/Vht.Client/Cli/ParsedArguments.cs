@@ -24,6 +24,14 @@ internal sealed class ParsedArguments
 
     internal int? BridgePort { get; private set; }
 
+    /// <summary>
+    /// Control pipe name override. The default is the frozen <c>\\.\pipe\vht-client</c>; the
+    /// override exists so the client window can hand the same pipe to the worker it starts, and so
+    /// the UI harness can drive a client that is not fighting the installed service for the
+    /// default pipe.
+    /// </summary>
+    internal string? PipeName { get; private set; }
+
     internal bool UseTls { get; private set; }
 
     internal bool All { get; private set; }
@@ -83,6 +91,9 @@ internal sealed class ParsedArguments
                         throw new ArgumentException($"--port expects a port number in 0..65535, got '{portText}'");
                     }
                     result.BridgePort = port;
+                    continue;
+                case "--pipe":
+                    result.PipeName = Next(args, ref i, "--pipe");
                     continue;
             }
 

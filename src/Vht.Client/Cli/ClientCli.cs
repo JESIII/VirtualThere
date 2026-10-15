@@ -29,6 +29,7 @@ using Vht.Client.Diagnostics;
 using Vht.Client.Peers;
 using Vht.Client.Policy;
 using Vht.Client.Transport;
+using Vht.Ui.Hosting;
 
 namespace Vht.Client.Cli;
 
@@ -39,7 +40,10 @@ internal static class ClientCli
     private const int ExitUsage = 2;
     private const int ExitFailure = 1;
 
-    internal static async Task<int> RunAsync(string[] args, TextWriter stdout, TextWriter stderr)
+    internal static async Task<int> RunAsync(
+        string[] args,
+        TextWriter stdout,
+        TextWriter stderr)
     {
         ParsedArguments parsed = ParsedArguments.Parse(args);
         if (parsed.ShowHelp)
@@ -112,11 +116,21 @@ internal static class ClientCli
         return new ClientRuntime(bridge, catalog, peers, policies, credentials, attachments, log);
     }
 
-    private static async Task<int> ServeAsync(ParsedArguments parsed, ClientLog log, TextWriter stderr)
+    /// <summary>
+    /// Runs the client runtime in the foreground: a console invocation, or the privileged worker a
+    /// window started (docs/UI.md section 1). Nothing here follows the window: the runtime stops
+    /// when Ctrl+C is pressed or when the control pipe asks it to, and it keeps serving (and keeps
+    /// devices attached) if the window that started it goes away.
+    /// </summary>
+    private static async Task<int> ServeAsync(
+        ParsedArguments parsed,
+        ClientLog log,
+        TextWriter stderr)
     {
         ClientRuntime runtime = BuildRuntime(parsed, log);
         await using ClientControlServer control = new(
-            runtime.Peers, runtime.Catalog, runtime.Attachments, runtime.Policy, runtime.Credentials, log);
+            runtime.Peers, runtime.Catalog, runtime.Attachments, runtime.Policy, runtime.Credentials, log,
+            parsed.PipeName);
 
         ConsoleCancelEventHandler cancelHandler = (_, e) =>
         {
@@ -136,7 +150,8 @@ internal static class ClientCli
             }
 
             runtime.Attachments.Start();
-            log.Info("client", $"vht-client running; {runtime.Peers.Peers.Count} peer(s) configured. Ctrl+C to stop.");
+            log.Info("client",
+                $"vht-client running; {runtime.Peers.Peers.Count} peer(s) configured. Ctrl+C to stop.");
 
             await runtime.WaitForShutdownAsync().ConfigureAwait(false);
             log.Info("client", "stopping");
@@ -391,7 +406,9 @@ internal static class ClientCli
         writer.WriteLine("""
             vht-client — attach remote USB devices as local ones, without a device limit.
 
-            usage: vht-client <command> [options]
+            usage: vht-client [command] [options]
+
+            (no command)                open the VirtualThere Client window
 
             commands:
               serve                     run the client: bridge, attach loop, control pipe
@@ -411,6 +428,7 @@ internal static class ClientCli
               --config <path>           config directory override (also $VHT_CONFIG)
               --peers <path>            peer file override
               --port <n>                loopback bridge port (default 3240)
+              --pipe <name>             control pipe to serve (default vht-client)
               --tls                     mark added peers as TLS (plain TCP is what v0.1.0 ships; see docs/TRANSPORT.md)
               --measure-capacity        run the port-capacity probe at startup (serve mode)
               -v, --verbose             debug logging

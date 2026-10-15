@@ -17,6 +17,15 @@ public sealed class ServerStatusSnapshot
 
     public int? TlsPort { get; init; }
 
+    /// <summary>
+    /// Listener descriptions exactly as the service reported them, e.g.
+    /// <c>0.0.0.0:3240 (PlainTcp)</c>. vht-server reports its listeners this way and no port
+    /// numbers, so the state line is built from these when <see cref="PlaintextPort"/> and
+    /// <see cref="TlsPort"/> are absent.
+    /// </summary>
+    public System.Collections.Generic.IReadOnlyList<string> Listeners { get; init; } =
+        Array.Empty<string>();
+
     public int ExportedDevices { get; init; }
 
     public int AttachedClients { get; init; }
@@ -39,7 +48,31 @@ public sealed class ServerStatusSnapshot
             ports.Add("TLS :" + TlsPort.Value);
         }
 
+        if (ports.Count == 0)
+        {
+            ports.AddRange(DescribeListeners());
+        }
+
         return ports.Count == 0 ? "Running" : "Running (" + string.Join(", ", ports) + ")";
+    }
+
+    private IEnumerable<string> DescribeListeners()
+    {
+        foreach (string listener in Listeners)
+        {
+            int colon = listener.IndexOf(':', StringComparison.Ordinal);
+            int space = listener.IndexOf(' ', StringComparison.Ordinal);
+            if (colon < 0)
+            {
+                continue;
+            }
+
+            string port = space > colon ? listener[(colon + 1)..space] : listener[(colon + 1)..];
+            string kind = space < 0 || listener.IndexOf("Tls", space, StringComparison.OrdinalIgnoreCase) < 0
+                ? "plaintext"
+                : "TLS";
+            yield return kind + " :" + port;
+        }
     }
 }
 
@@ -95,13 +128,39 @@ public sealed class VhtServiceClient
         JsonNode? node = response.Result;
         return new StatusResult(ControlPlaneStatus.Ok, new ServerStatusSnapshot
         {
+            // Both spellings are read: the windows were written against camelCase while
+            // vht-server's control plane (frozen by ARCHITECTURE.md Appendix C) emits
+            // snake_case. Accepting both is what makes the device list populate against a real
+            // server instead of only against the harness's mock.
             Running = JsonRead.Bool(node, "running", true) && !JsonRead.Bool(node, "stopped"),
-            ServerName = JsonRead.String(node, "serverName") ?? JsonRead.String(node, "name"),
-            PlaintextPort = JsonRead.Int(node, "plaintextPort", JsonRead.Int(node, "port")),
-            TlsPort = JsonRead.Int(node, "tlsPort", JsonRead.Int(node, "sslPort")),
-            ExportedDevices = JsonRead.Int(node, "exportedDevices"),
-            AttachedClients = JsonRead.Int(node, "attachedClients"),
+            ServerName = JsonRead.String(node, "serverName") ?? JsonRead.String(node, "server_name") ??
+                JsonRead.String(node, "name"),
+            PlaintextPort = JsonRead.Int(node, "plaintextPort",
+                JsonRead.Int(node, "plaintext_port", JsonRead.Int(node, "port"))),
+            TlsPort = JsonRead.Int(node, "tlsPort", JsonRead.Int(node, "tls_port", JsonRead.Int(node, "sslPort"))),
+            ExportedDevices = JsonRead.Int(node, "exportedDevices", JsonRead.Int(node, "exported_devices")),
+            AttachedClients = JsonRead.Int(node, "attachedClients", JsonRead.Int(node, "attached_devices")),
+            Listeners = ReadListeners(node),
         }, null);
+    }
+
+    private static System.Collections.Generic.IReadOnlyList<string> ReadListeners(JsonNode? node)
+    {
+        if (JsonRead.Array(node, "listeners", "endpoints") is not { } array)
+        {
+            return Array.Empty<string>();
+        }
+
+        var listeners = new List<string>(array.Count);
+        foreach (JsonNode? item in array)
+        {
+            if (item is not null && item.GetValueKind() == System.Text.Json.JsonValueKind.String)
+            {
+                listeners.Add(item.GetValue<string>());
+            }
+        }
+
+        return listeners;
     }
 
     public async Task<(ControlPlaneStatus Status, IReadOnlyList<DeviceSnapshot> Devices, ControlPlaneError? Error)>
@@ -135,6 +194,14 @@ public sealed class VhtServiceClient
 
     private static DeviceSnapshot ToDevice(JsonNode item, int index)
     {
+        // vht-server reports attachment as a boolean plus the holder's address ("attached",
+        // "attached_to"); the harness's mock reports a count ("attachedClients"). Both are read.
+        int attachedClients = JsonRead.Int(item, "attachedClients", JsonRead.Int(item, "clients"));
+        if (attachedClients == 0 && JsonRead.Bool(item, "attached"))
+        {
+            attachedClients = 1;
+        }
+
         return new DeviceSnapshot
         {
             Key = JsonRead.String(item, "key") ?? JsonRead.String(item, "busid") ?? "device-" + index,
@@ -142,13 +209,16 @@ public sealed class VhtServiceClient
             Nickname = JsonRead.String(item, "nickname"),
             VendorId = JsonRead.Int(item, "vid", JsonRead.Int(item, "vendorId")),
             ProductId = JsonRead.Int(item, "pid", JsonRead.Int(item, "productId")),
-            Vendor = JsonRead.String(item, "vendor"),
-            Product = JsonRead.String(item, "product"),
-            AttachedClients = JsonRead.Int(item, "attachedClients", JsonRead.Int(item, "clients")),
-            CaptureState = CaptureText.ParseState(JsonRead.String(item, "captureState")),
-            CaptureReason = CaptureText.ParseReason(JsonRead.String(item, "captureReason")),
+            Vendor = JsonRead.String(item, "vendor") ?? JsonRead.String(item, "manufacturer"),
+            Product = JsonRead.String(item, "product") ?? JsonRead.String(item, "display_name"),
+            AttachedClients = attachedClients,
+            CaptureState = CaptureText.ParseState(
+                JsonRead.String(item, "captureState") ?? JsonRead.String(item, "state")),
+            CaptureReason = CaptureText.ParseReason(
+                JsonRead.String(item, "captureReason") ?? JsonRead.String(item, "reason")),
             Ignored = JsonRead.Bool(item, "ignored"),
-            PasswordProtected = JsonRead.Bool(item, "passwordProtected") || JsonRead.Bool(item, "password"),
+            PasswordProtected = JsonRead.Bool(item, "passwordProtected") ||
+                JsonRead.Bool(item, "password_required") || JsonRead.Bool(item, "password"),
         };
     }
 
@@ -348,6 +418,13 @@ public sealed class VhtServiceClient
             ControlPlaneVerbs.ClientsAttach,
             Args(("peer", peerId), ("busid", busId), ("auto", autoAttach)),
             ct);
+
+    /// <summary>
+    /// Releases every device the client service is holding. Used when the client window stops the
+    /// worker it started: the devices are handed back before the worker process goes away.
+    /// </summary>
+    public Task<ControlPlaneResponse> DetachAllAsync(CancellationToken ct) =>
+        _plane.SendAsync(ControlPlaneVerbs.ClientsDetachAll, null, ct);
 
     internal static IReadOnlyDictionary<string, object?> Args(params (string Key, object? Value)[] pairs)
     {

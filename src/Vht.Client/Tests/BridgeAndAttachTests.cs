@@ -447,7 +447,7 @@ public sealed class ControlPlaneTests
         control.Start();
 
         using var client = new System.IO.Pipes.NamedPipeClientStream(
-            ".", ClientControlServer.PipeName, System.IO.Pipes.PipeDirection.InOut);
+            ".", ClientControlServer.DefaultPipeName, System.IO.Pipes.PipeDirection.InOut);
         await client.ConnectAsync(5000);
 
         using var writer = new StreamWriter(client, new UTF8Encoding(false), leaveOpen: true) { AutoFlush = true };

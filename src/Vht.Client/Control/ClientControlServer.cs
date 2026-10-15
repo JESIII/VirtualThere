@@ -28,7 +28,7 @@ namespace Vht.Client.Control;
 internal sealed class ClientControlServer : IAsyncDisposable
 {
     /// <summary>Appendix C's pipe name for the client.</summary>
-    internal const string PipeName = "vht-client";
+    internal const string DefaultPipeName = "vht-client";
 
     private readonly PeerStore _peers;
     private readonly RemoteDeviceCatalog _catalog;
@@ -48,7 +48,8 @@ internal sealed class ClientControlServer : IAsyncDisposable
         AttachManager attachments,
         AutoAttachPolicy policy,
         CredentialCache credentials,
-        ClientLog log)
+        ClientLog log,
+        string? pipeName = null)
     {
         _peers = peers;
         _catalog = catalog;
@@ -56,7 +57,14 @@ internal sealed class ClientControlServer : IAsyncDisposable
         _policy = policy;
         _credentials = credentials;
         _log = log;
+        PipeName = string.IsNullOrWhiteSpace(pipeName) ? DefaultPipeName : pipeName;
     }
+
+    /// <summary>
+    /// The pipe this instance serves. <see cref="DefaultPipeName"/> unless a caller overrode it -
+    /// the client window passes the pipe it was told to use, so it and its worker always agree.
+    /// </summary>
+    internal string PipeName { get; }
 
     internal void Start()
     {

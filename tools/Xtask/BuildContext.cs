@@ -66,12 +66,16 @@ internal sealed class BuildContext
     internal string MsiPath(string version) =>
         Path.Combine(InstallerDir, $"VirtualThere-{version}-x64.msi");
 
-    /// <summary>The four shipped binaries, in the order they are listed to the operator.</summary>
+    /// <summary>
+    /// The shipped binaries, in the order they are listed to the operator. Two of them are windows:
+    /// <c>vht-server.exe</c> opens the server window and <c>vht-client.exe</c> the client window,
+    /// each hosting its own privileged worker. <c>vht.exe</c> is the scripting surface. There is no
+    /// separate tray binary any more.
+    /// </summary>
     internal static readonly (string Name, string Project)[] Products =
     [
         ("vht-server", "src/Vht.Server/Vht.Server.csproj"),
         ("vht-client", "src/Vht.Client/Vht.Client.csproj"),
-        ("vht-tray", "src/Vht.Ui/Vht.Ui/Vht.Ui.csproj"),
         ("vht", "src/Vht.Cli/Vht.Cli.csproj"),
     ];
 
@@ -81,6 +85,7 @@ internal sealed class BuildContext
         "tests/Vht.Core.Tests/Vht.Core.Tests.csproj",
         "tests/Vht.Config.Tests/Vht.Config.Tests.csproj",
         "tests/Vht.Transport.Tests/Vht.Transport.Tests.csproj",
+        "tests/Vht.Ui.Tests/Vht.Ui.Tests.csproj",
         "src/Vht.Client/Tests/Vht.Client.Tests.csproj",
     ];
 

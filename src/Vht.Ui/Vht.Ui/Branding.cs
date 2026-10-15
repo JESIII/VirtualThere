@@ -26,7 +26,7 @@ public static class Branding
     public const string ClientTitle = ProductName + " Client";
     public const string TrayServerTooltip = ProductName + " Server";
     public const string TrayClientTooltip = ProductName + " Client";
-    public const string ExecutableName = "vht-tray.exe";
+    public const string ExecutableName = "vht.exe";
 
     /// <summary>Short line under the product name in the about box.</summary>
     public const string AboutTagline = "USB devices over the network, for Windows.";
@@ -37,8 +37,9 @@ public static class Branding
         "It is built from scratch: no third-party product's code, assets or strings are used,\n" +
         "and it is not wire-compatible with any other USB-over-IP implementation.\n" +
         "\n" +
-        "It presents a management UI for the " + ProductName + " server and client services.\n" +
-        "The tray application itself runs unelevated and never touches USB devices directly.";
+        "This window manages the " + ProductName + " server or client service. The window\n" +
+        "itself runs unelevated and never touches USB devices directly: the privileged side is\n" +
+        "a separate worker process reached over a local control pipe.";
 
     public const string AboutLicenceLine =
         "Licensed under the Apache License, Version 2.0. See LICENSE in the project root.";
