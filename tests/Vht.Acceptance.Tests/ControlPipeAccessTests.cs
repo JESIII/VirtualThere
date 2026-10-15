@@ -16,10 +16,15 @@ namespace Vht.Acceptance.Tests;
 /// <remarks>
 /// <para>
 /// The reported failure was an elevated worker whose pipe refused the unelevated window: the pipe
-/// was created with no security descriptor at all, so it inherited the owner's default DACL and -
-/// fatally - the owner's mandatory integrity label. A High-integrity worker's pipe is labelled High,
-/// and no-write-up then denies every write from the Medium-integrity window; the window reported
-/// that as "no listener ... is the service running?".
+/// was created with no security descriptor at all, so it inherited the owner's default DACL and
+/// carried no mandatory integrity label of its own. Measured on that pipe (docs/TROUBLESHOOTING.md
+/// has the descriptors), the denying gate was the <b>DACL</b>: a high-integrity token's owner is the
+/// Administrators group, the operator's own account is not in the default DACL, and the only ACE
+/// matching the window's token grants Everyone read only. The missing label is why that DACL is not
+/// the whole story in general - an object that does carry a label is subject to no-write-up, and a
+/// Medium client then cannot write to a High-labelled one whatever the DACL says - and it is a
+/// requirement of this code, so this test asserts it. The window reported the refusal as "no
+/// listener ... is the service running?".
 /// </para>
 /// <para>
 /// This test asserts the object's real state by opening the live pipe <b>by name</b> and asking the
@@ -28,14 +33,15 @@ namespace Vht.Acceptance.Tests;
 /// both: the DACL must contain an allow ACE for the interactive user (the old pipe carried the
 /// process default, which grants the interactive user nothing of its own and grants Everyone and
 /// ANONYMOUS read only), and the mandatory label must be Medium with no-write-up (the old pipe
-/// carried no label ACE at all, which is precisely how the elevated case ends up High).
+/// carried no label ACE at all, which leaves the object's level to whatever the creating token
+/// stamps and leaves a Low-integrity client admitted by that same DACL).
 /// </para>
 /// <para>
 /// <b>What this cannot assert.</b> The test process is Medium, and a test run cannot elevate itself
-/// (UAC consent is interactive), so it cannot create the High-integrity pipe that reproduced the bug
-/// and cannot watch the fixed pipe deflect a real High-label denial. That half is reported NOT RUN
-/// and has to be confirmed by starting the worker elevated; what is asserted here is the property
-/// that makes it work, read from the live object.
+/// (UAC consent is interactive), so it cannot create the High-integrity pipe that reproduced the
+/// bug and cannot watch the fixed pipe deflect a real High-label denial. That half is reported NOT
+/// RUN and has to be confirmed by starting the worker elevated; what is asserted here is the
+/// property that makes it work, read from the live object.
 /// </para>
 /// </remarks>
 public sealed class ControlPipeAccessTests
@@ -61,12 +67,13 @@ public sealed class ControlPipeAccessTests
 
         (string descriptor, string label) = await WaitForPipeAsync(pipeName);
 
-        // 1. The mandatory label. Without it the unelevated window is denied by no-write-up whenever
-        //    the worker is elevated, whatever the DACL says.
+        // 1. The mandatory label. An object that carries a High label refuses a Medium client every
+        //    write whatever the DACL says; leaving the object unlabelled leaves its level to whatever
+        //    the creating token stamps, and leaves a Low-integrity client admitted by the DACL below.
         Assert.True(
             label.Contains("(ML;;NW;;;ME)", StringComparison.OrdinalIgnoreCase),
             $"the control pipe's mandatory integrity label is '{label}', not Medium with no-write-up; " +
-            "an elevated worker's pipe would then refuse the window every write");
+            "an object that carries a High label would then refuse the window every write");
 
         // 2. The DACL: an allow ACE for the interactive user that really carries write access.
         string rights = NamedPipeSecurity.RightsOfAce(descriptor, "IU");

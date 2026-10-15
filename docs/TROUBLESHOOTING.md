@@ -38,18 +38,30 @@ Unhandled exception. System.UnauthorizedAccessException: Access to the path is d
 while the identical command from an **elevated** shell prints the full status. That asymmetry is the
 diagnosis: the pipe is there, and it is refusing the window.
 
-Cause: a named pipe created with **no security descriptor** inherits two properties from the process
-that creates it, and both of them break this pair of processes:
+Cause: a named pipe created with **no security descriptor** inherits the creating token's default
+DACL and carries **no mandatory integrity label of its own**. What the kernel reported for the pipe
+this failure was produced with - an **elevated** worker owning `\\.\pipe\vht-server`, read from an
+unelevated process with `GetSecurityInfo`:
 
-1. The token's **default DACL**, which names Local System, the built-in Administrators and the owner
-   account, and grants Everyone and ANONYMOUS read only. Nobody else is given write access.
-2. The token's **mandatory integrity label**. An object created by a High-integrity process carries a
-   High label, and Windows' no-write-up rule then denies every write from a Medium-integrity process
-   **regardless of the DACL**. The control protocol is request/response over a read/write pipe, so
-   the unelevated window is denied on its first request line.
+```
+owner|group|dacl: O:BAG:<operator SID>D:(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;BA)(A;;FR;;;WD)(A;;FR;;;AN)
+control=0x8004 SE_SACL_PRESENT=False    mandatory label: (none)
+open for read : OK      open for write: UnauthorizedAccessException: Access is denied.
+```
 
-The second one is why "just make the ACL permissive" does not fix it on its own, and why the failure
-looks like a missing service rather than a permission problem.
+**The DACL is what refused the window, and that is the measured cause.** The owner of a
+High-integrity token is the **Administrators group**, so the operator's own account does not appear
+in that DACL at all; the only ACE that matches the window's token is `Everyone`'s read-only one
+(`FR`). The write is refused by the access check, which is a **permission** denial, not a missing
+service.
+
+The label is the second thing this fix sets, and it is a requirement of the design rather than the
+mechanism that produced this report. An object with **no** label ACE is treated as Medium by Windows,
+so no-write-up does not apply to the object above - but an object whose descriptor *does* carry a
+label is subject to it, and a Medium-integrity window then cannot write to a High-labelled object
+**whatever the DACL allows**. The explicit Medium label also makes the object's level independent of
+the creating token, and no-write-up is the only thing that keeps a **Low**-integrity client out: such
+a client is the interactive user, so the DACL alone would admit it.
 
 Fix: the pipe is created with an explicit descriptor, which grants the interactive user read/write on
 the pipe and lowers the object's mandatory label to Medium:
@@ -73,6 +85,14 @@ If this class of failure ever comes back, ask the object rather than the log:
   reading the DACL needs `READ_CONTROL` on the pipe, which the descriptor above grants.
 * `Access is denied` **is** the answer in this situation. It does not mean "the service is not
   running".
+
+For comparison, the same read against a **fixed** pipe (unelevated worker, same shell):
+
+```
+owner|group|dacl: O:<operator SID>G:<operator SID>D:(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;<operator SID>)(A;;0x12019f;;;IU)S:AI(ML;;NW;;;ME)
+control=0x8814 SE_SACL_PRESENT=True     mandatory label: 'S:AI(ML;;NW;;;ME)'
+open for read : OK      open for write: OK
+```
 
 **The window's own message was a second, independent defect.** The window's client connects
 asynchronously with a connect timeout, and every failure of that path - including an access denial -

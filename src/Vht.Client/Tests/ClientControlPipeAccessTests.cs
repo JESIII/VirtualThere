@@ -7,9 +7,12 @@ namespace Vht.Client.Tests;
 
 /// <summary>
 /// The client role's control pipe is the same object as the server's, created the same way, and it
-/// failed the same way: an elevated <c>vht-client.exe --worker</c> owns it, the unelevated
-/// <c>vht-client.exe</c> window drives it, and a pipe with no security descriptor is labelled High
-/// by an elevated creator - which Windows then refuses to let a Medium-integrity process write to.
+/// failed the same way: an elevated <c>vht-client.exe --worker</c> owns it and the unelevated
+/// <c>vht-client.exe</c> window drives it, while a pipe with no security descriptor carries the
+/// creating token's default DACL (in which an elevated token's owner is the Administrators group,
+/// not the operator) and no mandatory integrity label of its own. The DACL is what refused the
+/// window here; the explicit Medium label is a requirement of this code (an object that carries a
+/// label is subject to no-write-up, which is also what keeps a Low-integrity client out).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -46,7 +49,7 @@ public sealed class ClientControlPipeAccessTests
         Assert.True(
             report.MediumIntegrityLabelPresent,
             $"the client control pipe's mandatory integrity label is '{report.IntegrityLabel}', not Medium " +
-            "with no-write-up; an elevated client worker's pipe would then refuse the window every write");
+            "with no-write-up; an object that carries a High label would then refuse the window every write");
 
         string rights = NamedPipeSecurity.RightsOfAce(report.Descriptor, "IU");
         Assert.True(

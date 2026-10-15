@@ -65,8 +65,8 @@ public sealed class ControlPlaneServer : IAsyncDisposable
     /// <summary>
     /// What the kernel reports about the live pipe's security descriptor and mandatory integrity
     /// label, or null before the first pipe has been created. Read back from the object itself, so
-    /// it can be asserted rather than assumed - a High label here is the failure that makes an
-    /// unelevated window unable to write to its own worker.
+    /// it can be asserted rather than assumed - a label that is not Medium is the state in which an
+    /// unelevated window may be unable to write to its own worker.
     /// </summary>
     public PipeSecurityReport? PipeSecurity { get; private set; }
 

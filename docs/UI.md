@@ -41,12 +41,27 @@ control pipe. The privileged half is a **separate process** started from the win
 ### The pipe both halves can use
 
 The split above works only if the pipe the **elevated** worker owns is writable by the **unelevated**
-window, and that does not happen by itself. A named pipe created with no security descriptor inherits
-the creating process's default DACL (Local System, the built-in Administrators, the owner account -
-and read-only for Everyone and ANONYMOUS) and its mandatory integrity label. An object created by a
-High-integrity process is labelled High, and Windows' no-write-up rule then denies every write from a
-Medium-integrity process whatever the DACL allows: the window is refused on its first request line and
-reports it as a service that is not running (`docs/TROUBLESHOOTING.md`).
+window, and that does not happen by itself. A named pipe created with no security descriptor
+inherits the creating process's default DACL and carries **no mandatory integrity label of its
+own**. Two different mechanisms, and which one refuses the window depends on the object
+(`docs/TROUBLESHOOTING.md` has the measured descriptors):
+
+* **The default DACL.** It names Local System, the built-in Administrators and the owner account,
+  and grants Everyone and ANONYMOUS read only. The owner account is the one thing that shifts with
+  elevation: under a High-integrity token it is the **Administrators group**, so the operator's own
+  account is not in the DACL at all and the only ACE that matches the window's token is Everyone's
+  read-only one. That is a **permission** denial, decided by the access check, and it is the one that
+  was measured on the pipe this failure was reported with: the window is refused on its first request
+  line and reports it as a service that is not running.
+* **The absent label.** Windows treats an object with **no** label ACE as Medium, so no-write-up is
+  not what refuses the window on such an object. It is still load-bearing, for two reasons: an
+  object whose descriptor *does* carry a label is subject to no-write-up, and a Medium-integrity
+  window then cannot write to a High-labelled object **whatever the DACL allows**; and no-write-up
+  is the only thing that keeps a **Low**-integrity client out, because such a client is the
+  interactive user and the ACE below admits it.
+
+So the label is set explicitly rather than left to the creating token: the object's level is then a
+property of this code rather than of whoever launched the worker.
 
 Every control pipe in both roles is therefore created through `Vht.Interop.Control.NamedPipeSecurity`
 with an explicit descriptor:

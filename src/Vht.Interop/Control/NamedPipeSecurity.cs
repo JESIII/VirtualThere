@@ -41,19 +41,30 @@ public sealed record PipeSecurityReport(string Descriptor, string IntegrityLabel
 /// </summary>
 /// <remarks>
 /// <para>
-/// A pipe created with no security descriptor inherits two things from the creating process that
-/// break that pair as soon as the worker is elevated (docs/UI.md section 1):
+/// A pipe created with no security descriptor inherits the creating process's default DACL and
+/// carries <b>no mandatory integrity label of its own</b>, and that pair breaks this two-process
+/// arrangement as soon as the worker is elevated (docs/UI.md section 1, with the measured
+/// descriptors in docs/TROUBLESHOOTING.md):
 /// </para>
 /// <list type="bullet">
 /// <item><description>
-/// the <b>default DACL</b> of the token, which grants the operator's own account full control but
-/// grants nothing at all to the interactive user as such, and
+/// the <b>default DACL</b> of the token. It names Local System, the built-in Administrators and the
+/// owner account, and grants Everyone and ANONYMOUS read only. When the creator is elevated the
+/// owner account <i>is</i> the Administrators group, so the operator's own account does not appear
+/// in it at all and the only ACE that matches the window's token is Everyone's read-only one: the
+/// window's first request line is refused by the access check. This is the effect that was
+/// <i>measured</i> on the pipe the reported failure was produced with, and it is an access
+/// <i>denial</i>, which is why it must not read as "the service is not running".
 /// </description></item>
 /// <item><description>
-/// the <b>mandatory integrity label</b> of the token. A non-medium creator gets an explicit label
-/// in the object's SACL - a High-integrity worker's pipe is labelled High - and no-write-up then
-/// denies every write from the Medium-integrity window, DACL or no DACL. This is an access
-/// <i>denial</i>, which is why it must not read as "the service is not running".
+/// the <b>missing mandatory integrity label</b>. Windows treats an object with no label ACE as
+/// Medium, so no-write-up is not what refuses the window on such an object - but an object whose
+/// descriptor <i>does</i> carry a label is subject to it, and then a Medium-integrity client cannot
+/// write to a High-labelled object whatever the DACL allows. The label is a requirement of this
+/// code, not an inference from the report: it makes the object's level independent of what the
+/// creating token happened to stamp, and no-write-up is the only thing that keeps a
+/// <b>Low</b>-integrity client out, since such a client is the interactive user and the
+/// interactive-user ACE below would otherwise admit it.
 /// </description></item>
 /// </list>
 /// <para>
@@ -346,8 +357,8 @@ internal static partial class NamedPipeSecurity
         if (!label.Contains(PipeSecurityReport.MediumIntegrityLabelAce, StringComparison.OrdinalIgnoreCase))
         {
             problem ??= string.IsNullOrEmpty(label)
-                ? "the pipe carries no mandatory integrity label, so it inherits the process's " +
-                  "integrity level: an elevated worker's pipe would be High and refuse the window's writes"
+                ? "the pipe carries no mandatory integrity label, so the object is treated as Medium " +
+                  "and its level follows whatever the creating token stamped"
                 : $"the pipe's mandatory integrity label is '{label}', not Medium";
         }
 

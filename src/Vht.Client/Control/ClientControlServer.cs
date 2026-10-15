@@ -69,8 +69,9 @@ internal sealed class ClientControlServer : IAsyncDisposable
 
     /// <summary>
     /// What the kernel reports about the live pipe's security descriptor and mandatory integrity
-    /// label, or null before the first instance exists. Read back from the object itself: a High
-    /// label here is the state in which the unelevated window cannot write to its own worker.
+    /// label, or null before the first instance exists. Read back from the object itself: a label
+    /// that is not Medium is the state in which the unelevated window may be unable to write to its
+    /// own worker.
     /// </summary>
     internal PipeSecurityReport? PipeSecurity { get; private set; }
 
