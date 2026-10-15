@@ -80,10 +80,13 @@ D:(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;<owner SID>)(A;;0x12019f;;;IU)S:(ML;;NW;;;ME)
 
 Two properties of that code are deliberate, and neither may be simplified away:
 
-* **It cannot break the unelevated path.** Writing a SACL needs `SeSecurityPrivilege`, which an
-  unelevated worker does not hold, so the pipe is created from the descriptor when the kernel accepts
-  it and from the plain constructor when it does not - an unelevated worker's object is Medium by
-  default, so both routes give the same working pair. Nothing here aborts pipe setup.
+* **It cannot break the unelevated path.** Raising an object's label above the caller's own level
+  needs `SeSecurityPrivilege`, which an unelevated worker does not hold; setting one at or below it
+  does not (measured on this host: a Medium token's pipe is created with `S:(ML;;NW;;;LW)` and
+  `S:(ML;;NW;;;ME)` and read back carrying them, while `S:(ML;;NW;;;HI)` is refused with
+  `win32 1314`). So the descriptor is normally accepted unelevated as well, and where the kernel does
+  refuse it the pipe is created from the plain constructor instead - an unelevated worker's object is
+  Medium by default, so both routes give the same working pair. Nothing here aborts pipe setup.
 * **It reports what the object got, not what was asked for.** The DACL and the label are read back
   out of the kernel with `GetSecurityInfo` on the live handle and exposed as
   `ControlPlaneServer.PipeSecurity`, then logged at `detail` level and **warned** about when the label

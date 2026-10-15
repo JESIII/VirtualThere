@@ -75,11 +75,13 @@ public sealed record PipeSecurityReport(string Descriptor, string IntegrityLabel
 /// the control protocol needs and no more.
 /// </para>
 /// <para>
-/// Nothing here may abort pipe setup. Writing a SACL at all requires <c>SeSecurityPrivilege</c>,
-/// which an unelevated worker does not hold, so the descriptor is used when the kernel accepts it
-/// and the pipe falls back to the plain constructor when it does not - an unelevated worker's
-/// object is Medium anyway. Whatever happens, the label is read back afterwards and reported, and
-/// the pipe keeps working.
+/// Nothing here may abort pipe setup. Raising an object's label above the caller's own integrity
+/// level needs <c>SeSecurityPrivilege</c>, which an unelevated worker does not hold; setting one at
+/// or below it does not (measured: a Medium token's pipe is created with <c>LW</c> and <c>ME</c> and
+/// read back carrying them, while <c>HI</c> is refused with <c>win32 1314</c>). The descriptor is
+/// therefore normally accepted unelevated too, and where the kernel does refuse it the pipe falls
+/// back to the plain constructor - an unelevated worker's object is Medium anyway. Whatever
+/// happens, the label is read back afterwards and reported, and the pipe keeps working.
 /// </para>
 /// </remarks>
 [SupportedOSPlatform("windows")]
