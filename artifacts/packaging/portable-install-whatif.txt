@@ -1,16 +1,17 @@
 ﻿VirtualThere packaging evidence
-captured-utc: 2026-10-14T23:46:45Z
+captured-utc: 2026-10-15T00:03:10Z
 host:         ZUAN  user: zirjo  elevated: False
 repository:   G:\Repos\VirtualThere
-portable:     C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run  (copied from G:\Repos\VirtualThere\dist\portable â€” not %ProgramFiles%, not an SCM service)
+portable:     C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run  (copied from G:\Repos\VirtualThere\dist\portable - not %ProgramFiles%, not an SCM service)
 NOTE: this shell is NOT elevated.
 
+2026-10-15T00:03:26Z [info] VirtualThere portable setup: action=Install elevated=False root='C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run' whatIf=True
+2026-10-15T00:03:26Z [info] installing the virtual host controller driver
+2026-10-15T00:03:26Z [info] adding the firewall rules
+2026-10-15T00:03:26Z [info] netsh: netsh advfirewall firewall add rule name="VirtualThere USB/IP (TCP 3240)" dir=in action=allow protocol=TCP localport=3240 profile=any program="C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run\vht-server.exe" enable=yes
+2026-10-15T00:03:26Z [info] netsh: netsh advfirewall firewall add rule name="VirtualThere USB/IP TLS (TCP 3241)" dir=in action=allow protocol=TCP localport=3241 profile=any program="C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run\vht-server.exe" enable=yes
+2026-10-15T00:03:26Z [info] creating the client logon task (the client needs Administrator to load the virtual host controller)
+2026-10-15T00:03:26Z [info] registering the service with 'vht-server.exe install'
+2026-10-15T00:03:26Z [info] portable setup finished. Start the server with .\vht-server.exe serve, or use the service if -IncludeService was given.
 
-Name                           Value                                                                                   
-----                           -----                                                                                   
-Code                           1                                                                                       
-Out                            2026-10-14T23:47:02Z [info] VirtualThere portable setup: action=Install elevated=Fals...
-
-
-
-[exit=1]
+[exit=0]

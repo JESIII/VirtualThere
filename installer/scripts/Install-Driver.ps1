@@ -59,6 +59,12 @@ $PinnedSha256 = '38cad6d4432b52d5bb9409d9ad03b72fdffc4ada4cd3a48fbeca1a2752a8518
 # name-tolerant and based on that token rather than on an exact INF name, because the INF file names
 # inside the vendor package are not published in the upstream README.
 $UpstreamToken = 'usbip'
+# Word boundary on purpose. Windows ships an in-box service named 'mausbip' ("MA-USB IP Filter
+# Driver", mausbhost.inf) whose name *contains* 'usbip'; a bare substring match made the presence
+# check report the driver as installed on a machine that never had it, and made the uninstaller treat
+# that in-box service key as an orphan of ours. `\busbip` matches usbip2_ude / usbip2_filter /
+# USBip-0.9.8.1 and not mausbip.
+$UpstreamTokenPattern = '\busbip'
 
 if (-not $DriverDirectory) { $DriverDirectory = Join-Path (Split-Path -Parent $PSScriptRoot) 'driver' }
 if (-not $LogDirectory) { $LogDirectory = Join-Path $env:ProgramData 'VirtualThere\logs' }
@@ -82,7 +88,7 @@ function Test-DriverPresent {
     $pnputil = (& pnputil.exe /enum-drivers 2>$null | Out-String)
     $storeHits = @()
     foreach ($line in ($pnputil -split "`r?`n")) {
-        if ($line -match '^\s*(Published|Original|Provider) Name\s*:' -and $line -match $script:UpstreamToken) {
+        if ($line -match '^\s*(Published|Original|Provider) Name\s*:' -and $line -match $script:UpstreamTokenPattern) {
             $storeHits += $line.Trim()
         }
     }
@@ -92,7 +98,7 @@ function Test-DriverPresent {
     $serviceHits = @()
     $serviceNames = (& reg.exe query 'HKLM\SYSTEM\CurrentControlSet\Services' 2>$null | Out-String)
     foreach ($line in ($serviceNames -split "`r?`n")) {
-        if ($line -match $script:UpstreamToken) { $serviceHits += $line.Trim() }
+        if ($line -match $script:UpstreamTokenPattern) { $serviceHits += $line.Trim() }
     }
 
     return [pscustomobject]@{

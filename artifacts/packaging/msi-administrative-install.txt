@@ -1,0 +1,26 @@
+=== msiexec /a (administrative install: lay out the MSI payload without installing or elevating) ===
+msi: dist/installer/VirtualThere-0.1.0-x64.msi
+msi sha256: fdfa05f9630ac50cc059914efe0cdfaa7876fcaf57a300aefa0586ccafe34f77
+msiexec exit=0
+
+=== files the package laid out (relative to TARGETDIR) ===
+PFiles64/VirtualThere/docs/PACKAGING.md
+PFiles64/VirtualThere/driver/USBip-0.9.8.1-x64.exe
+PFiles64/VirtualThere/driver/usbip-win2-LICENSE.txt
+PFiles64/VirtualThere/driver/usbip-win2-SHA256SUMS
+PFiles64/VirtualThere/scripts/Install-ClientTask.ps1
+PFiles64/VirtualThere/scripts/Install-Driver.ps1
+PFiles64/VirtualThere/scripts/Remove-ClientTask.ps1
+PFiles64/VirtualThere/scripts/Setup-Portable.ps1
+PFiles64/VirtualThere/scripts/Uninstall-Driver.ps1
+PFiles64/VirtualThere/vht.exe
+PFiles64/VirtualThere/vht-client.exe
+PFiles64/VirtualThere/vht-server.exe
+PFiles64/VirtualThere/vht-tray.exe
+VirtualThere-0.1.0-x64.msi
+
+=== the four applications, as installed ===
+37727353 C:/Users/zirjo/AppData/Local/hermes/cache/scratch/msi-admin-2/PFiles64/VirtualThere/vht.exe*
+37694533 C:/Users/zirjo/AppData/Local/hermes/cache/scratch/msi-admin-2/PFiles64/VirtualThere/vht-client.exe*
+37720435 C:/Users/zirjo/AppData/Local/hermes/cache/scratch/msi-admin-2/PFiles64/VirtualThere/vht-server.exe*
+69382757 C:/Users/zirjo/AppData/Local/hermes/cache/scratch/msi-admin-2/PFiles64/VirtualThere/vht-tray.exe*

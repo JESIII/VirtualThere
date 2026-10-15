@@ -1,8 +1,8 @@
 ﻿VirtualThere packaging evidence
-captured-utc: 2026-10-14T23:46:45Z
+captured-utc: 2026-10-15T00:03:10Z
 host:         ZUAN  user: zirjo  elevated: False
 repository:   G:\Repos\VirtualThere
-portable:     C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run  (copied from G:\Repos\VirtualThere\dist\portable â€” not %ProgramFiles%, not an SCM service)
+portable:     C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run  (copied from G:\Repos\VirtualThere\dist\portable - not %ProgramFiles%, not an SCM service)
 NOTE: this shell is NOT elevated.
 
 [SC] EnumQueryServicesStatus:OpenService FAILED 1060:

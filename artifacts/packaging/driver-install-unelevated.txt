@@ -1,16 +1,13 @@
 ﻿VirtualThere packaging evidence
-captured-utc: 2026-10-14T23:46:45Z
+captured-utc: 2026-10-15T00:03:10Z
 host:         ZUAN  user: zirjo  elevated: False
 repository:   G:\Repos\VirtualThere
-portable:     C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run  (copied from G:\Repos\VirtualThere\dist\portable â€” not %ProgramFiles%, not an SCM service)
+portable:     C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run  (copied from G:\Repos\VirtualThere\dist\portable - not %ProgramFiles%, not an SCM service)
 NOTE: this shell is NOT elevated.
 
-
-Name                           Value                                                                                   
-----                           -----                                                                                   
-Code                           3                                                                                       
-Out                            2026-10-14T23:47:05Z [info] Install-Driver.ps1 starting; driver directory 'C:\Users\z...
-
-
+2026-10-15T00:03:29Z [info] Install-Driver.ps1 starting; driver directory 'C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run\driver', elevated False
+2026-10-15T00:03:29Z [error] installing a driver package needs Administrator; run this from an elevated prompt:
+2026-10-15T00:03:29Z [error]     powershell -NoProfile -ExecutionPolicy Bypass -File Install-Driver.ps1
+2026-10-15T00:03:29Z [error] Nothing was changed.
 
 [exit=3]

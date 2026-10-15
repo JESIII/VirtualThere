@@ -1,16 +1,19 @@
 ﻿VirtualThere packaging evidence
-captured-utc: 2026-10-14T23:46:45Z
+captured-utc: 2026-10-15T00:03:10Z
 host:         ZUAN  user: zirjo  elevated: False
 repository:   G:\Repos\VirtualThere
-portable:     C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run  (copied from G:\Repos\VirtualThere\dist\portable â€” not %ProgramFiles%, not an SCM service)
+portable:     C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run  (copied from G:\Repos\VirtualThere\dist\portable - not %ProgramFiles%, not an SCM service)
 NOTE: this shell is NOT elevated.
 
+2026-10-15T00:03:23Z [info] VirtualThere portable setup: action=Status elevated=False root='C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run' whatIf=False
+2026-10-15T00:03:24Z [info]   2026-10-15T00:03:24Z [info] Install-Driver.ps1 starting; driver directory 'C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run\driver', elevated False
+2026-10-15T00:03:24Z [info]   2026-10-15T00:03:24Z [info] no driver package and no service key matching the upstream driver token was found
+2026-10-15T00:03:24Z [warn] virtual host controller driver: NOT installed (the client cannot attach anything without it)
+2026-10-15T00:03:24Z [info] firewall rule 'VirtualThere USB/IP (TCP 3240)': absent
+2026-10-15T00:03:24Z [info] firewall rule 'VirtualThere USB/IP TLS (TCP 3241)': absent
+2026-10-15T00:03:24Z [info] service 'vht-server': not installed
+2026-10-15T00:03:24Z [info] scheduled task 'VirtualThere Client': absent
+2026-10-15T00:03:24Z [info] binaries: vht-server.exe=True vht-client.exe=True vht-tray.exe=True vht.exe=True
+2026-10-15T00:03:24Z [info] Status is read-only and needs no elevation. Use -Action Install / -Action Uninstall (elevated) to change the machine-wide parts.
 
-Name                           Value                                                                                   
-----                           -----                                                                                   
-Code                           1                                                                                       
-Out                            2026-10-14T23:46:58Z [info] VirtualThere portable setup: action=Status elevated=False...
-
-
-
-[exit=1]
+[exit=0]

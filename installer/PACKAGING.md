@@ -245,9 +245,14 @@ step above is skipped. Logs: `%ProgramData%\VirtualThere\logs\driver-uninstall.l
    script's own message and exit code instead of half-installing. Every step is also available as a
    manual command (section 5 and section 8) for such a machine.
 2. **The driver INF names inside the vendor package are not published upstream**, so the presence
-   checks match on the upstream product's own token (`usbip`) rather than on exact INF names. If a
-   future upstream release renames its INF without that token, the check would need updating — it
-   fails loudly rather than silently, by design.
+   checks match on the upstream product's own token (`usbip`) rather than on exact INF names — and on
+   a **word boundary** (`\busbip`), because Windows ships an in-box service named `mausbip` ("MA-USB
+   IP Filter Driver", `mausbhost.inf`) whose name *contains* `usbip`. The bare substring made the
+   presence check report the driver as installed on a machine that never had it, and would have made
+   the uninstaller delete that in-box component's service key as if it were our orphan; both were
+   caught by running the scripts on this machine and are fixed. If a future upstream release renames
+   its INF without that token, the check would need updating — it fails loudly rather than silently,
+   by design.
 3. **Reboot-pending is not forced.** If the vendor package reports that a restart is needed, the
    install still succeeds and the log says so; the client reports the driver as unavailable until the
    restart.
@@ -266,24 +271,75 @@ step above is skipped. Logs: `%ProgramData%\VirtualThere\logs\driver-uninstall.l
 
 ## 8. Verification: what was run, and what needs an elevated shell
 
-Run and recorded in `artifacts/packaging/` (real output, not a summary):
+Every result below was produced by two commands on Windows 11 (build 26300) with .NET SDK 10.0.402,
+starting from `xtask clean`:
 
-* `xtask release` end to end, with the artifact table (paths, sizes, SHA-256) and the manifest.
-* `xtask verify`: `wix msi decompile` of the built MSI, then a scan of every decompiled table, of the
-  MSI's string table, and of the four shipped executables for the forbidden vocabulary
-  (`vhusb`, the reference product's own executable prefix, plus licence/purchase/unlicensed wording)
-  and for the device-count vocabulary
-  (`max_devices`, `MAX DEVICES EXCEEDED`). It also asserts the expected tables exist: `ServiceInstall`
-  for `vht-server`, two firewall rules with the documented names and ports, the three shortcuts, the
-  client-logon custom action, and that the MSI carries **no** EULA/licence dialog.
-* The portable layout executed from a non-installed folder (not under `%ProgramFiles%`,
-  not registered with the SCM): `vht-server list --local`, `vht-server version`, `vht-server
-  config-template`, `vht.exe list --local`, `vht-client status`, `vht-client capacity`.
-* `Setup-Portable.ps1 -Action Status` unelevated (read-only) and `-Action Install` unelevated, which
-  must exit 3 with the exact elevated command and change nothing.
-* `vht-server install` unelevated, which must report the actionable access-denied message.
-* `Install-ClientTask.ps1` unelevated, exercising the documented fallback (task without the highest
-  run level) and `Remove-ClientTask.ps1` removing it again.
+```
+dotnet run --project tools/Xtask -- release     # exit 0
+dotnet run --project tools/Xtask -- verify      # exit 0, "verify: PASS"
+```
+
+Raw console output: `artifacts/packaging/release-and-verify.log`. Re-captured deployment evidence:
+`artifacts/packaging/` — every file carries the capture timestamp, the host and the **elevation state
+of the shell it was captured in** (this one is *not* elevated).
+
+* **The release build, end to end.** The four test projects pass; the four products publish as
+  self-contained single-file executables; the pinned vendor driver package is verified against its
+  `SHA256SUMS` before it is copied; the MSI builds with WiX 5.0.2; `dist/release-manifest.txt` and
+  `dist/SHA256SUMS` list all 16 artifacts (373.3 MiB total) with sizes and SHA-256.
+* **`xtask verify` → PASS** (`dist/verify/verify-report.txt`). `wix msi decompile` of the built MSI,
+  then: the expected tables exist (`ServiceInstall` for `vht-server`, both firewall rules with the
+  documented names and ports, the three shortcuts, the tray logon entry, all three custom actions, the
+  pinned driver payload, the shipped packaging document); the package carries **no** wizard dialog
+  table, no `LicenseAgreementDlg`, no `LicenseAcceptedCheckBox`, no `WixUILicenseRtf`, no `PIDKEY` and
+  no `WIXUI_INSTALLDIR`; and neither the MSI, its decompiled source, nor the four shipped executables
+  contain any of the forbidden tokens (the reference product's name, licence/activation/purchase
+  wording, device-count wording).
+* **The MSI's own file table, laid out without installing anything.**
+  `msiexec /a VirtualThere-0.1.0-x64.msi /qn TARGETDIR=<scratch>` — an *administrative install*: no
+  elevation, no service, no driver, just the payload. This is how the "both apps present" half of the
+  acceptance criterion is checked here, with no clean VM available:
+  `artifacts/packaging/msi-administrative-install.txt`.
+* **The portable build, run from a non-installed location.** The whole folder was copied to
+  `%LOCALAPPDATA%\hermes\cache\scratch\vht-portable-run` (not `%ProgramFiles%`, not registered with the
+  SCM) and executed there: `vht-server version` / `list --local` / `config-template`, `vht status`,
+  `vht list --local`, `vht-client status`, `vht-client capacity`. `list --local` enumerated this
+  machine's 13 real USB devices and reported "no device limit". Files: `portable-*.txt`.
+* **Elevation behaviour, unelevated, changing nothing:** `vht-server install` (actionable
+  access-denied message), `Setup-Portable.ps1 -Action Install|Uninstall` (exit **3** plus the exact
+  elevated command), `-Action Install -WhatIf` (prints every privileged command, exit 0),
+  `-Action Status` (read-only, exit 0), `Install-Driver.ps1` (exit 3, before the vendor package is
+  touched), `Install-Driver.ps1 -Status` (correctly reports the driver absent), `Uninstall-Driver.ps1`
+  (exit 1), `Install-ClientTask.ps1` (the documented highest-run-level fallback, then "could not create
+  the logon task at all"), `Remove-ClientTask.ps1` (idempotent, exit 0). Files: `driver-*.txt`,
+  `client-task-*.txt`, `elevation-server-*.txt`, `portable-install-*.txt`.
+* **The machine state those checks read:** `netsh advfirewall` finds no rule, `sc query vht-server`
+  returns 1060 (no such service), `pnputil /enum-drivers` has no upstream driver package, and
+  `schtasks /query "VirtualThere Client"` finds no task. Files: `firewall-rule-query.txt`,
+  `service-query.txt`, `driver-store-usbip-hits.txt`, `client-task-query.txt`.
+
+**Defects this run found and fixed** — each was an observed failure, not a hypothetical one:
+
+1. `Setup-Portable.ps1` contained a C-style `\"` escape inside a PowerShell double-quoted string, so
+   the file **did not parse**: every portable action died before executing. (Found by parsing all five
+   scripts with PowerShell's own parser instead of by eye.)
+2. `Setup-Portable.ps1 -Action Status` aborted with "unhandled failure" on a machine with no client
+   task: PowerShell 5.1 turns redirected native stderr into a *terminating* error under
+   `$ErrorActionPreference = 'Stop'`, and `schtasks` writes "cannot find the task" to stderr.
+3. `Setup-Portable.ps1 -Action Install -WhatIf` aborted reading `$failed.Count`, because
+   `return $failed` unrolls an empty array to `$null`. Fixed with `return ,$failed` and
+   `@($failed).Count`.
+4. The driver presence check matched the **substring** `usbip`, which also matches the in-box
+   `mausbip` service ("MA-USB IP Filter Driver", `mausbhost.inf`). On this machine that made
+   `Install-Driver.ps1 -Status` claim the driver was installed, made a real install a no-op, and would
+   have made the uninstaller delete a Windows component's service key. Both scripts now match on a
+   word boundary (`\busbip`); see section 7.2.
+5. `Install-Driver.ps1` had no elevation gate at all: run unelevated it would have launched the vendor
+   installer and its UAC prompt. It now exits 3 with the actionable message, like `Setup-Portable.ps1`.
+6. `Uninstall-Driver.ps1` carried a stray `Array` statement, which PowerShell reported as an
+   unrecognised command before the script body ran.
+7. `xtask hash` swept `xtask verify`'s scratch directory into the manifest when `verify` ran before
+   `hash`. `dist/verify/` is now excluded from artifact collection.
 
 **Not run here — requires an elevated shell and/or a clean VM, and is reported as unverified rather
 than assumed:**
@@ -305,7 +361,7 @@ corresponding custom action):
 msiexec /i VirtualThere-0.1.0-x64.msi /l*v install.log
 sc.exe query vht-server
 netsh advfirewall firewall show rule name="VirtualThere USB/IP (TCP 3240)"
-pnputil /enum-drivers | Select-String usbip
+pnputil /enum-drivers | Select-String '\busbip'
 schtasks /query /tn "VirtualThere Client" /fo list /v
 & "$env:ProgramFiles\VirtualThere\vht-server.exe" list          # devices offered
 & "$env:ProgramFiles\VirtualThere\vht-client.exe" peers add <server>:3240
@@ -314,7 +370,7 @@ schtasks /query /tn "VirtualThere Client" /fo list /v
 msiexec /x VirtualThere-0.1.0-x64.msi /l*v uninstall.log
 sc.exe query vht-server                                        # 1060: service does not exist
 netsh advfirewall firewall show rule name="VirtualThere USB/IP (TCP 3240)"   # "No rules match"
-pnputil /enum-drivers | Select-String usbip                    # no match
+pnputil /enum-drivers | Select-String '\busbip'                    # no match
 schtasks /query /tn "VirtualThere Client"                      # ERROR: cannot find
 Test-Path "$env:ProgramFiles\VirtualThere"                     # False
 # 3. re-install must succeed again (the acceptance criterion)

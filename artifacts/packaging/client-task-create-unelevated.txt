@@ -1,16 +1,26 @@
 ﻿VirtualThere packaging evidence
-captured-utc: 2026-10-14T23:46:45Z
+captured-utc: 2026-10-15T00:03:10Z
 host:         ZUAN  user: zirjo  elevated: False
 repository:   G:\Repos\VirtualThere
-portable:     C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run  (copied from G:\Repos\VirtualThere\dist\portable â€” not %ProgramFiles%, not an SCM service)
+portable:     C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run  (copied from G:\Repos\VirtualThere\dist\portable - not %ProgramFiles%, not an SCM service)
 NOTE: this shell is NOT elevated.
 
-
-Name                           Value                                                                                   
-----                           -----                                                                                   
-Code                           1                                                                                       
-Out                            2026-10-14T23:47:07Z [info] Install-ClientTask.ps1 starting as 'ZUAN\zirjo'; elevated...
-
-
+2026-10-15T00:03:31Z [info] Install-ClientTask.ps1 starting as 'ZUAN\zirjo'; elevated False
+2026-10-15T00:03:31Z [info] schtasks /create /f /tn VirtualThere Client /tr "C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run\vht-client.exe" serve /sc onlogon /rl highest
+2026-10-15T00:03:31Z [info] schtasks: schtasks.exe : ERROR: Access is denied.
+2026-10-15T00:03:31Z [info] schtasks: At C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run\scripts\Install-ClientTask.ps1:81 char:16
+2026-10-15T00:03:31Z [info] schtasks: +     $output = (& schtasks.exe @arguments 2>&1 | Out-String)
+2026-10-15T00:03:31Z [info] schtasks: +                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2026-10-15T00:03:31Z [info] schtasks: + CategoryInfo          : NotSpecified: (ERROR: Access is denied.:String) [], RemoteException
+2026-10-15T00:03:31Z [info] schtasks: + FullyQualifiedErrorId : NativeCommandError
+2026-10-15T00:03:31Z [warn] creating the logon task with the highest run level failed; retrying unelevated
+2026-10-15T00:03:31Z [info] schtasks /create /f /tn VirtualThere Client /tr "C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run\vht-client.exe" serve /sc onlogon
+2026-10-15T00:03:31Z [info] schtasks: schtasks.exe : ERROR: Access is denied.
+2026-10-15T00:03:31Z [info] schtasks: At C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run\scripts\Install-ClientTask.ps1:81 char:16
+2026-10-15T00:03:31Z [info] schtasks: +     $output = (& schtasks.exe @arguments 2>&1 | Out-String)
+2026-10-15T00:03:31Z [info] schtasks: +                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2026-10-15T00:03:31Z [info] schtasks: + CategoryInfo          : NotSpecified: (ERROR: Access is denied.:String) [], RemoteException
+2026-10-15T00:03:31Z [info] schtasks: + FullyQualifiedErrorId : NativeCommandError
+2026-10-15T00:03:31Z [error] could not create the logon task at all
 
 [exit=1]

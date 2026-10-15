@@ -34,6 +34,10 @@ param(
 )
 
 $UpstreamToken = 'usbip'
+# Word boundary on purpose - see the note in Install-Driver.ps1: the in-box 'mausbip' service
+# ("MA-USB IP Filter Driver", mausbhost.inf) contains the substring 'usbip', and matching it would
+# have made this script delete a Windows component's service key as if it were an orphan of ours.
+$UpstreamTokenPattern = '\busbip'
 $TaskMarker = 'VirtualThere'
 
 $null = New-Item -ItemType Directory -Force -Path $LogDirectory
@@ -61,7 +65,7 @@ function Get-UpstreamDriverPackages {
     if ($current) { $packages += $current }
 
     return @($packages | Where-Object {
-            ($_.Original -match $script:UpstreamToken) -or ($_.Provider -match $script:UpstreamToken)
+            ($_.Original -match $script:UpstreamTokenPattern) -or ($_.Provider -match $script:UpstreamTokenPattern)
         })
 }
 
@@ -69,7 +73,7 @@ function Get-UpstreamServiceKeys {
     $found = @()
     $query = (& reg.exe query 'HKLM\SYSTEM\CurrentControlSet\Services' 2>$null | Out-String)
     foreach ($line in ($query -split "`r?`n")) {
-        if ($line -match ('HKEY_LOCAL_MACHINE\\.*\\([^\\]+)\s*$') -and $Matches[1] -match $script:UpstreamToken) {
+        if ($line -match ('HKEY_LOCAL_MACHINE\\.*\\([^\\]+)\s*$') -and $Matches[1] -match $script:UpstreamTokenPattern) {
             $found += $Matches[1]
         }
     }

@@ -1,16 +1,12 @@
 ﻿VirtualThere packaging evidence
-captured-utc: 2026-10-14T23:46:45Z
+captured-utc: 2026-10-15T00:03:10Z
 host:         ZUAN  user: zirjo  elevated: False
 repository:   G:\Repos\VirtualThere
-portable:     C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run  (copied from G:\Repos\VirtualThere\dist\portable â€” not %ProgramFiles%, not an SCM service)
+portable:     C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run  (copied from G:\Repos\VirtualThere\dist\portable - not %ProgramFiles%, not an SCM service)
 NOTE: this shell is NOT elevated.
 
-
-Name                           Value                                                                                   
-----                           -----                                                                                   
-Code                           1                                                                                       
-Out                            2026-10-14T23:47:06Z [info] Uninstall-Driver.ps1 starting as 'ZUAN\zirjo'; elevated F...
-
-
+2026-10-15T00:03:30Z [info] Uninstall-Driver.ps1 starting as 'ZUAN\zirjo'; elevated False
+2026-10-15T00:03:30Z [error] removing a driver package needs Administrator; run this from an elevated prompt:
+2026-10-15T00:03:30Z [error]     powershell -NoProfile -ExecutionPolicy Bypass -File Uninstall-Driver.ps1
 
 [exit=1]

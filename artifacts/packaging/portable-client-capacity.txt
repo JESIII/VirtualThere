@@ -1,17 +1,17 @@
 ﻿VirtualThere packaging evidence
-captured-utc: 2026-10-14T23:46:45Z
+captured-utc: 2026-10-15T00:03:10Z
 host:         ZUAN  user: zirjo  elevated: False
 repository:   G:\Repos\VirtualThere
-portable:     C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run  (copied from G:\Repos\VirtualThere\dist\portable â€” not %ProgramFiles%, not an SCM service)
+portable:     C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run  (copied from G:\Repos\VirtualThere\dist\portable - not %ProgramFiles%, not an SCM service)
 NOTE: this shell is NOT elevated.
 
-2026-10-14 23:46:57.331Z WARNING ude: the usbip-win2 UDE host-controller driver (GUID_DEVINTERFACE_USBIP_VHCI) is not installed. Install the driver package described in docs/INSTALL.md ΓÇö without it no remote device can be presented to Windows.
+2026-10-15 00:03:22.110Z WARNING ude: the usbip-win2 UDE host-controller driver (GUID_DEVINTERFACE_USBIP_VHCI) is not installed. Install the driver package described in docs/INSTALL.md — without it no remote device can be presented to Windows.
 vht-client.exe : error: the virtual host controller is unavailable: the usbip-win2 UDE host-controller driver 
-(GUID_DEVINTERFACE_USBIP_VHCI) is not installed. Install the driver package described in docs/INSTALL.md ΓÇö without 
-it no remote device can be presented to Windows.
-At C:\Users\zirjo\AppData\Local\hermes\cache\scratch\capture-packaging.ps1:64 char:58
-+ ...  'portable-client-capacity.txt';     c = { & $client capacity } })) {
-+                                                ~~~~~~~~~~~~~~~~~~
+(GUID_DEVINTERFACE_USBIP_VHCI) is not installed. Install the driver package described in docs/INSTALL.md — without it 
+no remote device can be presented to Windows.
+At C:\Users\zirjo\AppData\Local\hermes\cache\scratch\capture-packaging3.ps1:75 char:53
++ ... e-Native 'portable-client-capacity.txt'        { & $client capacity }
++                                                      ~~~~~~~~~~~~~~~~~~
     + CategoryInfo          : NotSpecified: (error: the virt...ted to Windows.:String) [], RemoteException
     + FullyQualifiedErrorId : NativeCommandError
  

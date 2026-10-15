@@ -132,7 +132,9 @@ function Invoke-Netsh {
         foreach ($l in ($output -split "`r?`n")) { if ($l.Trim()) { Write-Log "  $l" } }
         if ($LASTEXITCODE -ne 0) { $failed += $line }
     }
-    return $failed
+    # The comma matters: a bare `return $failed` with an empty array unrolls to $null, and a Count
+    # property access on null under Set-StrictMode throws instead of reporting "no failures".
+    return ,$failed
 }
 
 function Get-FirewallState {
@@ -168,8 +170,16 @@ function Get-ServiceState {
 }
 
 function Get-TaskState {
+    # schtasks writes its "cannot find the task" message to stderr, and PowerShell 5.1 turns a
+    # redirected native stderr into a terminating error while $ErrorActionPreference is 'Stop' - which
+    # made read-only `-Action Status` fail on a machine that simply has no task yet. Relax it for this
+    # one call: the answer is the exit code, not the text.
+    $saved = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     $null = (& schtasks.exe /query /tn $ClientTaskName 2>&1 | Out-String)
-    Write-Log ("scheduled task '{0}': {1}" -f $ClientTaskName, $(if ($LASTEXITCODE -eq 0) { 'present' } else { 'absent' }))
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = $saved
+    Write-Log ("scheduled task '{0}': {1}" -f $ClientTaskName, $(if ($code -eq 0) { 'present' } else { 'absent' }))
 }
 
 try {
@@ -220,7 +230,7 @@ try {
 
         Write-Log 'adding the firewall rules'
         $failed = Invoke-Netsh -Lines (Get-FirewallCommands)
-        if ($failed.Count -gt 0) {
+        if (@($failed).Count -gt 0) {
             Write-Log "failed netsh commands: $($failed -join '; ')" 'error'
             exit 1
         }
@@ -269,7 +279,7 @@ try {
     }
 
     $failed = Invoke-Netsh -Lines (Get-FirewallCommands -Remove)
-    if ($failed.Count -gt 0) { Write-Log "failed netsh commands: $($failed -join '; ')" 'error'; exit 1 }
+    if (@($failed).Count -gt 0) { Write-Log "failed netsh commands: $($failed -join '; ')" 'error'; exit 1 }
 
     $output = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path (Join-Path $PortableRoot 'scripts') 'Uninstall-Driver.ps1') 2>&1 | Out-String)
     foreach ($line in ($output -split "`r?`n")) { if ($line.Trim()) { Write-Log "driver: $($line.Trim())" } }

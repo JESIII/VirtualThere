@@ -1,16 +1,14 @@
 ﻿VirtualThere packaging evidence
-captured-utc: 2026-10-14T23:46:45Z
+captured-utc: 2026-10-15T00:03:10Z
 host:         ZUAN  user: zirjo  elevated: False
 repository:   G:\Repos\VirtualThere
-portable:     C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run  (copied from G:\Repos\VirtualThere\dist\portable â€” not %ProgramFiles%, not an SCM service)
+portable:     C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run  (copied from G:\Repos\VirtualThere\dist\portable - not %ProgramFiles%, not an SCM service)
 NOTE: this shell is NOT elevated.
 
-
-Name                           Value                                                                                   
-----                           -----                                                                                   
-Code                           3                                                                                       
-Out                            2026-10-14T23:47:01Z [info] VirtualThere portable setup: action=Install elevated=Fals...
-
-
+2026-10-15T00:03:25Z [info] VirtualThere portable setup: action=Install elevated=False root='C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run' whatIf=False
+2026-10-15T00:03:25Z [error] this action needs Administrator: it installs a driver package, edits the Windows Firewall, and optionally registers a service.
+2026-10-15T00:03:25Z [error] Nothing was changed. Run the same command from a prompt opened with "Run as administrator":
+2026-10-15T00:03:25Z [error]     powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\zirjo\AppData\Local\hermes\cache\scratch\vht-portable-run\Setup-Portable.ps1" -Action Install
+2026-10-15T00:03:25Z [error] To see the exact privileged commands without running them: add -WhatIf
 
 [exit=3]
