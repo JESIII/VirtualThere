@@ -8,7 +8,7 @@ using System.Text;
 
 namespace Xtask;
 
-/// <summary>`xtask test` — the four test projects. A failure stops the release.</summary>
+/// <summary>`xtask test` — the test projects. A failure stops the release.</summary>
 internal static class TestCommand
 {
     internal static Task<int> RunAsync(BuildContext context)

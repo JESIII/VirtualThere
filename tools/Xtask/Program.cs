@@ -5,7 +5,7 @@
 //   dotnet run --project tools/Xtask -- release     every release artifact, from a clean checkout
 //   dotnet run --project tools/Xtask -- portable    just dist/portable (self-contained single files)
 //   dotnet run --project tools/Xtask -- installer   just the MSI (needs dist/portable or builds it)
-//   dotnet run --project tools/Xtask -- test        the four test projects
+//   dotnet run --project tools/Xtask -- test        the test projects
 //   dotnet run --project tools/Xtask -- verify      decompile the MSI + scan artifacts for forbidden strings
 //   dotnet run --project tools/Xtask -- hash        rewrite dist/release-manifest.txt + dist/SHA256SUMS
 //   dotnet run --project tools/Xtask -- clean       remove dist/
@@ -87,9 +87,9 @@ internal static class Program
 
             verbs:
               release      tests, portable build, MSI, then the artifact manifest (all of it)
-              portable     publish the four single-file executables into dist/portable
+              portable     publish the single-file executables into dist/portable
               installer    build dist/installer/VirtualThere-<version>-x64.msi with WiX
-              test         run the four test projects
+              test         run the test projects
               verify       decompile the MSI, check its tables, and scan every artifact for
                            forbidden strings (the reference product's name, licence/purchase vocabulary, device caps)
               hash         rewrite dist/release-manifest.txt and dist/SHA256SUMS

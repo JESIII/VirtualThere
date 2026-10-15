@@ -244,8 +244,8 @@ Fix: stop the named process and run the command again.
 * Use the SDK the project targets: `dotnet --version` must be `10.0.x`.
 * `TreatWarningsAsErrors=true` means a warning fails the build - that is intentional.
 * Whole solution: `dotnet build VirtualThere.slnx -c Release` then
-  `dotnet test VirtualThere.slnx -c Release`. Expected: 0 warnings, 0 errors, 18 projects built,
-  and 0 failed across all 5 test suites. A project file that exists on disk but is missing from
+  `dotnet test VirtualThere.slnx -c Release`. Expected: 0 warnings, 0 errors, 20 projects built,
+  and 0 failed across all 7 test suites. A project file that exists on disk but is missing from
   `VirtualThere.slnx` is not built and not tested at all; `SolutionFileTests` fails on that
   instead of letting the run go green.
 * Rebuilding while the acceptance rig (`vht-accept`) is running fails with `MSB3026`/`MSB3027`: the
