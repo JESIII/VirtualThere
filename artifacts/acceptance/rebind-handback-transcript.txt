@@ -141,3 +141,49 @@ $ scripts/check-branding.sh
 == 2. licence-gate vocabulary in shipped assemblies ==
   ok: no licence-gate vocabulary in 1722 shipped assembly/binaries
 check-branding: PASSED
+
+--------------------------------------------------------------------------------
+6. Re-verification of this record at c353834 (final pass)
+--------------------------------------------------------------------------------
+
+The commit this transcript describes is `c353834` ("capture: record the prior
+binding before a rebind and hand the device back"). Sections 2 and 5 were re-run
+from a clean detached worktree of exactly that commit — not the shared checkout,
+which carries other cards' uncommitted work:
+
+$ git worktree add --detach <scratch>/vht-hb c353834
+$ cd <scratch>/vht-hb && dotnet test VirtualThere.slnx -c Release
+  Xtask.Tests           10 passed / 0 failed
+  Vht.Transport.Tests   69 passed / 0 failed
+  Vht.Config.Tests      77 passed / 0 failed
+  Vht.Core.Tests       160 passed / 0 failed
+  Vht.Ui.Tests          24 passed / 0 failed
+  Vht.Acceptance.Tests  56 passed / 0 failed
+  Vht.Client.Tests      50 passed / 0 failed
+  total                446 passed / 0 failed
+
+The 29 rebind/handback tests were run again by name and all passed, including
+`RecordedPriorBinding_SurvivesAServerRestart_AndIsReadBack`,
+`Restore_PutsTheDeviceBackOnItsPreviousDriver_AndRemovesTheStagedPackage`,
+`Provider_HandsBackEveryOutstandingRecord_OnShutdown`,
+`Provider_DoesNotClaimADevice_WhenTheRebindNeedsAReboot` and
+`RefreshExports_AndHotplug_NeverReachTheRebindOrTheOpenPath`.
+
+$ scripts/check-branding.sh          # PASSED, in the worktree and in the full tree
+  the worktree scans 16 assemblies (no dist/ build there); the full checkout,
+  which has dist/, scans 1722. Both report no licence-gate vocabulary.
+
+Inspection claims in section 3 were re-checked at c353834:
+
+$ grep -rn "OpenAsync" src/ --include=*.cs
+  src/Vht.Core/Capture/IDeviceCapture.cs:84    (the interface declaration)
+  src/Vht.Server/Devices/WinUsbCaptureProvider.cs:78   (the implementation)
+  src/Vht.Core/Server/UsbIpSession.cs:417      (the only caller: OP_REQ_IMPORT)
+$ grep -rn "EnumerateAsync|OpenAsync|Capture." src/Vht.Core/Server/VhtServerState.cs src/Vht.Server/Hotplug/HotplugWatcher.cs
+  VhtServerState.cs:80        await Capture.EnumerateAsync(ct)      # RefreshExportsAsync
+  HotplugWatcher.cs:150       provider.EnumerateAsync(...)          # the hotplug path
+
+Nothing on the scan path reaches `OpenAsync`: the only new call it gained is
+`Capture.RestorePendingHandbacks()` at start-up (ServerRuntime), which moves no
+device unless a record this server itself wrote is still on disk — and then only
+to put the device *back*.
