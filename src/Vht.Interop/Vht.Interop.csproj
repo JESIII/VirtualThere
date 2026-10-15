@@ -14,7 +14,18 @@
          point of this assembly (ARCHITECTURE.md Appendix A). -->
     <InternalsVisibleTo Include="vht-server" />
     <InternalsVisibleTo Include="vht" />
+    <!-- The client role creates the same pipe (src/Vht.Client/Control/ClientControlServer.cs), so it
+         consumes the same descriptor rather than re-declaring it. -->
+    <InternalsVisibleTo Include="vht-client" />
     <InternalsVisibleTo Include="Vht.Core.Tests" />
+    <!--
+      The two suites that assert a live control pipe's security descriptor against the kernel. The
+      reader (NamedPipeSecurity.ReadPipe) is internal because no shipped code path calls it - the
+      server reads the descriptor off its own handle - but both suites have to read the object
+      itself rather than trust a report the code under test produced about itself.
+    -->
+    <InternalsVisibleTo Include="Vht.Acceptance.Tests" />
+    <InternalsVisibleTo Include="Vht.Client.Tests" />
   </ItemGroup>
 
 </Project>

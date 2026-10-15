@@ -69,11 +69,19 @@
 
   <ItemGroup>
     <!--
-      The management window this executable hosts (Hosting/UiHost) is the only project reference:
-      everything else the client needs is compiled into this project on purpose (its own
-      Usbip/Interop sources), which is why there were no references here before.
+      The management window this executable hosts (Hosting/UiHost). Everything else the client needs
+      is compiled into this project on purpose (its own Usbip/Interop sources) - one exception, and
+      only one: the control pipe's security descriptor.
     -->
     <ProjectReference Include="..\Vht.Ui\Vht.Ui\Vht.Ui.csproj" />
+    <!--
+      Vht.Interop.Control.NamedPipeSecurity is shared with the server's control plane rather than
+      re-declared here. The client's own Interop sources are a *duplication of declarations*; a
+      security descriptor is not a declaration, and a second copy of it that drifts from the server's
+      is the failure mode this reference avoids (docs/UI.md section 1, "The pipe both halves can
+      use").
+    -->
+    <ProjectReference Include="..\Vht.Interop\Vht.Interop.csproj" />
   </ItemGroup>
 
   <ItemGroup>

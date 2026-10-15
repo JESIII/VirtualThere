@@ -21,6 +21,7 @@ using Vht.Client.Credentials;
 using Vht.Client.Diagnostics;
 using Vht.Client.Peers;
 using Vht.Client.Policy;
+using Vht.Interop.Control;
 
 namespace Vht.Client.Control;
 
@@ -66,6 +67,13 @@ internal sealed class ClientControlServer : IAsyncDisposable
     /// </summary>
     internal string PipeName { get; }
 
+    /// <summary>
+    /// What the kernel reports about the live pipe's security descriptor and mandatory integrity
+    /// label, or null before the first instance exists. Read back from the object itself: a High
+    /// label here is the state in which the unelevated window cannot write to its own worker.
+    /// </summary>
+    internal PipeSecurityReport? PipeSecurity { get; private set; }
+
     internal void Start()
     {
         _acceptLoop = Task.Run(() => AcceptLoopAsync(_shutdown.Token));
@@ -76,12 +84,25 @@ internal sealed class ClientControlServer : IAsyncDisposable
     {
         while (!ct.IsCancellationRequested)
         {
-            var pipe = new NamedPipeServerStream(
+            // Created through Vht.Interop.Control, exactly as the server's control plane is, so the
+            // pipe this *elevated* worker owns stays writable by the unelevated window that started
+            // it: an explicit DACL plus a Medium mandatory integrity label (docs/UI.md section 1).
+            NamedPipeServerStream pipe = NamedPipeSecurity.CreateServerPipe(
                 PipeName,
                 PipeDirection.InOut,
                 NamedPipeServerStream.MaxAllowedServerInstances,
                 PipeTransmissionMode.Byte,
-                PipeOptions.Asynchronous);
+                PipeOptions.Asynchronous,
+                out PipeSecurityReport security);
+
+            PipeSecurity = security;
+
+            if (security.Problem is not null)
+            {
+                // The window this worker belongs to may not be able to reach it at all. Say so
+                // rather than failing silently at the first request (docs/TROUBLESHOOTING.md).
+                _log.Warn("control", $"control pipe security is not what the window needs: {security.Problem}");
+            }
 
             try
             {

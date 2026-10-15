@@ -8,11 +8,79 @@ guess. Versions: v0.1.0, Windows 11, .NET SDK 10.0.402.
 ### `server is not answering: no answer from \\.\pipe\vht-server within 10s; is the service running?`
 
 The CLI could not open the control pipe. Either no server is running, or it is running under a
-different account than your shell (the pipe is ACL'd to Administrators and the interactive user).
+different account than your shell. The pipe's DACL grants Local System, the built-in Administrators
+and the interactive user read/write (`docs/UI.md` section 1), so "a different account" means an
+account that is not in that set.
 
 * Start one: `vht serve` (foreground) or `vht start` (service; elevated).
 * Check the service: `vht service-status`.
 * Override the pipe: `vht status --pipe <name>` (must match `control_plane.pipe_name`).
+
+An **access denial does not read like this**: it throws
+`System.UnauthorizedAccessException: Access to the path is denied` from
+`NamedPipeClientStream.TryConnect`. This message means nothing answered. If a service is running and
+you still see it, read the next entry - one of the two messages is wrong, and it may be this one.
+
+### The worker is running (elevated, one consent prompt), yet the window says it is not
+
+Symptom: `vht-server.exe` is open, **Start** was pressed, the single UAC prompt was accepted, the
+elevated worker is running and serving - and the window's state pill stays on *Not running*, its
+device list stays empty, and its connection line reads
+`No answer from \\.\pipe\vht-server - ...`. Meanwhile `vht status --pipe vht-server` **fails from an
+unelevated shell** with:
+
+```
+Unhandled exception. System.UnauthorizedAccessException: Access to the path is denied.
+   at System.IO.Pipes.NamedPipeClientStream.TryConnect(Int32 timeout)
+   at Vht.Server.Control.ControlClient.Send(JsonObject request)
+```
+
+while the identical command from an **elevated** shell prints the full status. That asymmetry is the
+diagnosis: the pipe is there, and it is refusing the window.
+
+Cause: a named pipe created with **no security descriptor** inherits two properties from the process
+that creates it, and both of them break this pair of processes:
+
+1. The token's **default DACL**, which names Local System, the built-in Administrators and the owner
+   account, and grants Everyone and ANONYMOUS read only. Nobody else is given write access.
+2. The token's **mandatory integrity label**. An object created by a High-integrity process carries a
+   High label, and Windows' no-write-up rule then denies every write from a Medium-integrity process
+   **regardless of the DACL**. The control protocol is request/response over a read/write pipe, so
+   the unelevated window is denied on its first request line.
+
+The second one is why "just make the ACL permissive" does not fix it on its own, and why the failure
+looks like a missing service rather than a permission problem.
+
+Fix: the pipe is created with an explicit descriptor, which grants the interactive user read/write on
+the pipe and lowers the object's mandatory label to Medium:
+
+```
+D:(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;<owner SID>)(A;;0x12019f;;;IU)S:(ML;;NW;;;ME)
+```
+
+That descriptor is `Vht.Interop.Control.NamedPipeSecurity`, used by the control plane of both roles
+(`docs/UI.md` section 1). `0x12019f` is FILE_GENERIC_READ|FILE_GENERIC_WRITE - what a client of the
+pipe needs, and no more.
+
+If this class of failure ever comes back, ask the object rather than the log:
+
+* With `logging.level = "detail"` the worker logs what the kernel reports for its own pipe, read back
+  from the live handle: `control pipe security: O:...G:...D:(...)S:AI(ML;;NW;;;ME)
+  label=S:AI(ML;;NW;;;ME)`. If the label is not Medium it logs a **warning** instead, and that
+  warning is the thing to search for.
+* The same read works from any unelevated process: `GetSecurityInfo` with
+  `LABEL_SECURITY_INFORMATION` needs no privilege (the full SACL does, and is not needed here), and
+  reading the DACL needs `READ_CONTROL` on the pipe, which the descriptor above grants.
+* `Access is denied` **is** the answer in this situation. It does not mean "the service is not
+  running".
+
+**The window's own message was a second, independent defect.** The window's client connects
+asynchronously with a connect timeout, and every failure of that path - including an access denial -
+arrived at the operator as *"no listener on \\.\pipe\vht-server - is the service running?"*. A pipe
+that exists and refuses you was reported as a service that is not there, which is why this looked
+like a startup problem for as long as it did. The wording now states both possibilities, and a real
+denial reports `\\.\pipe\vht-server refused access: ...`. The CLI client never had this misdirection:
+it connects synchronously with `PipeOptions.None` and surfaces the Win32 error it gets.
 
 ### `vht list --local` shows `state=CaptureUnsupported reason=driver_holds_device`
 

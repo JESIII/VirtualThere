@@ -9,6 +9,7 @@ using Vht.Core.Logging;
 using Vht.Core.Model;
 using Vht.Core.Policy;
 using Vht.Core.Server;
+using Vht.Interop.Control;
 using Vht.Server.Logging;
 
 namespace Vht.Server.Control;
@@ -61,6 +62,14 @@ public sealed class ControlPlaneServer : IAsyncDisposable
     /// <summary>Requests served since start.</summary>
     public long RequestsServed { get; private set; }
 
+    /// <summary>
+    /// What the kernel reports about the live pipe's security descriptor and mandatory integrity
+    /// label, or null before the first pipe has been created. Read back from the object itself, so
+    /// it can be asserted rather than assumed - a High label here is the failure that makes an
+    /// unelevated window unable to write to its own worker.
+    /// </summary>
+    public PipeSecurityReport? PipeSecurity { get; private set; }
+
     /// <summary>Starts the accept loop.</summary>
     public void Start()
     {
@@ -73,16 +82,30 @@ public sealed class ControlPlaneServer : IAsyncDisposable
 
     private async Task RunAsync(CancellationToken ct)
     {
+        bool first = true;
+
         while (!ct.IsCancellationRequested)
         {
             try
             {
-                var pipe = new NamedPipeServerStream(
+                // Created through Vht.Interop.Control so that the pipe this *elevated* worker owns
+                // is still writable by the unelevated window that started it: an explicit DACL plus
+                // a Medium mandatory integrity label (docs/UI.md section 1).
+                NamedPipeServerStream pipe = NamedPipeSecurity.CreateServerPipe(
                     PipeName,
                     PipeDirection.InOut,
                     NamedPipeServerStream.MaxAllowedServerInstances,
                     PipeTransmissionMode.Byte,
-                    PipeOptions.Asynchronous);
+                    PipeOptions.Asynchronous,
+                    out PipeSecurityReport security);
+
+                PipeSecurity = security;
+
+                if (first)
+                {
+                    first = false;
+                    ReportPipeSecurity(security);
+                }
 
                 await using (pipe.ConfigureAwait(false))
                 {
@@ -106,6 +129,31 @@ public sealed class ControlPlaneServer : IAsyncDisposable
                     $"control plane failed: {ex.Message}");
                 await Task.Delay(500, CancellationToken.None).ConfigureAwait(false);
             }
+        }
+    }
+
+    /// <summary>
+    /// Records the pipe's security state in the server's own log. The descriptor goes out at
+    /// Detail level because it is diagnostic; a label that is not Medium is a warning, because it
+    /// means an unelevated window will be refused and the operator needs to be able to see why.
+    /// </summary>
+    private void ReportPipeSecurity(PipeSecurityReport security)
+    {
+        _log.Write(LogLevel.Detail, LogEvent.ControlPlaneStarted,
+            $"control pipe security: {security.Descriptor} label={security.IntegrityLabel}",
+            new Dictionary<string, object?>
+            {
+                ["pipe"] = PipePath,
+                ["descriptor"] = security.Descriptor,
+                ["integrity_label"] = security.IntegrityLabel,
+                ["integrity_label_medium"] = security.MediumIntegrityLabelPresent,
+                ["interactive_user_ace"] = security.InteractiveUserHasAnAce,
+            });
+
+        if (security.Problem is not null)
+        {
+            _log.Write(LogLevel.Warn, LogEvent.ControlPlaneFailed,
+                $"control pipe security is not what the window needs: {security.Problem}");
         }
     }
 

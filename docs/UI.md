@@ -38,6 +38,52 @@ control pipe. The privileged half is a **separate process** started from the win
    else travels with it), elevated with `Verb=runas`: Windows raises **exactly one** consent prompt,
    and the worker runs hidden with no console. It binds the pipe, and the window then attaches to it.
 
+### The pipe both halves can use
+
+The split above works only if the pipe the **elevated** worker owns is writable by the **unelevated**
+window, and that does not happen by itself. A named pipe created with no security descriptor inherits
+the creating process's default DACL (Local System, the built-in Administrators, the owner account -
+and read-only for Everyone and ANONYMOUS) and its mandatory integrity label. An object created by a
+High-integrity process is labelled High, and Windows' no-write-up rule then denies every write from a
+Medium-integrity process whatever the DACL allows: the window is refused on its first request line and
+reports it as a service that is not running (`docs/TROUBLESHOOTING.md`).
+
+Every control pipe in both roles is therefore created through `Vht.Interop.Control.NamedPipeSecurity`
+with an explicit descriptor:
+
+```
+D:(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;<owner SID>)(A;;0x12019f;;;IU)S:(ML;;NW;;;ME)
+```
+
+* `D:` - Local System and the built-in Administrators keep full control, the owner account keeps full
+  control, and the interactive user (`IU`) gets `0x12019f`, i.e.
+  `FILE_GENERIC_READ|FILE_GENERIC_WRITE`: exactly what a request/response client of the pipe needs and
+  no more.
+* `S:(ML;;NW;;;ME)` - the object's mandatory label is **Medium** with no-write-up, so a
+  Medium-integrity window is not blocked by the label, while a Low-integrity process still cannot
+  write to the pipe.
+
+Two properties of that code are deliberate, and neither may be simplified away:
+
+* **It cannot break the unelevated path.** Writing a SACL needs `SeSecurityPrivilege`, which an
+  unelevated worker does not hold, so the pipe is created from the descriptor when the kernel accepts
+  it and from the plain constructor when it does not - an unelevated worker's object is Medium by
+  default, so both routes give the same working pair. Nothing here aborts pipe setup.
+* **It reports what the object got, not what was asked for.** The DACL and the label are read back
+  out of the kernel with `GetSecurityInfo` on the live handle and exposed as
+  `ControlPlaneServer.PipeSecurity`, then logged at `detail` level and **warned** about when the label
+  is not Medium. `LABEL_SECURITY_INFORMATION` is readable without any privilege, which is why the
+  label can be checked here at all; the full SACL is not needed and is not requested.
+
+`tests/Vht.Acceptance.Tests/ControlPipeAccessTests` covers this by opening a live pipe **by name** and
+asserting the kernel's own answer - an allow ACE for the interactive user that carries write access,
+and the Medium label - and then opening it for writing and driving a round trip through both real
+clients (the CLI's and the window's). It asserts the object's state rather than that a helper was
+called: against the previous implementation it fails on the pipe carrying no label ACE at all and on
+its DACL having nothing for the interactive user. The elevated half - a High-integrity worker's pipe
+deflecting a real denial - requires an interactive consent prompt, so it is not part of the automated
+suite.
+
 ### Closing the window, and what happens to the worker
 
 | The operator does | The window process | The worker |

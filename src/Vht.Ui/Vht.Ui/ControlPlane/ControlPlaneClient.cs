@@ -96,9 +96,14 @@ public sealed class ControlPlaneClient : IControlPlane
         }
         catch (TimeoutException)
         {
+            // Two states answer exactly like this: nothing listening at all, and a listener that is
+            // running but whose security descriptor refuses this window's writes. The message must
+            // not assert the first when it may be the second - that misdirection sent a real
+            // access-denied report to "the service is not running" (docs/TROUBLESHOOTING.md).
             return ControlPlaneResponse.Unavailable(
                 verb,
-                "no listener on \\\\.\\pipe\\" + PipeName + " - is the service running?");
+                "nothing answered on \\\\.\\pipe\\" + PipeName + " - the service is not running, or it is " +
+                "running with a security descriptor this window cannot write to");
         }
         catch (IOException ex)
         {
@@ -106,7 +111,9 @@ public sealed class ControlPlaneClient : IControlPlane
         }
         catch (UnauthorizedAccessException ex)
         {
-            return ControlPlaneResponse.Unavailable(verb, ex.Message);
+            // The access denial itself: the pipe exists, and this window is not allowed to use it.
+            return ControlPlaneResponse.Unavailable(
+                verb, "\\\\.\\pipe\\" + PipeName + " refused access: " + ex.Message);
         }
     }
 
