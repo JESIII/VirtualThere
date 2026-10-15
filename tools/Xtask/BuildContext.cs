@@ -32,6 +32,8 @@ internal sealed class BuildContext
         InstallerDir = Path.Combine(DistRoot, "installer");
         VerifyDir = Path.Combine(DistRoot, "verify");
         PublishDir = Path.Combine(DistRoot, "publish");
+        PortableStagingDir = Path.Combine(PublishDir, "portable");
+        PortablePreviousDir = Path.Combine(PublishDir, "portable.previous");
         ManifestFile = Path.Combine(DistRoot, "release-manifest.txt");
         SumsFile = Path.Combine(DistRoot, "SHA256SUMS");
         ThirdPartyDriverDir = Path.Combine(repoRoot, "third_party", "usbip-win2-driver");
@@ -52,6 +54,12 @@ internal sealed class BuildContext
     internal string VerifyDir { get; }
 
     internal string PublishDir { get; }
+
+    /// <summary>Where the complete portable set is assembled before it is swapped into dist/portable.</summary>
+    internal string PortableStagingDir { get; }
+
+    /// <summary>Where the live portable set is parked for the length of that swap.</summary>
+    internal string PortablePreviousDir { get; }
 
     internal string ManifestFile { get; }
 
@@ -86,6 +94,7 @@ internal sealed class BuildContext
         "tests/Vht.Config.Tests/Vht.Config.Tests.csproj",
         "tests/Vht.Transport.Tests/Vht.Transport.Tests.csproj",
         "tests/Vht.Ui.Tests/Vht.Ui.Tests.csproj",
+        "tests/Xtask.Tests/Xtask.Tests.csproj",
         "src/Vht.Client/Tests/Vht.Client.Tests.csproj",
     ];
 
@@ -223,11 +232,48 @@ internal sealed class BuildContext
 
     internal static void EnsureDirectory(string path) => Directory.CreateDirectory(path);
 
+    /// <summary>
+    /// Recursive delete, and the one place a stuck file becomes an operator-readable message. Every
+    /// directory xtask deletes is either an artifact directory or a staging directory, and both are
+    /// names a program may be running from: a locked file there is the normal state of a portable
+    /// build that is in use, not an exotic I/O error. A bare UnauthorizedAccessException out of a
+    /// half-finished delete names neither the file nor what to do about it.
+    /// </summary>
     internal static void DeleteDirectory(string path)
     {
-        if (Directory.Exists(path))
+        if (!Directory.Exists(path))
+        {
+            return;
+        }
+
+        try
         {
             Directory.Delete(path, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            IReadOnlyList<string> locked = OutputDirectoryGuard.LockedFiles(path);
+            string detail = locked.Count > 0 ? "locked: " + string.Join(", ", locked) : ex.Message;
+            throw new InvalidOperationException(
+                $"could not delete {path}: {detail}. A recursive delete stops where it fails, so some of " +
+                $"that folder is already gone and {path} is incomplete. If a VirtualThere process is " +
+                "running from it, stop it first (docs/TROUBLESHOOTING.md).", ex);
+        }
+    }
+
+    /// <summary>
+    /// Best-effort delete for scratch directories: a leftover staging folder must never turn a
+    /// successful build into a failed one. It reports instead of throwing.
+    /// </summary>
+    internal static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            DeleteDirectory(path);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Console.Error.WriteLine("xtask: warning: " + ex.Message);
         }
     }
 
@@ -255,8 +301,12 @@ internal sealed class BuildContext
             // anything else named the same, so compare full paths rather than file names.
             // dist/verify/ is `xtask verify`'s scratch area — the decompiled MSI source and the files
             // it extracted. It is not a release artifact, and hashing it here would put its contents
-            // into the manifest when `verify` is run before `hash`.
+            // into the manifest when `verify` is run before `hash`. dist/publish/ is the same kind of
+            // scratch: the per-product publish output, the staged portable set and the directory
+            // parked by the swap. It is normally deleted before this runs; excluding it means a
+            // leftover from a failed build cannot silently join the manifest.
             if (path.StartsWith(VerifyDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith(PublishDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(path, ManifestFile, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(path, SumsFile, StringComparison.OrdinalIgnoreCase))
             {

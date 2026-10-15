@@ -81,43 +81,70 @@ internal static class PortableCommand
         Console.WriteLine($"portable: publishing {BuildContext.Products.Length} products for {rid}, " +
                           $"self-contained={selfContained}, single file, compressed");
 
-        // Start from a clean folder so a stale executable can never end up in a release.
-        BuildContext.DeleteDirectory(context.PortableDir);
-        BuildContext.EnsureDirectory(context.PortableDir);
+        // Nothing is deleted until this passes. dist/portable is a program directory as much as it is
+        // an artifact directory - the documented portable workflow runs the server straight out of it -
+        // and a running executable cannot be overwritten or deleted on Windows. This used to be
+        // discovered by deleting the folder and then failing on the one locked file, which cost the
+        // operator the working install they had in there.
+        OutputDirectoryGuard.EnsureReplaceable(context.PortableDir, "dist/portable");
+
+        // The new set is assembled in dist/publish and swapped in at the end (ArtifactSwap.Replace),
+        // so a failure anywhere in between leaves dist/portable exactly as it was, and the swap itself
+        // either completes or puts the previous set back.
+        string staged = context.PortableStagingDir;
         BuildContext.EnsureDirectory(context.PublishDir);
+        BuildContext.DeleteDirectory(staged);
+        BuildContext.EnsureDirectory(staged);
 
-        foreach ((string name, string project) in BuildContext.Products)
+        try
         {
-            string staging = Path.Combine(context.PublishDir, name);
-            BuildContext.DeleteDirectory(staging);
-
-            context.RunChecked("dotnet",
-            [
-                "publish", project,
-                "-c", "Release",
-                "-r", rid,
-                "--self-contained", selfContained,
-                "-p:PublishSingleFile=true",
-                "-p:IncludeNativeLibrariesForSelfExtract=true",
-                "-p:EnableCompressionInSingleFile=true",
-                "-p:DebugType=None",
-                "-p:DebugSymbols=false",
-                "-o", staging,
-            ]);
-
-            string exe = Path.Combine(staging, name + ".exe");
-            if (!File.Exists(exe))
+            foreach ((string name, string project) in BuildContext.Products)
             {
-                throw new InvalidOperationException($"publish did not produce {exe}");
+                string publish = Path.Combine(context.PublishDir, name);
+                BuildContext.DeleteDirectory(publish);
+
+                context.RunChecked("dotnet",
+                [
+                    "publish", project,
+                    "-c", "Release",
+                    "-r", rid,
+                    "--self-contained", selfContained,
+                    "-p:PublishSingleFile=true",
+                    "-p:IncludeNativeLibrariesForSelfExtract=true",
+                    "-p:EnableCompressionInSingleFile=true",
+                    "-p:DebugType=None",
+                    "-p:DebugSymbols=false",
+                    "-o", publish,
+                ]);
+
+                string exe = Path.Combine(publish, name + ".exe");
+                if (!File.Exists(exe))
+                {
+                    throw new InvalidOperationException($"publish did not produce {exe}");
+                }
+
+                long size = new FileInfo(exe).Length;
+                Console.WriteLine($"  {name}.exe  {BuildContext.Bytes(size)}");
+                File.Copy(exe, Path.Combine(staged, name + ".exe"), overwrite: true);
             }
 
-            long size = new FileInfo(exe).Length;
-            Console.WriteLine($"  {name}.exe  {BuildContext.Bytes(size)}");
-            File.Copy(exe, Path.Combine(context.PortableDir, name + ".exe"), overwrite: true);
+            WriteSupportFiles(context, staged);
+            ArtifactSwap.Replace(staged, context.PortableDir, context.PortablePreviousDir, "dist/portable");
         }
+        finally
+        {
+            // Scratch only: the per-product publish output and, if the build failed before the swap,
+            // the partial staged set. dist/portable is not touched here - on success it is the staged
+            // set already, on failure it is the untouched previous one. The directory parked by the
+            // swap is deliberately left alone: if the swap failed and could not put it back, that is
+            // the old artifact set and deleting it would be the very bug this command had.
+            foreach ((string name, _) in BuildContext.Products)
+            {
+                BuildContext.TryDeleteDirectory(Path.Combine(context.PublishDir, name));
+            }
 
-        BuildContext.DeleteDirectory(context.PublishDir);
-        WriteSupportFiles(context);
+            BuildContext.TryDeleteDirectory(staged);
+        }
 
         Console.WriteLine($"portable: {context.PortableDir}");
         Program.PrintArtifacts(context, "portable artifacts");
@@ -127,19 +154,22 @@ internal static class PortableCommand
     /// <summary>
     /// The files a portable folder needs for parity with an installed tree: the marker that keeps
     /// config next to the binaries, the pinned driver package with its notice, the privileged setup
-    /// scripts, and this card's packaging document.
+    /// scripts, and this card's packaging document. Everything is written into the directory being
+    /// assembled, never into the live one.
     /// </summary>
-    internal static void WriteSupportFiles(BuildContext context)
+    internal static void WriteSupportFiles(BuildContext context, string target)
     {
+        BuildContext.EnsureDirectory(target);
+
         // portable.marker: Vht.Config/Vht.Client look for this file next to the executable and keep
         // config.toml, peers.json, grants and logs in ./config instead of %LOCALAPPDATA%.
         File.WriteAllText(
-            Path.Combine(context.PortableDir, "portable.marker"),
+            Path.Combine(target, "portable.marker"),
             "VirtualThere portable build marker: config lives in ./config next to these executables.\n",
             Encoding.ASCII);
 
         // The driver payload, verbatim, with the hash list the install script pins.
-        string driverTarget = Path.Combine(context.PortableDir, "driver");
+        string driverTarget = Path.Combine(target, "driver");
         VerifyThirdPartyHashes(context.ThirdPartyDriverDir);
         foreach (string file in Directory.EnumerateFiles(context.ThirdPartyDriverDir, "*", SearchOption.TopDirectoryOnly))
         {
@@ -150,16 +180,16 @@ internal static class PortableCommand
         // (it resolves the layout either way - see the script's own comment).
         foreach (string script in Directory.EnumerateFiles(context.ScriptsSourceDir, "*.ps1"))
         {
-            BuildContext.CopyFile(script, Path.Combine(context.PortableDir, "scripts"));
+            BuildContext.CopyFile(script, Path.Combine(target, "scripts"));
         }
 
         BuildContext.CopyFile(
             Path.Combine(context.ScriptsSourceDir, "Setup-Portable.ps1"),
-            context.PortableDir);
+            target);
 
         BuildContext.CopyFile(
             Path.Combine(context.InstallerSourceDir, "PACKAGING.md"),
-            context.PortableDir);
+            target);
     }
 
     /// <summary>
@@ -269,12 +299,16 @@ internal static class InstallerCommand
         BuildContext.EnsureDirectory(context.InstallerDir);
 
         // A stale package or its debug database must never end up in a release: WiX will not
-        // overwrite an existing .wixpdb, and `hash` would then publish the old one.
+        // overwrite an existing .wixpdb, and `hash` would then publish the old one. This is the one
+        // other place the build deletes a file it did not create, so it gets the same treatment as
+        // dist/portable: check that the file can be replaced before touching it, and refuse with a
+        // message that names it rather than failing somewhere inside WiX.
         foreach (string stale in Directory.EnumerateFiles(context.InstallerDir, "*", SearchOption.TopDirectoryOnly))
         {
             if (stale.EndsWith(".msi", StringComparison.OrdinalIgnoreCase) ||
                 stale.EndsWith(".wixpdb", StringComparison.OrdinalIgnoreCase))
             {
+                OutputDirectoryGuard.EnsureFileReplaceable(stale);
                 File.Delete(stale);
             }
         }
@@ -403,6 +437,12 @@ internal static class CleanCommand
 {
     internal static int Run(BuildContext context)
     {
+        // `clean` deletes dist/, and dist/ holds programs that may be running from it: the portable
+        // server runs straight out of dist/portable, and `xtask clean` in a second shell while it does
+        // would delete the folder out from under it. Refuse for the artifact directories up front, so
+        // the answer is a named process rather than a recursive delete that stops half way.
+        OutputDirectoryGuard.EnsureReplaceable(context.PortableDir, "dist/portable");
+        OutputDirectoryGuard.EnsureReplaceable(context.InstallerDir, "dist/installer");
         BuildContext.DeleteDirectory(context.DistRoot);
         Console.WriteLine($"clean: removed {context.DistRoot}");
         return 0;

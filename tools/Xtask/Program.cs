@@ -54,6 +54,15 @@ internal static class Program
             Console.Error.WriteLine("xtask: " + ex.Message);
             return 1;
         }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A locked or unwritable path that got past the pre-flight checks. Reports the operating
+            // system's own description of the path it refused, with the exit code a script expects,
+            // instead of an unhandled exception's stack trace and Windows' 0xE0434352.
+            Console.Error.WriteLine("xtask: " + ex.GetType().Name + ": " + ex.Message);
+            Console.Error.WriteLine("xtask: the build stopped before it finished; check what still holds that path.");
+            return 1;
+        }
     }
 
     private static int Version(BuildContext context)

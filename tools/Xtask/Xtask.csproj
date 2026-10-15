@@ -18,6 +18,20 @@
     <PublishAot>false</PublishAot>
     <!-- The analyzer set is on repo-wide (Directory.Build.props); this file keeps it honest. -->
     <RunAnalyzersDuringBuild>true</RunAnalyzersDuringBuild>
+    <!--
+      Only for the LibraryImport declarations in OutputDirectoryGuard (OpenProcess /
+      QueryFullProcessImageName) - reading the image path of an elevated vht-server.exe from an
+      unelevated shell, which is the case the guard exists for. Managed code here is unchanged;
+      the source generator emits the unsafe marshalling. Same reason Vht.Interop sets it.
+    -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The guard and the swap are build-time invariants with real failure modes ("the old set was
+         destroyed", "a partially populated artifact folder"), and the only way to test them without
+         a running vht-server.exe is to call them directly: tests/Xtask.Tests. -->
+    <InternalsVisibleTo Include="Xtask.Tests" />
+  </ItemGroup>
 
 </Project>

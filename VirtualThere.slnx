@@ -19,6 +19,7 @@
     <Project Path="tests/Vht.Transport.Tests/Vht.Transport.Tests.csproj" />
     <Project Path="tests/Vht.Transport.Bench/Vht.Transport.Bench.csproj" />
     <Project Path="tests/Vht.Ui.Tests/Vht.Ui.Tests.csproj" />
+    <Project Path="tests/Xtask.Tests/Xtask.Tests.csproj" />
     <Project Path="src/Vht.Client/Tests/Vht.Client.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">

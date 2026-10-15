@@ -190,6 +190,55 @@ A device can be claimed by one client at a time. From the server: `vht kick <bus
 the holder. From the client: `vht-client detach --all`. A crashed client releases its claim when its
 connection ends.
 
+### `xtask portable`: `dist/portable is in use and cannot be replaced safely.`
+
+The full message, with the process and pid named:
+
+```
+xtask: dist/portable is in use and cannot be replaced safely.
+
+  locked: G:\Repos\VirtualThere\dist\portable\vht-server.exe
+  holder: vht-server.exe (pid 45184, G:\Repos\VirtualThere\dist\portable\vht-server.exe)
+
+  A server or client started from this folder keeps its own executable open, so a
+  publish would delete the folder and then fail on the locked file. Nothing has been
+  deleted: the folder is byte-for-byte what it was. See docs/TROUBLESHOOTING.md.
+
+  Stop the process and run the command again (elevated shell if it is elevated):
+      taskkill /pid 45184 /t /f
+```
+
+`holder: not attributable to a VirtualThere process` appears instead when the lock is real but the
+image path cannot be read (an elevated worker asked from an unelevated shell); the `locked:` lines
+name the file, which is the actionable part.
+
+Cause: Windows refuses to delete or overwrite the image file of a running process. `dist/portable` is
+a program directory as much as it is an artifact directory - the documented portable workflow runs
+`vht-server.exe` straight out of it, and a portable server started with **Start** runs a `--worker`
+from the same folder - so this is the normal state of the machine, not an edge case.
+
+`xtask portable` (and `xtask clean`, for `dist/portable` and `dist/installer`) now checks every file
+in the folder *before* deleting anything: the folder's files are probed for a foreign handle, and the
+candidate processes (`vht-server.exe`, `vht-client.exe`, `vht.exe`) are reported by name and pid when
+their image lives in that folder - a copy running from `%ProgramFiles%` or from
+`src/Vht.Server/bin/...` is not blamed for it. The new artifact set is assembled in
+`dist/publish/portable` and swapped into place with two renames, so a failure at any point - this
+refusal, a failed `dotnet publish`, a stuck swap - leaves the folder exactly as it was.
+
+That is the whole point: the earlier behaviour deleted `dist/portable` first and *then* failed on the
+locked file, which removed every other file in the folder and left a stale `vht-server.exe` behind.
+A failed build silently destroyed a working portable install, and the exit was an unhandled
+`UnauthorizedAccessException` rather than a diagnosis.
+
+Fix: stop the named process and run the command again.
+
+* `taskkill /pid <pid> /t /f` - `/t` also stops the elevated worker the window started. From an
+  **unelevated** shell this fails with `Access is denied` when the process is elevated (the window's
+  **Stop**, or Ctrl+C in the console the server was started from, is the unelevated way out).
+* A `vht-client.exe` kept alive by the logon task: `schtasks /end /tn "VirtualThere Client"`.
+* Then `dotnet run --project tools/Xtask -- portable`. `dist/portable` is untouched until the new set
+  is complete, so there is nothing to clean up after a refusal.
+
 ### Build or test failures
 
 * Use the SDK the project targets: `dotnet --version` must be `10.0.x`.
