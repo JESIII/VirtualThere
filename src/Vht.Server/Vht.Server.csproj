@@ -38,6 +38,13 @@
     <ProjectReference Include="..\Vht.Core\Vht.Core.csproj" />
     <ProjectReference Include="..\Vht.Interop\Vht.Interop.csproj" />
 
+    <!--
+      The one shared location rule (ConfigPathResolver): the server resolves server.toml through it
+      instead of assembling %ProgramData% itself, so a portable.marker beside the executable means
+      ./config/server.toml - the same directory the client keeps its files in.
+    -->
+    <ProjectReference Include="..\Vht.Config\Vht.Config.csproj" />
+
     <!-- The management window this executable hosts (Hosting/UiHost). -->
     <ProjectReference Include="..\Vht.Ui\Vht.Ui\Vht.Ui.csproj" />
   </ItemGroup>

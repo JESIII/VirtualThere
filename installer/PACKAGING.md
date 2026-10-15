@@ -40,7 +40,7 @@ dist/
     vht-server.exe            server (and the VirtualThere Server window; self-contained single file)
     vht-client.exe            client (and the VirtualThere Client window)
     vht.exe                   operator command line
-    portable.marker           config and state stay in this folder
+    portable.marker           config and state stay in ./config in this folder
     driver/                   pinned third-party driver package + its licence + its SHA256SUMS
     scripts/                  the privileged setup scripts (see section 3 and 5)
     Setup-Portable.ps1        makes a portable folder fully functional (wrapper over scripts/)
@@ -265,6 +265,10 @@ step above is skipped. Logs: `%ProgramData%\VirtualThere\logs\driver-uninstall.l
    `%LOCALAPPDATA%\VirtualThere\client` (client) hold configuration, peers, grants and logs. Removing
    them is not the uninstaller's job (silently deleting user data is worse than leaving it), and the
    uninstall acceptance test only requires the service, driver, firewall rules and binaries to go.
+   A **portable** folder is the exception that makes the "delete the folder" story true: while
+   `portable.marker` is present, both executables keep everything they write in `<folder>\config`
+   (`server.toml` for the server, `config.toml`, peers and grants for the client) and touch neither
+   `%ProgramData%` nor `%LOCALAPPDATA%`. See section 1's layout listing.
 6. **No icons or branding artwork** in the package: the icon set lives in the UI card's scope.
    Shortcuts therefore use the role executables' default icon.
 

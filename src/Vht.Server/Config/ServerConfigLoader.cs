@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using Vht.Config;
+using Vht.Config.Model;
 using Vht.Core.Logging;
 using Vht.Core.Server;
 
@@ -25,10 +27,39 @@ namespace Vht.Server.Config;
 /// </remarks>
 public static class ServerConfigLoader
 {
-    /// <summary>Default config path when <c>--config</c> is not given.</summary>
-    public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-        "VirtualThere", "server.toml");
+    /// <summary>The file name the server keeps its configuration in.</summary>
+    public const string FileName = "server.toml";
+
+    /// <summary>
+    /// Resolves where <c>server.toml</c> lives, through the product-wide rule
+    /// (<see cref="ConfigPathResolver"/>): <c>--config</c>, then <c>VHT_CONFIG</c>, then a
+    /// <c>portable.marker</c> beside the executable (which puts the file in <c>./config</c> in that
+    /// folder), then the installed default <c>%ProgramData%\VirtualThere\server.toml</c>.
+    /// </summary>
+    /// <remarks>
+    /// The server used to assemble the <c>%ProgramData%</c> path itself, which made a portable
+    /// <c>vht-server.exe</c> read and write a machine-wide file outside the folder it was unzipped
+    /// into - and two portable copies share that one file. This is the same resolution the client and
+    /// the rest of the product use, so all three now agree: the marker's presence redirects the
+    /// directory, its absence leaves the installed default alone (the MSI/service case).
+    /// </remarks>
+    public static ConfigPaths Resolve(
+        string? commandLinePath = null,
+        string? environmentValue = null,
+        string? executableDirectory = null,
+        string? programDataDirectory = null,
+        string? localApplicationDataDirectory = null) =>
+        ConfigPathResolver.Resolve(
+            ConfigRole.Server,
+            commandLinePath,
+            environmentValue,
+            executableDirectory,
+            programDataDirectory,
+            localApplicationDataDirectory,
+            configFileName: FileName);
+
+    /// <summary>Default config path when <c>--config</c> and <c>VHT_CONFIG</c> are not given.</summary>
+    public static string DefaultPath => Resolve().ConfigFile;
 
     /// <summary>Applies a TOML file onto <paramref name="options"/>; reports problems.</summary>
     public static IReadOnlyList<string> Apply(string path, ServerOptions options, ILogger? log = null)

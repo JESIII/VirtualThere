@@ -35,9 +35,14 @@ msiexec /x VirtualThere-0.1.0-x64.msi /qn          # uninstall: service, driver,
 ```
 
 The portable folder is used in place: copy `dist/portable/` anywhere (it is not under
-`%ProgramFiles%` and is not registered with the SCM) and run `vht-server.exe`, `vht-client.exe`,
-`vht-server.exe`, `vht-client.exe` or `vht.exe` from there. Configuration stays in `./config` next to the binaries,
-because the folder contains `portable.marker`.
+`%ProgramFiles%` and is not registered with the SCM) and run `vht-server.exe`, `vht-client.exe` or
+`vht.exe` from there. Configuration stays in `./config` next to the binaries, because the folder
+contains `portable.marker`: the server reads and writes `config\server.toml` there, the client its
+own `config\config.toml`, peers and grants. Nothing in a portable folder goes to `%ProgramData%` or
+`%LOCALAPPDATA%`, so two copies unzipped to two places cannot share one configuration file, and
+deleting the folder really does remove everything the folder wrote. Remove `portable.marker` and the
+executables fall back to the installed defaults (server `%ProgramData%\VirtualThere\server.toml`,
+client `%LOCALAPPDATA%\VirtualThere\client`).
 
 Everything below was exercised on Windows 11 (build 26300) with .NET SDK 10.0.402.
 
@@ -139,7 +144,11 @@ vht service-status
 ```
 
 The service reads `%ProgramData%\VirtualThere\server.toml` by default. Override with
-`--config <path>` or the `VHT_CONFIG` environment variable.
+`--config <path>` or the `VHT_CONFIG` environment variable. In a portable folder - one containing
+`portable.marker` beside the executables - that default is `<folder>\config\server.toml` instead, so
+`vht config-template` with no `--out` writes the starter file exactly where the shipped
+`dist/portable/vht-server.exe` will read it. See the portable-folder paragraph at the top of this
+document.
 
 Uninstall:
 

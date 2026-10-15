@@ -28,12 +28,16 @@ public sealed class ConfigStoreTests
             Assert.Equal(environmentFile, fromEnvironment.ConfigFile);
             Assert.Equal(ConfigSourceKind.Environment, fromEnvironment.Source);
 
-            // a portable.marker next to the binary keeps config beside the binary
+            // a portable.marker next to the binary keeps config in ./config beside the binary (the
+            // same directory Vht.Client/ClientPaths uses and the one portable.marker documents)
             var portable = Path.Combine(temporary, "portable");
             Directory.CreateDirectory(portable);
             File.WriteAllText(Path.Combine(portable, ConfigPathResolver.PortableMarkerFileName), string.Empty);
             var portablePaths = ConfigPathResolver.Resolve(ConfigRole.Server, null, null, portable);
-            Assert.Equal(Path.Combine(portable, ConfigPathResolver.ConfigFileName), portablePaths.ConfigFile);
+            Assert.Equal(
+                Path.Combine(portable, ConfigPathResolver.PortableDirectoryName, ConfigPathResolver.ConfigFileName),
+                portablePaths.ConfigFile);
+            Assert.Equal(ConfigSourceKind.Portable, portablePaths.Source);
             Assert.NotNull(portablePaths.PortableMarker);
 
             var defaults = ConfigPathResolver.Resolve(

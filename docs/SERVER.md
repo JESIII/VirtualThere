@@ -50,11 +50,31 @@ needed for it. The full window semantics - including the notification-area affor
 
 ## 2. Config file: the `server.toml` subset
 
-Default path: `%ProgramData%\VirtualThere\server.toml`. Write a commented starter file with:
+Default path: `%ProgramData%\VirtualThere\server.toml` - that is the **installed** default, and the
+MSI/service case is unchanged by the rule below. In a **portable** folder (one containing
+`portable.marker` beside the executables) it is `config\server.toml` **in that folder** instead, so
+the shipped `dist/portable/vht-server.exe` keeps its configuration beside itself and writes nothing
+machine-wide. Precedence, highest first:
+
+1. `--config <path>` (a file, or a directory),
+2. `VHT_CONFIG`,
+3. `portable.marker` beside the executable -> `<folder>\config\server.toml`,
+4. the installed default `%ProgramData%\VirtualThere\server.toml`.
+
+The marker's **presence** is the whole test: remove the file and the installed default applies again.
+`vht-client` and the rest of the product resolve the same directory by the same rule, so a portable
+folder holds every file it writes (the client's `config\config.toml`, peers, grants and logs beside
+the server's `config\server.toml`).
+
+Write a commented starter file with:
 
 ```bash
 vht config-template --out C:\ProgramData\VirtualThere\server.toml
 ```
+
+With no `--out`, `vht config-template` writes to the same path the server will read - the portable
+`.\config\server.toml` in a portable folder, `%ProgramData%\VirtualThere\server.toml` otherwise. The
+server creates that directory at start-up when it is missing.
 
 The server parses a documented subset of TOML: comments (`#`), `[section]` headers, dotted keys,
 strings, booleans, integers and arrays of strings. A key is resolved **relative to its section**, as
@@ -84,11 +104,17 @@ are the ones the service itself reads today.
 | `connections.max_in_flight_urbs` | int | runtime default | Back-pressure per connection |
 | `connections.max_transfer_buffer` | int | runtime default | Largest single transfer accepted |
 | `logging.level` | string | `info` | `debug`, `info`, `warn`, `error` |
-| `logging.file` | string | none | Also write the log to this file |
+| `logging.file` | string | none | Also write the log to this file, used exactly as written |
 | `control_plane.enabled` | bool | `true` | Serve the local named-pipe control plane |
 | `control_plane.pipe_name` | string | `vht-server` | Pipe name (`\\.\pipe\vht-server`) |
 | `hooks.timeout_seconds` | int | runtime default | Kill a hook script that runs longer than this |
 | `hooks.script_root` | string | none | Directory hook scripts are resolved under |
+
+There is no default log file (`logging.file` is `none`): the server logs to the console, and the
+service to the Event Log, unless you name a file. Nothing derives a log path from the config
+location, so no log is written into `%ProgramData%` behind your back. The directory holding the
+config file is created at start-up even when the file is not there yet - that is where the server's
+`state.toml` lands, so a portable folder is self-contained.
 
 Selectors are `vvvv:pppp`, `vvvv:pppp:serial` or `vvvv:pppp:serial@server`, e.g.
 `policy.ignore = ["1050:0407", "0b05:19af"]`.

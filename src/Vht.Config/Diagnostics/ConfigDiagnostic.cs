@@ -9,6 +9,10 @@ public enum ConfigSourceKind
     Overlay = 2,
     Environment = 3,
     CommandLine = 4,
+
+    /// <summary>A <c>portable.marker</c> beside the executable - config and state stay in
+    /// <c>./config</c> in that folder.</summary>
+    Portable = 5,
 }
 
 public enum ConfigDiagnosticSeverity

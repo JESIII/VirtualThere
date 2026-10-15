@@ -9,9 +9,14 @@ namespace Vht.Config;
 /// <item><c>--config &lt;path&gt;</c> (this always wins - explicit beats implicit);</item>
 /// <item><c>VHT_CONFIG</c> environment variable;</item>
 /// <item>a <c>portable.marker</c> file next to the executable - portable builds keep their config
-/// beside the binary so they can be run from a USB stick;</item>
+/// in <c>./config</c> next to the binary so they can be run from a USB stick, and two copies
+/// unzipped to different places cannot share one machine-wide file;</item>
 /// <item>the per-user / per-machine default for the role.</item>
 /// </list>
+/// Any role may ask for a different file name inside the resolved directory
+/// (<see cref="ConfigPathResolver.Resolve"/>'s <c>configFileName</c>): the server keeps
+/// <c>server.toml</c> where the rest of the product keeps <c>config.toml</c>. The <i>directory</i>
+/// rule above is the same for every caller either way.
 /// Defaults: Windows service <c>%ProgramData%\VirtualThere\config.toml</c>; Windows client
 /// <c>%LOCALAPPDATA%\VirtualThere\config.toml</c>; Linux/macOS
 /// <c>$XDG_CONFIG_HOME/virtualthere/config.toml</c> (or <c>~/.config/...</c>) and
@@ -49,10 +54,23 @@ public static class ConfigPathResolver
     public const string ConfigFileName = "config.toml";
     public const string StateFileName = "state.toml";
     public const string PortableMarkerFileName = "portable.marker";
+
+    /// <summary>The sub-directory a portable build keeps its files in, beside the executables.</summary>
+    public const string PortableDirectoryName = "config";
     public const string EnvironmentVariable = "VHT_CONFIG";
     public const string DataDirectoryVariable = "VHT_DATA_DIR";
     public const string AppFolderName = "VirtualThere";
 
+    /// <param name="role">Whose default applies when nothing else resolves.</param>
+    /// <param name="commandLinePath">An explicit <c>--config</c>; a file path or a directory.</param>
+    /// <param name="environmentValue"><c>VHT_CONFIG</c>; <c>null</c> reads the process environment.</param>
+    /// <param name="executableDirectory">Where the marker is looked for; defaults to
+    /// <see cref="AppContext.BaseDirectory"/>. The portable marker's <i>presence</i> is the only thing
+    /// that matters - removing the file restores the per-role default.</param>
+    /// <param name="configFileName">File name to use inside the resolved directory. Defaults to
+    /// <see cref="ConfigFileName"/>; the server passes <c>server.toml</c>. It never applies when the
+    /// caller named a file explicitly (<paramref name="commandLinePath"/> /
+    /// <paramref name="environmentValue"/> ending in <c>.toml</c>).</param>
     public static ConfigPaths Resolve(
         ConfigRole role,
         string? commandLinePath = null,
@@ -61,38 +79,44 @@ public static class ConfigPathResolver
         string? programDataDirectory = null,
         string? localApplicationDataDirectory = null,
         string? homeDirectory = null,
-        string? xdgConfigHome = null)
+        string? xdgConfigHome = null,
+        string? configFileName = null)
     {
         executableDirectory ??= AppContext.BaseDirectory;
+        configFileName = string.IsNullOrWhiteSpace(configFileName) ? ConfigFileName : configFileName!;
 
-        // 3. portable marker next to the binary.
+        // 3. portable marker next to the binary. The marker redirects the directory to ./config, so a
+        //    portable build never touches %ProgramData%/%LOCALAPPDATA% - not for config, not for
+        //    state. Vht.Client/ClientPaths resolves the same directory for the client role.
         string? portableMarker = null;
+        string? portableDirectory = null;
         if (!string.IsNullOrWhiteSpace(executableDirectory))
         {
             var marker = Path.Combine(executableDirectory, PortableMarkerFileName);
             if (System.IO.File.Exists(marker))
             {
                 portableMarker = marker;
+                portableDirectory = Path.Combine(executableDirectory, PortableDirectoryName);
             }
         }
 
         if (!string.IsNullOrWhiteSpace(commandLinePath))
         {
-            return From(Path.GetFullPath(commandLinePath), ConfigSourceKind.CommandLine, portableMarker);
+            return From(Path.GetFullPath(commandLinePath), ConfigSourceKind.CommandLine, portableMarker, configFileName);
         }
 
         environmentValue ??= Environment.GetEnvironmentVariable(EnvironmentVariable);
         if (!string.IsNullOrWhiteSpace(environmentValue))
         {
-            return From(Path.GetFullPath(environmentValue), ConfigSourceKind.Environment, portableMarker);
+            return From(Path.GetFullPath(environmentValue), ConfigSourceKind.Environment, portableMarker, configFileName);
         }
 
-        if (portableMarker is not null)
+        if (portableDirectory is not null)
         {
-            return From(executableDirectory!, ConfigSourceKind.Environment, portableMarker);
+            return From(portableDirectory, ConfigSourceKind.Portable, portableMarker, configFileName);
         }
 
-        return From(DefaultDirectory(role, programDataDirectory, localApplicationDataDirectory, homeDirectory, xdgConfigHome), ConfigSourceKind.Defaults, null);
+        return From(DefaultDirectory(role, programDataDirectory, localApplicationDataDirectory, homeDirectory, xdgConfigHome), ConfigSourceKind.Defaults, null, configFileName);
     }
 
     public static string DefaultDirectory(
@@ -137,7 +161,7 @@ public static class ConfigPathResolver
         return Path.Combine(baseDirectory, AppFolderName.ToLowerInvariant());
     }
 
-    private static ConfigPaths From(string fileOrDirectory, ConfigSourceKind source, string? portableMarker)
+    private static ConfigPaths From(string fileOrDirectory, ConfigSourceKind source, string? portableMarker, string configFileName)
     {
         var path = Expand(fileOrDirectory);
         string directory;
@@ -151,7 +175,7 @@ public static class ConfigPathResolver
         else
         {
             directory = ConfigPaths.DirectoryOf(path);
-            configFile = Path.Combine(directory, ConfigFileName);
+            configFile = Path.Combine(directory, configFileName);
         }
 
         if (directory.Length == 0)

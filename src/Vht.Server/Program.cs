@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
+using Vht.Config;
+using Vht.Config.Diagnostics;
 using Vht.Core;
 using Vht.Core.Logging;
 using Vht.Core.Server;
@@ -216,8 +218,27 @@ public static class Program
         if (HasFlag(args, "--template") && configPath is not null)
             ServerCommands.WriteConfigTemplate(Console.Out, configPath);
 
-        string path = configPath ?? ServerConfigLoader.DefaultPath;
+        // One location rule for the whole product: --config, then VHT_CONFIG, then a portable.marker
+        // beside the executable (./config in that folder), then %ProgramData%. The server used to
+        // hardcode the last one, so a portable build wrote its configuration outside the folder it
+        // was unzipped into.
+        ConfigPaths paths = ServerConfigLoader.Resolve(configPath);
+        string path = paths.ConfigFile;
         var logger = BuildLogger(options);
+
+        if (paths.Source == ConfigSourceKind.Portable)
+        {
+            logger.Write(LogLevel.Info, LogEvent.ConfigurationLoaded,
+                $"portable build: {ConfigPathResolver.PortableMarkerFileName} beside the executable; " +
+                $"configuration stays in this folder",
+                new Dictionary<string, object?>
+                {
+                    ["portable_marker"] = paths.PortableMarker,
+                    ["directory"] = paths.Directory,
+                });
+        }
+
+        EnsureDirectory(paths.Directory, logger);
 
         IReadOnlyList<string> configProblems = ServerConfigLoader.Apply(path, options, logger);
         foreach (string problem in configProblems)
@@ -271,6 +292,27 @@ public static class Program
             "running in the foreground (not launched by the service control manager); Ctrl+C to stop");
 
         return await runtime.RunAsync(cancel.Token).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Creates the directory the server reads and writes its configuration in. Best-effort and
+    /// non-fatal: on an installed machine it usually already exists, and an unelevated server that
+    /// may not create <c>%ProgramData%\VirtualThere</c> has to say so rather than fail later with a
+    /// configuration that silently never persisted.
+    /// </summary>
+    private static void EnsureDirectory(string directory, ILogger logger)
+    {
+        try
+        {
+            Directory.CreateDirectory(directory);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            logger.Write(LogLevel.Warn, LogEvent.ConfigurationLoaded,
+                $"could not create the configuration directory {directory}: {ex.Message}; " +
+                "settings changed at run time will not be persisted",
+                new Dictionary<string, object?> { ["path"] = directory });
+        }
     }
 
     private static ILogger BuildLogger(ServerOptions options)

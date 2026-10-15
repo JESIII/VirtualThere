@@ -79,9 +79,12 @@ instead of half-working.
 ### Where are the config and state files?
 
 Server (service): `%ProgramData%\VirtualThere\server.toml`. Client window/worker:
-`%LOCALAPPDATA%\VirtualThere\`. Override with `--config <path>` or `VHT_CONFIG`. Portable builds use
-a file next to the binary when a `virtualthere.portable` marker is present. The keys are in
-`docs/SERVER.md` and, for the full model, `docs/CONFIG.md`.
+`%LOCALAPPDATA%\VirtualThere\client\`. Override with `--config <path>` or `VHT_CONFIG`. A portable
+build - a folder containing `portable.marker` beside the executables - keeps what it writes in
+`<folder>\config` instead (`server.toml` for the server, `config.toml`, peers and grants for the
+client), which is also why two portable folders cannot share one configuration file. Remove the
+marker and the machine-wide default above applies again. The keys are in `docs/SERVER.md` and, for the
+full model, `docs/CONFIG.md`.
 
 ### Why is the config documentation in two places?
 

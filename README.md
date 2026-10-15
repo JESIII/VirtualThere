@@ -64,6 +64,14 @@ certificate is available here), so Windows shows its usual "unknown publisher" p
 been run on a clean machine yet - the packaging document says exactly what was and was not verified
 ([`installer/PACKAGING.md`](installer/PACKAGING.md) section 8).
 
+The **portable folder** is used in place: copy `dist/portable/` anywhere and run `vht-server.exe`,
+`vht-client.exe` or `vht.exe` from it. That folder contains `portable.marker`, so both executables
+keep everything they write in `config\` beside themselves - `server.toml` for the server,
+`config.toml`, peers and grants for the client - and never touch `%ProgramData%` or `%LOCALAPPDATA%`.
+Two portable copies therefore cannot share one configuration file, and removing the folder removes
+everything it wrote. Delete `portable.marker` and the installed defaults apply again (server
+`%ProgramData%\VirtualThere\server.toml`, client `%LOCALAPPDATA%\VirtualThere\client`).
+
 **From source**
 
 **Prerequisites**
@@ -99,6 +107,7 @@ to `PATH`, or use full paths.
 
 ```bash
 vht config-template --out C:\ProgramData\VirtualThere\server.toml   # writes a commented starter file
+# no --out: writes to the path the server will read (%ProgramData%, or .\config in a portable folder)
 vht serve                                                          # foreground; Ctrl+C to stop
 ```
 

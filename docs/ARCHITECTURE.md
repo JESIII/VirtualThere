@@ -594,10 +594,12 @@ Build system details:
   `vht-client.exe` + `vht.exe` into `dist/portable/`; no installer, no service
   registration — the server runs as a console app, which is the documented "portable Windows server"
   parity item (`packaging-workstream`).
-- **Config location:** `%ProgramData%\VirtualThere\config.toml` for the service,
-  `%LOCALAPPDATA%\VirtualThere\config.toml` for the client/tray, each overridable by
-  `--config <path>` and `VHT_CONFIG`. Portable builds keep config next to the binary when a
-  `portable.marker` file is present.
+- **Config location:** `%ProgramData%\VirtualThere\config.toml` for the service
+  (`server.toml` is the service's file name), `%LOCALAPPDATA%\VirtualThere\config.toml` for the
+  client/tray. One rule for all of them (`Vht.Config` `ConfigPathResolver`): `--config <path>`, then
+  `VHT_CONFIG`, then a `portable.marker` beside the executable (which keeps config and state in
+  `./config` in that folder - the server included, so a portable folder writes nothing machine-wide),
+  then the per-role default. Without the marker the installed default stands.
 - **Versioning:** one version for all binaries from `Vht.Core` `AssemblyInformationalVersion`;
   auto-update = manual for v1, stated plainly in the README (`packaging-workstream` deliverable 6).
 

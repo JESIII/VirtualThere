@@ -237,11 +237,18 @@ public static class ServerCommands
         return result.Ok ? 0 : 1;
     }
 
-    /// <summary>Writes the commented configuration template.</summary>
+    /// <summary>
+    /// Writes the commented configuration template, creating the directory it lands in - the default
+    /// path is <c>./config/server.toml</c> in a portable build (where nothing has created that
+    /// directory yet) and <c>%ProgramData%\VirtualThere\server.toml</c> on an installed machine.
+    /// </summary>
     public static int WriteConfigTemplate(TextWriter output, string path)
     {
         try
         {
+            if (Path.GetDirectoryName(Path.GetFullPath(path)) is { Length: > 0 } directory)
+                Directory.CreateDirectory(directory);
+
             File.WriteAllText(path, ServerConfigLoader.Template);
             output.WriteLine($"wrote configuration template to {path}");
             return 0;
