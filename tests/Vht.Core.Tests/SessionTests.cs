@@ -126,6 +126,75 @@ public sealed class SessionTests
         Assert.Equal(1, harness.Session.Outcome.SubmitsCompleted);
     }
 
+    /// <summary>
+    /// The session must declare a reply's data stage as the endpoint's own transfer class, and its
+    /// URB header as control. This is the production half of the compression opt-in: with the
+    /// classification absent, every byte the shipping path wrote was classified control, so the LZ4
+    /// decorator could never compress anything (finding F3 / doc §9.5).
+    /// </summary>
+    /// <remarks>
+    /// <see cref="InMemoryTransport.CompressionActive"/> is switched on here so the classification is
+    /// observable; when it is left off (every other test) the session takes the single whole-frame
+    /// write it always took, which is why those tests are unaffected by this change. The threshold is
+    /// lowered to 4 KiB so one test covers both sides of it: a data stage the compressor would be
+    /// offered, and one it would refuse — the latter must not pay for a second frame.
+    /// </remarks>
+    [Fact]
+    public async Task ABulkInDataStageAtOrAboveTheThresholdIsDeclaredBulkWhileTheUrbHeaderStaysControl()
+    {
+        UsbDevice device = TestDevices.Create(1);
+        VhtServerState state = await ExportedAsync(device);
+        Harness harness = Start(state, kind: TransportKind.TlsLz4);
+        harness.Link.ServerTransport.CompressionActive = true;
+        harness.Link.ServerTransport.CompressionThresholdBytes = 4096;
+
+        harness.Link.SendImportRequest(device.BusId);
+        Assert.NotNull(await harness.Link.ReadImportReplyAsync(harness.Ct));
+
+        // At the threshold: the data stage is its own write, declared bulk; the URB header is a
+        // separate write declared control, so it can never be compressed.
+        harness.Link.ServerTransport.ClearWrites();
+        harness.Link.SendSubmit(1, DevId(device), UsbIp.DirIn, 1,
+            numberOfPackets: UsbIp.NoIsoPackets, transferBufferLength: 4096);
+        FakeLink.UrbReply bulk = await harness.Link.ReadUrbReplyAsync(harness.Ct);
+
+        Assert.Equal(0, bulk.Status);
+        Assert.Equal(4096, bulk.Data.Length);
+
+        IReadOnlyList<(PayloadKind Kind, int Length)> bulkWrites = harness.Link.ServerTransport.Writes;
+        Assert.Equal(2, bulkWrites.Count);
+        Assert.Equal(PayloadKind.Control, bulkWrites[0].Kind);
+        Assert.Equal(UsbIp.HeaderSize, bulkWrites[0].Length);
+        Assert.Equal(PayloadKind.Bulk, bulkWrites[1].Kind);
+        Assert.Equal(4096, bulkWrites[1].Length);
+
+        // One byte under the threshold: the compressor would refuse it, so the reply is one whole
+        // raw write and the classification costs nothing.
+        harness.Link.ServerTransport.ClearWrites();
+        harness.Link.SendSubmit(2, DevId(device), UsbIp.DirIn, 1,
+            numberOfPackets: UsbIp.NoIsoPackets, transferBufferLength: 4095);
+        FakeLink.UrbReply small = await harness.Link.ReadUrbReplyAsync(harness.Ct);
+
+        Assert.Equal(4095u, small.ActualLength);
+        (PayloadKind Kind, int Length) one = Assert.Single(harness.Link.ServerTransport.Writes);
+        Assert.Equal(PayloadKind.Control, one.Kind);
+        Assert.Equal(UsbIp.HeaderSize + 4095, one.Length);
+
+        // A control transfer's data stage is control, so the whole frame goes as one raw write and
+        // nothing about it is ever offered to the compressor.
+        harness.Link.ServerTransport.ClearWrites();
+        harness.Link.SendSubmit(3, DevId(device), UsbIp.DirIn, 0, setup: 0x8006000100000012,
+            numberOfPackets: UsbIp.NoIsoPackets, transferBufferLength: 8192);
+        FakeLink.UrbReply control = await harness.Link.ReadUrbReplyAsync(harness.Ct);
+
+        Assert.Equal(8192u, control.ActualLength);
+        (PayloadKind Kind, int Length) controlOnly = Assert.Single(harness.Link.ServerTransport.Writes);
+        Assert.Equal(PayloadKind.Control, controlOnly.Kind);
+        Assert.Equal(UsbIp.HeaderSize + 8192, controlOnly.Length);
+
+        await harness.CloseAndWaitAsync();
+    }
+
     [Fact]
     public async Task AnOutBulkTransferCarriesItsPayloadToTheDevice()
     {

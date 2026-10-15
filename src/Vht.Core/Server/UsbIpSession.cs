@@ -694,6 +694,20 @@ public sealed class UsbIpSession
             ? buffer.AsSpan(0, Math.Clamp(actual, 0, buffer.Length))
             : ReadOnlySpan<byte>.Empty;
 
+        // The transfer class of the data stage, taken from the endpoint that produced it. This is
+        // the same resolution the read side already uses (ResolveTransferType), and it is what the
+        // compression layer needs to decide whether the payload may be compressed at all. A reply
+        // with no data stage declares Control, which sends the whole frame raw.
+        PayloadKind replyKind = data.Length == 0
+            ? PayloadKind.Control
+            : epType switch
+            {
+                UsbIp.EpTypeBulk => PayloadKind.Bulk,
+                UsbIp.EpTypeInterrupt => PayloadKind.Interrupt,
+                UsbIp.EpTypeIso => PayloadKind.Isochronous,
+                _ => PayloadKind.Control,
+            };
+
         byte[] reply = UsbIpCodec.EncodeRetSubmit(
             basic, status, data,
             startFrame: submit.StartFrame,
@@ -716,7 +730,7 @@ public sealed class UsbIpSession
                 return;
             }
 
-            await SendAsync(reply, ct).ConfigureAwait(false);
+            await SendAsync(reply, replyKind, ct).ConfigureAwait(false);
             _outcome = With(_outcome, completed: _outcome.SubmitsCompleted + 1);
         }
         catch (IOException)
@@ -841,13 +855,72 @@ public sealed class UsbIpSession
     // Helpers
     // =====================================================================================
 
-    private async ValueTask SendAsync(ReadOnlyMemory<byte> frame, CancellationToken ct)
+    /// <summary>
+    /// Writes a whole reply frame with every byte classified <see cref="PayloadKind.Control"/>.
+    /// </summary>
+    /// <remarks>
+    /// Correct for every reply that is not a URB completion: the devlist, import and device-info
+    /// bodies, unlink acknowledgements and refusal replies have no data stage, so there is nothing
+    /// to classify and nothing that may be compressed.
+    /// </remarks>
+    private async ValueTask SendAsync(ReadOnlyMemory<byte> frame, CancellationToken ct) =>
+        await SendAsync(frame, PayloadKind.Control, ct).ConfigureAwait(false);
+
+    /// <summary>
+    /// Writes one reply frame, declaring the transfer class of its data stage.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A <c>USBIP_RET_SUBMIT</c> frame is the 48-byte URB header followed by the data stage, and the
+    /// two are written as <b>two transport writes under one hold of the write lock</b>: the header as
+    /// <see cref="PayloadKind.Control"/> (never compressed), the data as
+    /// <paramref name="dataKind"/>. That is the whole point of the change — until it, every byte the
+    /// session wrote was classified control, so the LZ4 decorator's
+    /// <c>WritePayloadAsync</c> opt-in was unreachable from production and no URB ever compressed.
+    /// </para>
+    /// <para>
+    /// Two writes are not two logical frames on the wire buffer: nothing else can interleave because
+    /// the write lock is held across both, and the peer's transport reassembles by byte count, which
+    /// is what <c>UsbIpSession</c> does on the read side too. A transport that does not implement
+    /// <see cref="IPayloadKindTransport"/>, or one that reports
+    /// <see cref="IPayloadKindTransport.CompressionActive"/> false, still gets a single write of the
+    /// whole frame — byte-for-byte what this method did before the classification existed.
+    /// </para>
+    /// <para>
+    /// The split is also skipped when the data stage could not be compressed anyway: a transfer class
+    /// that is never compressed (control, isochronous) or a data stage below
+    /// <see cref="IPayloadKindTransport.CompressionThresholdBytes"/>. That is the same test the LZ4
+    /// decorator makes in <c>WriteFrameAsync</c>, hoisted one level so a reply the compressor would
+    /// refuse does not pay a second frame header and a second CRC-32C pass for nothing. It is the
+    /// reason that threshold is published on the interface rather than kept private to the decorator.
+    /// </para>
+    /// </remarks>
+    private async ValueTask SendAsync(ReadOnlyMemory<byte> frame, PayloadKind dataKind, CancellationToken ct)
     {
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            if (frame.Length > 0)
+            if (frame.Length == 0)
+            {
+                return;
+            }
+
+            int dataLength = frame.Length - UsbIp.HeaderSize;
+            bool compressible = dataKind is PayloadKind.Bulk or PayloadKind.Interrupt;
+
+            if (!compressible
+                || _transport is not IPayloadKindTransport classified
+                || !classified.CompressionActive
+                || dataLength < classified.CompressionThresholdBytes)
+            {
                 await _transport.WriteAsync(frame, ct).ConfigureAwait(false);
+                return;
+            }
+
+            await classified.WritePayloadAsync(PayloadKind.Control, frame[..UsbIp.HeaderSize], ct)
+                .ConfigureAwait(false);
+            await classified.WritePayloadAsync(dataKind, frame[UsbIp.HeaderSize..], ct)
+                .ConfigureAwait(false);
         }
         finally
         {
@@ -861,9 +934,9 @@ public sealed class UsbIpSession
         {
             // The list exists so teardown can wait for the transfers that are still running - it is
             // a barrier, not a history. Dropping the finished ones before each add keeps it at the
-            // in-flight count (never more than FallbackMaxInFlight transfers), so a long run cannot
-            // retain one async state machine - and the transfer buffer it owns - per URB ever
-            // served. RemoveAll on a list of that size is a handful of pointer comparisons and
+            // in-flight count (never more than ConnectionResources.MaxInFlightUrbs transfers), so a
+            // long run cannot accumulate one entry - and one ever-larger backing array - per URB
+            // ever served. RemoveAll on a list of that size is a handful of pointer comparisons and
             // allocates nothing, which matters at tens of thousands of submits per second.
             _pendingTransfers.RemoveAll(static t => t.IsCompleted);
             _pendingTransfers.Add(task);

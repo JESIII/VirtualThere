@@ -80,10 +80,16 @@ public sealed class ByteStream
 }
 
 /// <summary>The server side of an in-memory connection.</summary>
-public sealed class InMemoryTransport : ITransport
+/// <remarks>
+/// It also implements <see cref="IPayloadKindTransport"/>, which is how a session test sees the
+/// classification the session now attaches to a reply's data stage. <see cref="CompressionActive"/>
+/// is <b>off by default</b>, so every existing test drives the same whole-frame path it always did.
+/// </remarks>
+public sealed class InMemoryTransport : ITransport, IPayloadKindTransport
 {
     private readonly ByteStream _inbound;
     private readonly ByteStream _outbound;
+    private readonly List<(PayloadKind Kind, int Length)> _writes = new();
 
     public InMemoryTransport(ByteStream inbound, ByteStream outbound, TransportKind kind)
     {
@@ -98,13 +104,45 @@ public sealed class InMemoryTransport : ITransport
         ? TransportCapabilities.None
         : TransportCapabilities.HandshakeRequired;
 
+    /// <summary>When true, the session classifies a reply's data stage and this double records it.</summary>
+    public bool CompressionActive { get; set; }
+
+    /// <inheritdoc />
+    public int CompressionThresholdBytes { get; set; } = 64 * 1024;
+
+    /// <summary>Every write this transport received, in order, as (declared class, byte count).</summary>
+    public IReadOnlyList<(PayloadKind Kind, int Length)> Writes
+    {
+        get { lock (_writes) return _writes.ToArray(); }
+    }
+
+    /// <summary>Forgets the recorded writes, so a test can look at one phase only.</summary>
+    public void ClearWrites()
+    {
+        lock (_writes) _writes.Clear();
+    }
+
     public ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct) =>
         _inbound.ReadAsync(buffer, ct);
 
     public ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct)
     {
+        Record(PayloadKind.Control, buffer.Length);
         _outbound.Write(buffer.Span);
         return ValueTask.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public ValueTask WritePayloadAsync(PayloadKind payloadKind, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    {
+        Record(payloadKind, payload.Length);
+        _outbound.Write(payload.Span);
+        return ValueTask.CompletedTask;
+    }
+
+    private void Record(PayloadKind kind, int length)
+    {
+        lock (_writes) _writes.Add((kind, length));
     }
 
     public Task<AuthResult> AuthenticateAsync(AuthRequest request, CancellationToken ct) =>
