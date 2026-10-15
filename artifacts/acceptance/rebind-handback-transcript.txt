@@ -1,0 +1,143 @@
+VirtualThere — P2 rebind handback: acceptance transcript
+=======================================================
+
+Card:      t_7b9fd136 "Rebind is one-way: record the prior binding and hand the device back on
+           detach and shutdown"
+Host:      Windows 11, G:\Repos\VirtualThere (git main)
+Elevation: NO — this shell is not elevated (`elevated=False` below). Re-selecting a driver needs
+           administrator rights, so every transcript that requires actually moving a device is
+           NOT RUN here and is listed as such at the end. Nothing below changed a driver binding.
+
+--------------------------------------------------------------------------------
+1. Environment, and what could be run at all
+--------------------------------------------------------------------------------
+
+The probe below prints, for every USB devnode on this machine, the INF Windows has selected for it.
+It was written to establish which read API the shipped code could stand on (the answer:
+DEVPKEY_Device_DriverInfPath, fmtid a8b865dd-2e3d-4094-ad97-e593a70c75d6, pid 5), and the shipped
+PriorBindingQuery.cs reads exactly those properties and the same devnode enumeration.
+
+$ dotnet run -c Release        # scratch probe, READ-ONLY: no driver store call, no re-selection
+elevated=False
+instance=USB\VID_05E3&PID_0610\8&2D69411B&0&14
+  devpkey DriverInfPath=usbhub3.inf
+  devpkey Service=USBHUB3
+instance=USB\VID_174C&PID_55AA\MSFT3000000000000000000000
+  devpkey DriverInfPath=uaspstor.inf
+  devpkey Service=UASPStor
+instance=USB\VID_045B&PID_0209\A&2A7440DB&0&1
+  devpkey DriverInfPath=usbhub3.inf
+  devpkey Service=USBHUB3
+instance=USB\VID_3710&PID_5406&MI_02\C&14ACC1D3&0&0002
+  devpkey DriverInfPath=input.inf
+  devpkey Service=HidUsb
+instance=USB\VID_046D&PID_0AAA&MI_03\9&26545131&3&0003
+  devpkey DriverInfPath=input.inf
+  devpkey Service=HidUsb
+instance=USB\VID_3151&PID_5029&MI_01\A&224DFBF3&0&0001
+  devpkey DriverInfPath=input.inf
+  devpkey Service=HidUsb
+instance=USB\VID_8087&PID_1024&MI_00\A&1B262C0B&0&0000
+  devpkey DriverInfPath=wdma_usb.inf
+  devpkey Service=usbaudio
+instance=USB\VID_0489&PID_E0E2\000000000
+  devpkey DriverInfPath=usb.inf
+  devpkey Service=usbccgp
+
+What this establishes: the record this card requires is readable on a real machine, before anything
+is moved — device instance id, the INF in effect (a name Windows resolves under C:\Windows\INF) and
+the driver service. It is the input to PriorBindingStore, not a simulation of it.
+
+--------------------------------------------------------------------------------
+2. The round trip, rebind then hand back (automated, real execution)
+--------------------------------------------------------------------------------
+
+The machine is stood in for by a fake IDeviceBindingApi that keeps the state a driver store keeps —
+which INF each devnode is selected on, and which packages are staged — so "the device returns to its
+previous driver" is asserted as a state, not as a method call. The rebinder under test is the
+shipping WinUsbRebinder; the store is the shipping PriorBindingStore, writing a real file.
+
+$ dotnet test tests/Vht.Acceptance.Tests/Vht.Acceptance.Tests.csproj -c Release \
+      --filter "FullyQualifiedName~RebindHandbackTests|FullyQualifiedName~CaptureRebindPathTests"
+Passed!  - Failed: 0, Passed: 29, Skipped: 0, Total: 29 - Vht.Acceptance.Tests.dll (net10.0)
+
+   16 of those are new (RebindHandbackTests), including:
+     Rebind_RecordsThePriorBinding_OnDiskBeforeTheDriverIsReSelected
+        - the record file exists and names the prior INF at the moment the driver is re-selected,
+          and the call order is exactly read -> stage -> select
+     RecordedPriorBinding_SurvivesAServerRestart_AndIsReadBack
+        - a second rebinder over the same directory (what the next process sees) reads the record
+          back: instance id, USB\VID_0781&PID_5583, disk.inf, C:\Windows\INF\disk.inf, service disk,
+          provider Microsoft, phase rebound
+     Restore_PutsTheDeviceBackOnItsPreviousDriver_AndRemovesTheStagedPackage
+        - after the handback the devnode is selected on C:\Windows\INF\disk.inf again and oem42.inf
+          is gone from the driver store; call order select(prior) -> uninstall(staged)
+     Restore_WithoutElevation_ReportsTheExactUndoPathAndKeepsTheRecord
+        - names `pnputil /delete-driver oem42.inf /uninstall /force` and touches nothing
+     Provider_HandsTheDeviceBack_WhenTheClientDetaches / ..._WhenItIsReleasedExplicitly
+     Provider_HandsBackEveryOutstandingRecord_OnShutdown
+     Provider_DoesNotClaimADevice_WhenTheRebindNeedsAReboot
+        - refuses, names the reboot, no "rebound onto the inbox winusb.sys" line, hands it back
+     RefreshExports_AndHotplug_NeverReachTheRebindOrTheOpenPath
+        - the no-disturbance property, pinned
+
+--------------------------------------------------------------------------------
+3. What was checked by inspection, not by test
+--------------------------------------------------------------------------------
+
+* `Capture.OpenAsync` still has exactly one caller in src/: `Vht.Core/Server/UsbIpSession.cs:417`
+  (a client's OP_REQ_IMPORT). `VhtServerState.RefreshExportsAsync` and `ApplyHotplugChange` call
+  only `Capture.EnumerateAsync`; `HotplugWatcher` reaches the provider only through those two.
+  The only new call added on the scan path is `Capture.RestorePendingHandbacks()` at start-up, which
+  is a no-op unless a record this server wrote is still on disk (asserted by
+  `Restore_ForADeviceThisServerNeverMoved_TouchesNothing`).
+* The rebinder is still constructed only when `capture.rebind.enabled` is set
+  (`Vht.Server/Hosting/ServerRuntime.cs`), so "never rebind without explicit intent" is unchanged:
+  no new per-device opt-in was added, and the P2 gate in `WinUsbCaptureProvider.OpenAsync` is
+  untouched.
+
+--------------------------------------------------------------------------------
+4. NOT RUN, and why
+--------------------------------------------------------------------------------
+
+* "Attach a device through a client, then detach: the local machine gets it back and it functions,
+  without a reboot and without a manual pnputil. Paste the transcript."
+  NOT RUN — moving a device needs an elevated process (`UpdateDriverForPlugAndPlayDevices` requires
+  administrator rights; `elevated=False` above) and this shell cannot answer a UAC prompt. It also
+  needs a USB/IP client session and a device that may safely be moved off its driver, and no device
+  on this machine may be diverted from its function driver unattended.
+  What stands in its place: the round trip is executed end to end against the fake machine above
+  (record -> stage -> select -> re-select prior -> uninstall staged), and the unelevated refusal for
+  the real machine is the next item.
+* "Stop the server with a device attached: no device is left on winusb.sys."
+  NOT RUN for the same reason (no device can be moved here). The code path is exercised:
+  `ServerRuntime` cancels connections first and then calls `WinUsbCaptureProvider.DisposeAsync()`,
+  which hands back every outstanding record, and `Provider_HandsBackEveryOutstandingRecord_OnShutdown`
+  asserts the sweep runs.
+* Real-machine rebind + handback of a live device (the `Restore` half on real hardware).
+  NOT RUN — same elevation reason. Verified instead: the read half on this machine (section 1), and
+  the failure mode that an unelevated handback produces: it returns the record unchanged, reports
+  win32 5 and names the manual undo path, so a device is never reported as handed back when it is
+  not.
+
+--------------------------------------------------------------------------------
+5. Full suite and guards
+--------------------------------------------------------------------------------
+
+$ dotnet test VirtualThere.slnx -c Release
+  Xtask.Tests           10 passed / 0 failed
+  Vht.Config.Tests      77 passed / 0 failed
+  Vht.Transport.Tests   69 passed / 0 failed
+  Vht.Ui.Tests          24 passed / 0 failed
+  Vht.Core.Tests       160 passed / 0 failed
+  Vht.Acceptance.Tests  56 passed / 0 failed
+  Vht.Client.Tests      50 passed / 0 failed
+  ---------------------------------------------------
+  total                446 passed / 0 failed
+
+$ scripts/check-branding.sh
+== 1. foreign branding in text files ==
+  ok: 7 allowed file(s) name it, nothing else does
+== 2. licence-gate vocabulary in shipped assemblies ==
+  ok: no licence-gate vocabulary in 1722 shipped assembly/binaries
+check-branding: PASSED

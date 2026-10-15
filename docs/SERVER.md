@@ -206,6 +206,57 @@ capture of 1-3 failed at bind: driver_holds_device no WinUSB handle (win32 8); .
 `capture.mode = "prebound-only"` does **not** offer the rebind, whatever `capture.rebind.enabled`
 says: `prebound-only` means "never rebinds", so a held device stays `CaptureUnsupported`.
 
+### 3.2 Exclusivity, and the handback that undoes a rebind
+
+**Running the server does not disturb your devices.** Enumeration - at start-up, on the periodic
+rescan and on every hotplug event - is read-only: it opens each device's interface to read its
+descriptors and never re-selects a driver. Nothing is claimed, rebound or otherwise touched until a
+client actually attaches a device (`Capture.OpenAsync` is reached only from a client's USB/IP
+session). An unattached device is never touched, whatever `capture.rebind.enabled` says.
+
+**An attached device is held exclusively while a client uses it.** That is inherent to USB, not a
+policy choice: one host owns the device's endpoints at a time, so while a client streams URBs
+through the server, the device answers that client and not the local machine. Detach the client, or
+force it off with `vht kick <busid>`, and the device is yours again.
+
+**A rebind is undone, exactly, by the same server.** When a device is moved onto `winusb.sys` (P2),
+the server writes down what the device was bound to *before* it touches anything - device instance
+id, the INF in effect and its path, the driver service - into
+`%ProgramData%\VirtualThere\driver\prior-bindings.json`, and hands the device back:
+
+| Moment | What happens |
+|---|---|
+| the client detaches, or the device is released explicitly (`vht kick <busid>`) | the previous INF is re-selected for the device, and the package this server staged (`oemNN.inf`) is removed from the driver store |
+| the server stops with a device attached | the same handback runs as the server shuts down, so no device is left on `winusb.sys` because a client was attached |
+| the process was killed mid-rebind | the record on disk is read back at the next start, and the handback runs then |
+
+The record is written before the driver store is touched and removed only once both halves of the
+handback are done, so an unfinished handback is retried rather than forgotten.
+
+**A reboot is reported before the device is taken, never after.** If Windows says the new binding
+needs a restart to take effect, the server does not claim the device at all: the client's attach is
+refused with that reason, the device is handed straight back, and the log says so:
+
+```
+1-3: the rebind onto the inbox winusb.sys (oem42.inf) only takes effect after a reboot, so the
+     device is not being taken; reboot and attach it again
+```
+
+**If the automatic handback cannot finish** - an unelevated process, or a driver store that refuses
+the change - the log names the exact undo path:
+
+```
+1-3: handing the device back failed (the device was released): re-selecting C:\Windows\INF\disk.inf
+     for USB\VID_0781&PID_5583\4C530001120328105553 failed (win32 5: Access is denied); the device
+     is still on oem42.inf. Undo by hand: pnputil /delete-driver oem42.inf /uninstall /force, then
+     Device Manager > USB\VID_0781&PID_5583\4C530001120328105553 > Uninstall device and Scan for
+     hardware changes so it returns to C:\Windows\INF\disk.inf
+```
+
+Re-running the server elevated is the first thing to try: it performs the handback at start-up from
+the record it left behind.
+
+
 Devices are re-scanned periodically (about every 3 s) on hosts where device-change notifications are
 not available, which is the hotplug path here.
 

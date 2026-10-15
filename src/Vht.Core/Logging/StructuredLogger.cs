@@ -40,6 +40,8 @@ public enum LogEvent
     DeviceExportRemoved,
     DeviceOpened,
     DeviceReleased,
+    DeviceBindingRecorded,
+    DeviceHandedBack,
     HotplugArrival,
     HotplugRemoval,
     ClientConnected,

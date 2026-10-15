@@ -346,21 +346,43 @@ public sealed class CaptureRebindPathTests
     private sealed class RecordingRebinder : IDeviceRebinder
     {
         private readonly RebindResult _result;
+        private readonly RestoreResult _restore;
 
-        public RecordingRebinder(bool canRebind, RebindResult? result = null)
+        public RecordingRebinder(bool canRebind, RebindResult? result = null, RestoreResult? restore = null)
         {
             CanRebind = canRebind;
             _result = result ?? RebindResult.Success(@"oem42.inf", rebootRequired: false);
+            _restore = restore ?? RestoreResult.NoRecord(@"USB\VID_046D&PID_0AAA");
         }
 
         public bool CanRebind { get; }
 
         public List<(ushort VendorId, ushort ProductId)> Attempts { get; } = new();
 
+        public List<(ushort VendorId, ushort ProductId)> Restores { get; } = new();
+
+        public List<RestoreResult> Pending { get; } = new();
+
+        public int RestorePendingCalls { get; private set; }
+
+        public int PendingHandbacks => Pending.Count;
+
         public RebindResult Rebind(ushort vendorId, ushort productId)
         {
             Attempts.Add((vendorId, productId));
             return _result;
+        }
+
+        public RestoreResult Restore(ushort vendorId, ushort productId)
+        {
+            Restores.Add((vendorId, productId));
+            return _restore;
+        }
+
+        public IReadOnlyList<RestoreResult> RestorePending()
+        {
+            RestorePendingCalls++;
+            return Pending.ToArray();
         }
     }
 }

@@ -67,7 +67,7 @@ public sealed class ServerRuntime : IAsyncDisposable
         if (log is StructuredLogger structured) structured.AddSink(ring);
 
         var enumerator = new UsbDeviceEnumerator(options, log);
-        WinUsbRebinder? rebinder = options.RebindEnabled ? new WinUsbRebinder(string.Empty) : null;
+        WinUsbRebinder? rebinder = options.RebindEnabled ? new WinUsbRebinder(string.Empty, log) : null;
         var capture = new WinUsbCaptureProvider(enumerator, options, log, rebinder);
 
         HookRunner? hooks = options.Hooks.Scripts.Count > 0
@@ -117,6 +117,12 @@ public sealed class ServerRuntime : IAsyncDisposable
             });
 
         ExportedDevices = await State.RefreshExportsAsync(linked.Token).ConfigureAwait(false);
+
+        // A run that was killed mid-rebind leaves its record behind, and the devices it moved are
+        // still on the package it staged. Handing them back here - before the server starts
+        // serving - is what makes the record worth writing at all. Nothing is touched when the
+        // record is empty, which is the normal case.
+        Capture.RestorePendingHandbacks();
 
         if (!Hotplug.Start(out int cr))
         {
@@ -171,8 +177,12 @@ public sealed class ServerRuntime : IAsyncDisposable
 
             await Tcp.DisposeAsync().ConfigureAwait(false);
             await Hotplug.DisposeAsync().ConfigureAwait(false);
-            await Capture.DisposeAsync().ConfigureAwait(false);
 
+            // Connections are cancelled *before* the capture provider is disposed, so the sessions
+            // holding a device hand it back on their own teardown first and the sweep in
+            // Capture.DisposeAsync() has nothing left to do. Whatever a session was too late to
+            // release is handed back by that sweep regardless: no device is left on winusb.sys
+            // because the server stopped while a client had it.
             foreach (Connection connection in State.Connections.Snapshot())
             {
                 try
@@ -183,6 +193,8 @@ public sealed class ServerRuntime : IAsyncDisposable
                 {
                 }
             }
+
+            await Capture.DisposeAsync().ConfigureAwait(false);
 
             State.Logger.Write(LogLevel.Info, LogEvent.ServerStopped, "stopped");
         }
