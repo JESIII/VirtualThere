@@ -312,8 +312,92 @@ peer that does not ask for compression simply gets a plain TLS session. *(`Compr
 
 **Applied only to declared payload frames.** `WriteAsync` treats its argument as `PayloadKind.Control`
 and never compresses it; only `WritePayloadAsync(PayloadKind.Bulk|Interrupt, …)` can opt a frame in, and
-only at or above `Lz4Options.ThresholdBytes` (default **1024**). USB/IP headers therefore cannot be
-compressed by accident. *(`Lz4LeavesControlTrafficAndSmallPayloadsRaw`.)*
+only at or above `Lz4Options.ThresholdBytes` (default **64 KiB**). USB/IP headers therefore cannot be
+compressed by accident. *(`Lz4LeavesControlTrafficAndSmallPayloadsRaw`,
+`DefaultThresholdLeavesOneByteUnderItRawAndCompressesAtIt`,
+`LoweringTheThresholdCompressesPayloadsTheDefaultWouldLeaveRaw`.)*
+
+**The transport's opt-in now reaches the session.** Until card **t_825b4f08** the classification stopped
+at the `Vht.Transport` boundary: `IPayloadCompressionTransport.WritePayloadAsync` had no caller outside
+that assembly, the frozen `Vht.Core.Transport.ITransport` the USB/IP session writes through had no
+payload-kind parameter, and so **every** reply frame — data stage included — was written as
+`PayloadKind.Control` and never compressed. That is what §9.5 measured: 0 compressed frames at every URB
+size, compressible and incompressible alike, and a constant 6–32% loss for `TlsLz4` that no
+`ThresholdBytes` value could change.
+
+The kind is now carried through the session:
+
+- `Vht.Core.Transport` gains a narrow **optional** interface, `IPayloadKindTransport`, in the same
+  additive style as `IPeerInfo` — the frozen `ITransport` member set is untouched, so nothing that
+  already implements it breaks, and `PayloadKind`'s members are identical to `Vht.Transport.PayloadKind`
+  so an adapter between the two is a cast. It publishes `CompressionActive` and
+  `CompressionThresholdBytes` as well as the classified write.
+- `UsbIpSession.SendAsync` writes a `USBIP_RET_SUBMIT` frame as **two classified writes under one hold of
+  its write lock**: the 48-byte URB header as `Control`, the data stage as the endpoint's own transfer
+  class, which is the same `ResolveTransferType` resolution the read side already performs (bulk,
+  interrupt, isochronous, or control). One lock hold means no other reply can interleave, and the peer
+  reassembles by byte count exactly as it did with one write.
+- **Headers stay uncompressed by construction.** A split only ever puts the data stage in its own frame;
+  the header is written whole, as `Control`, and `Lz4Transport.WriteFrameAsync` refuses to compress that
+  class. A transport that does not implement the optional interface, or reports `CompressionActive`
+  false, gets one plain write of the whole frame — byte-for-byte the pre-change behaviour.
+- **A refused payload pays nothing.** The split is skipped when the data stage could not be compressed
+  anyway: control and isochronous are never compressed, and a stage below `CompressionThresholdBytes` is
+  written as part of the whole frame. Hoisting that test out of the decorator is why the threshold is
+  published on the interface: without it, every sub-threshold reply would have paid a second frame header
+  and a second CRC-32C pass to have the compressor refuse it. The consequence is visible in §9.5 — the
+  `TlsLz4` arm at 4 KiB (frame counts and `wire/payload` ratio unchanged from the pre-change run) is
+  unaffected by this work, on compressible and incompressible payload alike.
+
+*(`ABulkInDataStageAtOrAboveTheThresholdIsDeclaredBulkWhileTheUrbHeaderStaysControl` in
+`tests/Vht.Core.Tests/SessionTests.cs`: at the threshold a bulk-IN reply is two writes — `Control`/48
+bytes then `Bulk`/4096 — one byte under it is a single `Control` write of the whole frame, and a control
+transfer's 8 KiB data stage is likewise one `Control` write.)*
+
+### 6.1 The threshold is 64 KiB, and this is why
+
+The old default was **1024**, inherited from the reference product's `CompressionLimit` vocabulary. That
+value was never measured here, and it was wrong: it offered every 1–32 KiB payload to LZ4, which is
+exactly the region where LZ4 loses to plain TLS. The sweep in §9.4 (median of 7 runs per case, range
+recorded, three consecutive sweeps preserved at `artifacts/transport/sweep-run{1,2,3}.txt`) puts the
+crossover **between 32 KiB and 64 KiB** on compressible payload:
+
+| Payload | LZ4 vs TLS, compressible (three runs) |
+|---|---|
+| 4 KiB | −8.4%, −12.7%, −10.6% |
+| 8 KiB | −6.5%, −25.9%, −18.0% |
+| 16 KiB | +7.3% (outlier run), −26.3%, −33.1% |
+| 32 KiB | −1.9%, −4.2%, −0.2% — break-even |
+| **64 KiB** | **+24.9%, +21.2%, +23.3%** — non-overlapping ranges in every run |
+| 256 KiB | +44.2%, +48.6%, +44.0% |
+| 1 MiB | +50.8%, +43.1%, +47.3% |
+
+**Decision: `Lz4Options.ThresholdBytes` = 65536** (`transport.tls.lz4_threshold_bytes`, config default
+raised alongside it). The rule applied: *the smallest swept payload size at which LZ4 beat plain TLS on
+compressible data with ranges that did not overlap the TLS arm, in every run.* That is 64 KiB. The
+16 KiB row in the first run is quoted rather than dropped because it is a counterexample to a naive
+reading: its TLS median sat on a range of 442–1389 MB/s, so a single-sample sign there would have been
+noise. The 32–64 KiB span was not swept; it is treated as a loss, not assumed a win, which is why the
+threshold is not set lower.
+
+**What the threshold does not buy.** Only the compression *attempt* is skipped. A frame that falls back
+to raw still computes CRC-32C over the uncompressed bytes, so incompressible payload loses at every
+size regardless of the threshold (−21% to −60% measured, §9.4). That overhead is the CRC-32C hardware
+item, filed separately; a threshold cannot address it. Choosing `Tls` over `TlsLz4` is what handles a
+peer whose traffic is genuinely random.
+
+**Measured, but not acted on: the production path never compresses.** §9.5 sweeps the URB size at the
+layer finding F3 was measured at, through the shipping `VhtServerState` / `UsbIpSession` / USB/IP codec
+with the server session's own LZ4 counters read out. Every `TlsLz4` case emitted **0 compressed
+frames** — at 4 KiB, 64 KiB, 256 KiB and 1 MiB URB, compressible and incompressible alike — so
+`TlsLz4` cost 6–32% over `Tls` with no compression ever attempted and no payload-size crossover at all.
+The cause is visible in the code: `IPayloadCompressionTransport.WritePayloadAsync` is implemented and
+tested in `Vht.Transport`, but nothing outside that assembly calls it. The frozen `Vht.Core.Transport`
+interface the USB/IP session writes through (`UsbIpSession.SendAsync` → `ITransport.WriteAsync`) has no
+payload-kind parameter, so a reply frame is always classified `Control` and the compression opt-in is
+unreachable from production. Raising a threshold cannot fix that; it needs the payload classification
+carried through the session. Filed as follow-up card **t_825b4f08** rather than done here, because it
+changes a shared interface rather than a policy constant.
 
 **Framing** — `[u8 type][u32 compressed_len][u32 uncompressed_len][u32 crc32c][body]`, 13-byte header,
 big-endian integers:
@@ -378,7 +462,7 @@ between the two.
 | `ClientName` | machine name | Sent in the client hello |
 | `HandshakeTimeout` | 20 s | Whole TLS + hello + auth exchange |
 | `Lz4.Enabled` | `true` | Per-peer switch *within* a `TlsLz4` session |
-| `Lz4.ThresholdBytes` | 1024 | `transport.tls.lz4_threshold_bytes` |
+| `Lz4.ThresholdBytes` | 65536 (64 KiB) | `transport.tls.lz4_threshold_bytes`; measured crossover, §6.1 |
 | `Lz4.MaxPayloadFrameBytes` | 4 MiB | Bounds both directions; 1 KiB..64 MiB |
 | `Authentication.SharedSecret` | null | Server-wide secret |
 | `Authentication.DevicePasswords` | empty | busid → password (≤ 4096 entries) |
@@ -461,6 +545,118 @@ Reading these honestly:
   of magnitude below any of these numbers, so the compression decision on real devices will be about CPU
   cost and wire cost on the actual link, not about these figures.
 
+### 9.4 Payload-size sweep — the crossover behind the 64 KiB threshold
+
+Reproduce with:
+
+```
+dotnet run -c Release --project tests/Vht.Transport.Bench/Vht.Transport.Bench.csproj -- sweep artifacts/transport
+```
+
+Method: the same real sockets, Schannel handshake and framing as §9.3, but the payload size is swept
+instead of fixed at 1 MiB, and each case is repeated 7 times with the median and the observed range
+recorded. The LZ4 policy is held fixed at `ThresholdBytes = 0` for the sweep — otherwise the sweep would
+be measuring the threshold's own effect and the crossover it exists to find would be invisible by
+construction. Three consecutive sweeps are preserved verbatim as
+`artifacts/transport/sweep-run{1,2,3}.txt`; `artifacts/transport/sweep.txt` is the last of them.
+64 MiB of payload per run, 1 device, loopback.
+
+`TlsLz4` vs `Tls`, MB/s medians (range in brackets), run 3:
+
+| Payload | `Tls` compressible | `TlsLz4` compressible | Δ | `Tls` incompressible | `TlsLz4` incompressible | Δ |
+|---|---|---|---|---|---|---|
+| 4 KiB | 429.6 (363.8–434.7) | 384.0 (191.5–395.3) | −10.6% | 451.6 (428.8–461.0) | 346.8 (337.3–351.3) | −23.2% |
+| 8 KiB | 841.7 (795.1–863.3) | 689.9 (643.7–700.2) | −18.0% | 826.8 (801.8–839.8) | 558.5 (522.9–566.2) | −32.4% |
+| 16 KiB | 1475.8 (1435.0–1526.2) | 987.3 (905.3–1069.4) | −33.1% | 1372.3 (749.7–1514.0) | 581.7 (525.8–611.0) | −57.6% |
+| 32 KiB | 1462.5 (735.1–1535.3) | 1459.9 (1352.0–1523.4) | −0.2% | 1436.3 (1379.3–1546.2) | 698.8 (556.3–746.1) | −51.3% |
+| **64 KiB** | 1445.4 (1158.2–1553.7) | **1782.5 (1708.8–1859.7)** | **+23.3%** | 1540.7 (1480.7–1556.4) | 823.6 (803.5–852.2) | −46.5% |
+| 256 KiB | 1533.8 (1498.4–1571.5) | **2209.4 (2071.1–2259.5)** | **+44.0%** | 1481.5 (1444.4–1552.0) | 891.6 (883.1–900.0) | −39.8% |
+| 1 MiB | 1533.2 (1469.0–1568.7) | **2258.8 (2171.4–2300.3)** | **+47.3%** | 1509.5 (1445.3–1550.9) | 862.5 (739.7–891.8) | −42.9% |
+
+The compression ratio is real and large at every size (`wire/payload` was 0.071 at 4 KiB and 0.004 at
+1 MiB — the swept compressible pattern is highly redundant), so the sub-64 KiB loss is **not** a
+compression failure: it is the fixed per-frame cost (LZ4 encode, CRC-32C over the uncompressed bytes,
+two copies) exceeding a socket saving that is small in absolute terms. That is exactly why the crossover
+is a payload-size function and not a property of the data.
+
+Cross-run stability (compressible Δ in the three preserved runs): 4 KiB −8.4/−12.7/−10.6, 8 KiB
+−6.5/−25.9/−18.0, 16 KiB +7.3/−26.3/−33.1, 32 KiB −1.9/−4.2/−0.2, **64 KiB +24.9/+21.2/+23.3**, 256 KiB
++44.2/+48.6/+44.0, 1 MiB +50.8/+43.1/+47.3. The 16 KiB `+7.3%` is the one outlier and it is reported
+rather than discarded: its TLS median was drawn from a 442–1389 MB/s range, so the sign there is noise.
+At 64 KiB and above the ranges do not overlap between the arms in any run. **The crossover is between
+32 KiB and 64 KiB.**
+
+**NOT RUN in this sweep:** payload sizes between 32 KiB and 64 KiB. The threshold is set at 64 KiB
+precisely so the unswept region is excluded rather than guessed at.
+
+Timing caveat, recorded because it is material: this host was running several unrelated .NET worker
+processes throughout (20 `dotnet`/`vht-*` processes at the time of the recorded runs), which is why
+individual ranges are as wide as they are. The two arms of each comparison are interleaved
+(same size, back to back) so load affects both, and the conclusion rests on the *ranges* rather than on
+the medians alone.
+
+### 9.5 URB-size sweep through the production path — compression now engages
+
+Reproduce with:
+
+```
+dotnet run -c Release --project tests/Vht.Acceptance/Vht.Acceptance.csproj -- perf-sweep
+```
+
+Method: the shipping server stack (`VhtServerState`, `UsbIpSession`, the USB/IP codec, the production
+`Vht.Transport` code) over real loopback TCP, one synthetic device, bulk-IN reads at the swept URB size
+with 8 in flight, 4 s per case, 5 repeats, median and range recorded. The `compressed` column is the
+**server session's own** `Lz4Transport.Statistics.CompressedFrames` for that case. Transcripts: three
+consecutive runs, `artifacts/acceptance/perf-sweep.txt` (the table below) plus
+`artifacts/acceptance/perf-sweep-run1.txt` and `perf-sweep-run2.txt`.
+
+| URB | `Tls` comp. | `TlsLz4` comp. | Δ | `Tls` inc. | `TlsLz4` inc. | Δ | compressed frames (comp. / inc.) |
+|---|---|---|---|---|---|---|---|
+| 4 KiB | 238.1 (227.3–248.2) | 206.3 (199.0–207.9) | −13.3% | 239.4 (209.5–243.6) | 215.7 (205.3–219.0) | −9.9% | **0 / 0** |
+| 64 KiB | 869.5 (852.6–909.8) | 1096.4 (1026.8–1112.5) | **+26.1%** | 849.6 (803.1–866.7) | 541.8 (532.8–556.1) | −36.2% | **70 371 / 0** |
+| 256 KiB | 908.5 (850.1–931.8) | 1117.4 (1051.7–1152.3) | **+23.0%** | 903.7 (858.2–918.9) | 616.3 (599.3–617.4) | −31.8% | **17 939 / 0** |
+| 1 MiB | 1045.7 (1023.0–1096.6) | 1637.1 (1623.1–1655.5) | **+56.5%** | 1075.9 (1064.0–1103.1) | 765.3 (751.5–795.6) | −28.9% | **6 576 / 0** |
+
+The 64 KiB row is the acceptance criterion this card was filed against, and it reproduces run to run
+with ranges that never overlap:
+
+| Run | `Tls` comp. 64 KiB | `TlsLz4` comp. 64 KiB | Δ | compressed frames |
+|---|---|---|---|---|
+| 1 (`perf-sweep-run1.txt`) | 785.5 (753.0–798.2) | 938.0 (865.5–945.0) | +19.4% | 60 215 |
+| 2 (`perf-sweep-run2.txt`) | 801.5 (760.5–818.4) | 981.0 (939.0–988.8) | +22.4% | 62 917 |
+| 3 (`perf-sweep.txt`) | 869.5 (852.6–909.8) | 1096.4 (1026.8–1112.5) | +26.1% | 70 371 |
+
+Three things are worth reading off this table, because each is a specific claim:
+
+1. **Compression engages at and above the 64 KiB threshold, and nowhere below it.** The 4 KiB row emits
+   **0** compressed frames on compressible payload — the data stage is below `Lz4Options.ThresholdBytes`,
+   so `UsbIpSession` writes the reply as one whole frame, exactly as it did before this card, and the
+   `TlsLz4` column there is pure framing (13 bytes per frame, `wire/payload` 1.003) and costs the same
+   ~10–13% it always did. Nothing about the sub-threshold path was changed to make the large sizes win.
+2. **On compressible payload LZ4 now beats plain TLS end to end** — +19.4%/+22.4%/+26.1% at 64 KiB,
+   +18.8%/+19.6%/+23.0% at 256 KiB and +35.5%/+34.7%/+56.5% at 1 MiB across the three runs — and the
+   wire/payload ratio collapses from 1.000 to 0.004–0.009, which is the compression itself, visible from
+   the server's own counters rather than inferred from throughput alone. This is the §9.4 result (LZ4
+   beats TLS by +21..25% on compressible payload at 64 KiB at the transport layer) reproduced through
+   the production stack, which is what §9.5 previously could not do.
+3. **On incompressible payload `TlsLz4` still loses**, and more than it did when it never compressed:
+   −9.9%/−11.1%/−9.7% at 4 KiB (the unchanged path) against −36.2%/−44.2%/−35.6% at 64 KiB and
+   −31.8%/−32.3%/−31.9% at 256 KiB. Offering a payload to LZ4 is what costs this: the data stage is now
+   its own frame, so an incompressible URB pays a second 13-byte header and a second CRC-32C pass for a
+   compression attempt that loses and falls back to raw. That penalty is the CRC-32C hardware item in
+   §12 item 7 and is unaffected by any threshold; a peer whose traffic is genuinely random should be on
+   `Tls`, which is the per-peer off switch, not a threshold value.
+
+**What this section said before this card.** It reported a reproduction of finding F3 in
+`docs/ACCEPTANCE.md` §8 that went further than F3 did: `TlsLz4` was 6–32% slower than `Tls` at *every*
+URB size, compressible and incompressible alike, because **not one frame was ever compressed** —
+`IPayloadCompressionTransport.WritePayloadAsync` had no caller outside `Vht.Transport` and the frozen
+`Vht.Core.Transport.ITransport` the session wrote through carried no payload kind, so every reply byte
+was classified `Control`. That measurement was correct and is preserved in git; the rows above are what
+the same harness reports now that the kind is carried through the session (§6.1). The old conclusion —
+"there is no payload-size crossover in the production path, and no threshold value can change it" — was
+a statement about a missing interface, not about the threshold, and is now false.
+
 ---
 
 ## 10. Dependencies and licences
@@ -497,12 +693,15 @@ Deliberately **rejected**, to avoid a licence problem or a fork we would have to
 
 ## 11. Verification summary
 
-`dotnet test tests/Vht.Transport.Tests/Vht.Transport.Tests.csproj` — **67 tests, 0 failures** (covered:
+`dotnet test tests/Vht.Transport.Tests/Vht.Transport.Tests.csproj` — **69 tests, 0 failures** (covered:
 handshake framing and hostile framing, capability/downgrade refusals, TLS sessions with Schannel,
 certificate generation and permissions, SPKI pinning in all three modes, corrupted/truncated pin store,
 shared-secret and per-device auth success and failure, constant-time proof verification, token-bucket and
 lockout behaviour across connections, plaintext fail-closed, LZ4 round-trip, raw fallback, frame
-tampering, memory-bomb bounds, and CRC-32C against an independent reference).
+tampering, memory-bomb bounds, the threshold boundary, and CRC-32C against an independent reference).
+`dotnet test tests/Vht.Acceptance.Tests/Vht.Acceptance.Tests.csproj` — **18 tests, 0 failures**.
+`dotnet test tests/Vht.Core.Tests/Vht.Core.Tests.csproj` — **160 tests, 0 failures**, including the
+session-level classification test added by card **t_825b4f08**.
 
 Mapping to this card's acceptance criteria:
 
@@ -512,7 +711,10 @@ Mapping to this card's acceptance criteria:
 | Tampering with compressed frames is detected | 13-byte header + CRC over uncompressed bytes; `CorruptedFrameIsDetectedByTheReader`, `TruncatedFrameIsDetected`, `CorruptedFrameFromAHostilePeerKillsTheLiveSession` |
 | Wrong password / wrong pinned fingerprint fails closed, repeats are throttled | `WrongSharedSecretFailsClosed`, `WrongDevicePasswordAndUnknownDeviceBothFailClosed`, `WrongPinnedFingerprintFailsClosed`, `RepeatedFailuresAreThrottledAcrossConnections`, `RepeatedFailuresLockThePeerOutExponentially` |
 | MB/s plain vs TLS vs TLS+LZ4, and handshake ms | §9 |
+| The LZ4 threshold is a measured value, not a copied default | §6.1 and §9.4; `DefaultThresholdAndFrameLimitsMatchTheArchitecture`, `DefaultThresholdLeavesOneByteUnderItRawAndCompressesAtIt`, `LoweringTheThresholdCompressesPayloadsTheDefaultWouldLeaveRaw` |
 | Every dependency and its licence listed | §10 |
+| **t_825b4f08**: a bulk-IN transfer through the production session shows non-zero `CompressedFrames` at or above the threshold URB size and zero below it, read out of the live session | §9.5 (0 compressed frames at 4 KiB, 70 371 of 211 118 frames at 64 KiB, counters read via `BlockingServerTransportFactory.Accepted`); `ABulkInDataStageAtOrAboveTheThresholdIsDeclaredBulkWhileTheUrbHeaderStaysControl` |
+| **t_825b4f08**: end-to-end throughput at 64 KiB URBs on compressible payload beats the plain `Tls` arm with non-overlapping ranges over repeated runs | §9.5 three-run table: +19.4% (785.5 [753.0–798.2] → 938.0 [865.5–945.0]), +22.4% (801.5 [760.5–818.4] → 981.0 [939.0–988.8]) and +26.1% (869.5 [852.6–909.8] → 1096.4 [1026.8–1112.5]) |
 
 ---
 
@@ -520,17 +722,29 @@ Mapping to this card's acceptance criteria:
 
 Honest gaps in v1, in priority order:
 
-1. **The verifier is password-equivalent** (§5.1). Accepted for v1; SRP or a PAKE would remove it.
-2. **No client certificates.** Client identity is the pinned server key plus a credential; the server
+1. **The client half of the compression opt-in is still unclassified** (§6.1, §9.5). The *server* session
+   now declares its reply data stages (`UsbIpSession` → `IPayloadKindTransport`), which is what makes
+   `TlsLz4` a win on compressible bulk-IN traffic. The client's own OUT payloads are written whole
+   through the client-side interface, which mirrors the frozen one and has the same gap, so an
+   OUT-heavy session still compresses only one direction. The server-side change is the one the
+   acceptance criterion covered; the client side is the natural next card, not something this one
+   silently half-did. (Wire compatibility is unaffected either way: the classification changes nothing
+   the peer parses.)
+2. **The verifier is password-equivalent** (§5.1). Accepted for v1; SRP or a PAKE would remove it.
+3. **No client certificates.** Client identity is the pinned server key plus a credential; the server
    does not identify the *client* cryptographically beyond the shared secret.
-3. **TLS 1.2 is still accepted by default** because Schannel's TLS 1.3 floor is Windows 11 / Server 2022.
+4. **TLS 1.2 is still accepted by default** because Schannel's TLS 1.3 floor is Windows 11 / Server 2022.
    Set `Tls.RequireTls13` where the fleet allows it.
-4. **Insecure pin mode is reachable in configuration.** It is intended for the loopback bridge hop only;
+5. **Insecure pin mode is reachable in configuration.** It is intended for the loopback bridge hop only;
    the config layer should gate it behind an explicit acknowledgement key (ARCHITECTURE.md §6.5).
-5. **The rate limiter keys on IP**, so peers behind one NAT share a bucket, and an attacker with many
+6. **The rate limiter keys on IP**, so peers behind one NAT share a bucket, and an attacker with many
    addresses still relies on the global bucket.
-6. **CRC-32C is software-only** (§6). Hardware CRC would lift the ~1.8× incompressible penalty.
-7. **Benchmark variance is high** (§9.3). A pinned-core, single-run-per-process harness would give
-   tighter numbers; the current figures are medians with the range shown rather than a clean curve.
-8. **No isochronous-specific testing.** The feature is negotiated but best-effort only (§10 risk 6 of
+7. **CRC-32C is software-only** (§6). Hardware CRC would lift the ~1.8× incompressible penalty — the
+   penalty a threshold cannot touch, because a raw frame pays the CRC too.
+8. **Benchmark variance is high** (§9.3, §9.4). A pinned-core, single-run-per-process harness would give
+   tighter numbers; the current figures are medians with the range shown rather than a clean curve, and
+   the whole sweep was recorded on a host carrying unrelated worker processes.
+9. **The 32–64 KiB span is unswept** (§9.4). The threshold sits at the lower edge of the measured win
+   rather than in the middle of the unknown region.
+10. **No isochronous-specific testing.** The feature is negotiated but best-effort only (§10 risk 6 of
    ARCHITECTURE.md) and unproven against real isochronous devices.

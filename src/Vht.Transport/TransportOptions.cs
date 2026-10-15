@@ -34,26 +34,41 @@ public sealed record Lz4Options
     /// <remarks>
     /// <para>
     /// <b>64 KiB, measured, not chosen.</b> The payload-size sweep in
-    /// <c>tests/Vht.Transport.Bench</c> (<c>sweep</c> mode, artifacts preserved at
-    /// <c>artifacts/transport/sweep.txt</c>) swept 4/8/16/32/64/256 KiB and 1 MiB on this host with
-    /// compressible and incompressible payloads. LZ4 is a **net loss** on compressible payload at every
-    /// size below 64 KiB (−43.8% at 4 KiB, −34.0% at 8 KiB, −36.9% at 16 KiB, −11.0% at 32 KiB) and a
-    /// **win** at 64 KiB and above (+28.7% at 64 KiB, +55.0% at 256 KiB, +89.8% at 1 MiB). The cost
-    /// below the crossover is the fixed per-frame work — CRC-32C plus a copy — which does not shrink
-    /// with the payload; the saving does.
+    /// <c>tests/Vht.Transport.Bench</c> (<c>sweep</c> mode; every run preserved at
+    /// <c>artifacts/transport/sweep-run*.txt</c>) swept 4/8/16/32/64/256 KiB and 1 MiB on this host,
+    /// compressible and incompressible, median of 7 runs per case with the observed range. On
+    /// <em>compressible</em> payload, LZ4 versus plain TLS, three consecutive sweeps:
+    /// </para>
+    /// <list type="bullet">
+    /// <item><description>4 KiB: −8.4%, −12.7%, −10.6%</description></item>
+    /// <item><description>8 KiB: −6.5%, −25.9%, −18.0%</description></item>
+    /// <item><description>16 KiB: +7.3% (one outlier run), −26.3%, −33.1%</description></item>
+    /// <item><description>32 KiB: −1.9%, −4.2%, −0.2% — break-even</description></item>
+    /// <item><description><b>64 KiB: +24.9%, +21.2%, +23.3%</b> — with non-overlapping ranges every run</description></item>
+    /// <item><description>256 KiB: +44.2%, +48.6%, +44.0%</description></item>
+    /// <item><description>1 MiB: +50.8%, +43.1%, +47.3%</description></item>
+    /// </list>
+    /// <para>
+    /// The sign flips between 32 KiB and 64 KiB, so 64 KiB is the smallest payload size at which
+    /// compression was measured to win — and it wins with ranges that do not overlap the TLS arm, in
+    /// every run. The previous default (1024) put every 1–32 KiB payload squarely in the measured-loss
+    /// region; payloads below 64 KiB are now left raw by construction, and only sizes the measurement
+    /// supports are offered to LZ4. The 32–64 KiB region was not swept, so it is treated as a loss
+    /// rather than assumed a win. See <c>docs/TRANSPORT.md</c> §6 and §9.4.
     /// </para>
     /// <para>
-    /// The previous default (1024) therefore put every 1–32 KiB payload squarely in the measured-loss
-    /// region. 64 KiB is the smallest swept size at which compression was measured to win, so payloads
-    /// smaller than that are now left raw by construction, and only the sizes the measurement supports
-    /// are offered to LZ4. The region between 32 KiB and 64 KiB was not swept; it is treated as a loss
-    /// rather than assumed a win. See <c>docs/TRANSPORT.md</c> §6.
+    /// <b>What this threshold does not fix.</b> Incompressible payload loses at every size (−21% to
+    /// −60% measured) because a frame pays CRC-32C and a copy whether or not it ends up compressed, and
+    /// the threshold only skips the compression <em>attempt</em>. That cost is the CRC-32C item filed
+    /// separately, not something a threshold can address.
     /// </para>
     /// <para>
-    /// This threshold cannot make incompressible payload a win: those pay CRC-32C and framing with no
-    /// saving at every size. Choosing <see cref="TransportKind.Tls"/> rather than
-    /// <see cref="TransportKind.TlsLz4"/> is what handles that, and it is why compression is negotiated
-    /// per peer.
+    /// <b>The value now applies on the shipping path too.</b> Until card t_825b4f08 it did not: the
+    /// USB/IP session classified every reply byte as control, so this threshold was never consulted and
+    /// no URB ever compressed. <c>UsbIpSession</c> now declares a reply's data stage as its endpoint's
+    /// transfer class through <c>Vht.Core.Transport.IPayloadKindTransport</c>, so a payload at or above
+    /// this value is offered to LZ4 in production and one below it is written whole (see
+    /// <c>docs/TRANSPORT.md</c> §6.1 and §9.5).
     /// </para>
     /// </remarks>
     public int ThresholdBytes { get; init; } = 64 * 1024;
