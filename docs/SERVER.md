@@ -57,13 +57,18 @@ vht config-template --out C:\ProgramData\VirtualThere\server.toml
 ```
 
 The server parses a documented subset of TOML: comments (`#`), `[section]` headers, dotted keys,
-strings, booleans, integers and arrays of strings. Anything it cannot parse is **reported, never
-guessed at**, and unknown keys are warned about rather than fatal. The full config model (validation,
+strings, booleans, integers and arrays of strings. A key is resolved **relative to its section**, as
+TOML requires, so `rebind.enabled` under `[capture]` is `capture.rebind.enabled`; the fully-qualified
+spelling (`capture.rebind.enabled` under `[capture]`) is accepted too. Anything it cannot parse is
+**reported, never guessed at**, and unknown keys are warned about rather than fatal - set
+`general.strict = true` (or pass `vht-server serve --strict`) to make an unknown key fail the load.
+The full config model (validation,
 origins, reload classification, device identity, discovery) lives in `docs/CONFIG.md`; the keys below
 are the ones the service itself reads today.
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
+| `general.strict` | bool | `false` | Fail the load on an unknown key instead of warning about it |
 | `server.name` | string | machine host name, upper-cased | Name advertised to clients and in discovery |
 | `transport.plaintext.enabled` | bool | `true` | Enable the stock-USB/IP listener |
 | `transport.plaintext.port` | int | `3240` | Its port (the stock USB/IP port, so Linux `usbip` can attach) |

@@ -223,6 +223,17 @@ public static class Program
         foreach (string problem in configProblems)
             logger.Write(LogLevel.Warn, LogEvent.ConfigurationLoaded, $"configuration: {problem}");
 
+        // `general.strict = true` in the file (or --strict on the command line) makes a rejected key
+        // fatal instead of a warning. Without it a key the loader does not know - including one the
+        // operator believed was meaningful - starts the server with the setting silently ignored.
+        if ((options.StrictConfig || HasFlag(args, "--strict")) && configProblems.Count > 0)
+        {
+            logger.Write(LogLevel.Error, LogEvent.ConfigurationLoaded,
+                $"configuration rejected: {configProblems.Count} problem(s) with general.strict on; " +
+                "fix the file or remove the strict flag");
+            return 2;
+        }
+
         // --pipe applies after the configuration file so it wins: the window passes it to the worker
         // and both ends have to agree on one pipe even when the file names another.
         if (FlagValue(args, "--pipe") is { Length: > 0 } pipeName)
@@ -373,7 +384,7 @@ public static class Program
         output.WriteLine();
         output.WriteLine("serve options: --config <path> --pipe <name> --port <n>");
         output.WriteLine("               --capture-mode auto|winusb-only|prebound-only");
-        output.WriteLine("               --rebind --log-level <level> --log-file <path> --name <text>");
+        output.WriteLine("               --rebind --strict --log-level <level> --log-file <path> --name <text>");
         output.WriteLine();
         output.WriteLine("window options: --pipe <name> --port <n> --minimized --no-elevate --help");
     }

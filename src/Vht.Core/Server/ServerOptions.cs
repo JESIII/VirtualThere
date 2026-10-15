@@ -19,6 +19,13 @@ public sealed class ServerOptions
     /// <summary><c>server.name</c> — advertised server name (reference vocabulary: <c>ServerName</c>).</summary>
     public string ServerName { get; set; } = Environment.MachineName;
 
+    /// <summary>
+    /// <c>general.strict</c> — fail the load on an unknown key instead of warning about it.
+    /// Mirrors the config card's key of the same name. Off by default, so a file carrying a key from
+    /// a newer version still starts.
+    /// </summary>
+    public bool StrictConfig { get; set; }
+
     /// <summary><c>transport.plaintext.enabled</c> — serve stock USB/IP for interop.</summary>
     public bool PlaintextListenerEnabled { get; set; } = true;
 

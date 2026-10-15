@@ -103,8 +103,16 @@ public static class ServerConfigLoader
                 continue;
             }
 
-            // A dotted key carries its own section; a bare key inherits the current one.
-            string full = key.Contains('.') || section.Length == 0 ? key : $"{section}.{key}";
+            // TOML semantics: the key is resolved *relative to the current section*, dotted or not, so
+            // `rebind.enabled` under `[capture]` is `capture.rebind.enabled`. A key that already names
+            // the section (`capture.mode` under `[capture]`) is left alone, so both spellings are
+            // accepted. Dropping the section for a dotted left-hand side silently made the generated
+            // template's `capture.rebind.enabled` unreachable (it arrived as `rebind.enabled`, which no
+            // case accepts), which is exactly the defect this rule closes.
+            string full = section.Length == 0 ||
+                          key.StartsWith(section + ".", StringComparison.OrdinalIgnoreCase)
+                ? key
+                : $"{section}.{key}";
 
             if (values.ContainsKey(full))
                 problems.Add($"duplicate key '{full}'; the last value wins");
@@ -129,6 +137,13 @@ public static class ServerConfigLoader
             case "server.name":
             case "general.server_name":
                 options.ServerName = text;
+                return true;
+
+            // Mirrors the config card's `general.strict`: an unknown key becomes fatal for the load
+            // rather than a warning. Off by default so an old file with a stray key still starts.
+            case "general.strict":
+                if (!isBool) goto default;
+                options.StrictConfig = flag;
                 return true;
 
             case "transport.plaintext.enabled":
@@ -242,7 +257,8 @@ public static class ServerConfigLoader
                     return true;
                 }
 
-                detail = $"unknown configuration key '{key}'";
+                detail = $"unknown configuration key '{key}'; it is not a key of the generated template " +
+                         $"('vht config-template'), so it is ignored";
                 return false;
         }
     }
