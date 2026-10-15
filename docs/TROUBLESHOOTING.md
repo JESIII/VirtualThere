@@ -21,6 +21,48 @@ An **access denial does not read like this**: it throws
 `NamedPipeClientStream.TryConnect`. This message means nothing answered. If a service is running and
 you still see it, read the next entry - one of the two messages is wrong, and it may be this one.
 
+### Where the server's runtime log is, and what the rebind lines in it mean
+
+The server always writes a structured log. `[logging] file = ""` in `server.toml` means **the
+default location**, not "no file":
+
+```
+<resolved config directory>\logs\server.log
+```
+
+which is `.\config\logs\server.log` in a portable folder (a `portable.marker` beside the
+executable) and `%ProgramData%\VirtualThere\logs\server.log` otherwise. The file is JSON lines,
+capped at 8 MiB, rolling one generation to `server.log.1`. `vht status` prints it, whether or not a
+server is answering:
+
+```
+runtime log:   C:\ProgramData\VirtualThere\logs\server.log
+log written:   2026-10-15 02:00:12 (19844 bytes)
+```
+
+This is the only reason a GUI-launched worker is diagnosable at all. That worker is a `WinExe`
+started with `Verb=runas`: elevated, `ShellExecuteEx` redirects nothing and there is no console to
+inherit; unelevated, the window redirects its two streams and keeps the last 200 lines for its own
+log. Anything a worker says *before* it binds the control pipe - including the lines it wrote on the
+way to a crash - exists only in this file.
+
+An explicit `logging.file` (or `--log-file`) is a **second** destination. The default sink is never
+dropped: the pre-configuration lines exist only in it.
+
+The three outcomes of a P2 rebind (`capture.rebind.enabled = true`) are distinguishable in it, and
+each names the `busid` it applies to. Filter the file on the bus id of the device that never
+appeared and read one of:
+
+| line | meaning |
+|---|---|
+| `<busid>: capture.rebind.enabled is set but this process is not elevated, so the P2 rebind path cannot run` | The window's worker is not elevated. Nothing changed on the device: the operator has to start the server window and accept the consent prompt, or run `vht-server serve --rebind` from an elevated shell. |
+| `<busid>: P2 rebind failed: <detail>` (with `win32_error` when there is one) | The rebind was attempted and Windows refused. The device is untouched and still held by its original driver. `<detail>` is the real Win32 failure, not a summary. |
+| `<busid>: rebound onto the inbox winusb.sys (<inf>)` | The rebind succeeded and the device is being claimed now. |
+| `<busid>: the rebind onto the inbox winusb.sys (<inf>) only takes effect after a reboot, so the device is not being taken; reboot and attach it again` | The rebind only exists after a restart. Nothing was taken and the device was handed straight back - reboot, then attach again. |
+
+The `rebound` case never leaves a half-bound device behind: a rebinding that cannot be used is
+followed by the hand-back line for the same bus id.
+
 ### The worker is running (elevated, one consent prompt), yet the window says it is not
 
 Symptom: `vht-server.exe` is open, **Start** was pressed, the single UAC prompt was accepted, the

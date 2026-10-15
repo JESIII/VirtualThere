@@ -127,9 +127,11 @@ are the ones the service itself reads today.
 | `hooks.timeout_seconds` | int | runtime default | Kill a hook script that runs longer than this |
 | `hooks.script_root` | string | none | Directory hook scripts are resolved under |
 
-There is no default log file (`logging.file` is `none`): the server logs to the console, and the
-service to the Event Log, unless you name a file. Nothing derives a log path from the config
-location, so no log is written into `%ProgramData%` behind your back. The directory holding the
+There is always a default log file: `logging.file` empty (what the generated template's `""`
+means) resolves to `<resolved config directory>\logs\server.log`, so `portable.marker` governs the
+server's runtime log as well as its configuration, and nothing lands in `%ProgramData%` behind a
+portable build's back. Naming a file adds a second destination rather than replacing that one,
+because the lines written before the configuration is read exist only in the default. The directory holding the
 config file is created at start-up even when the file is not there yet - that is where the server's
 `state.toml` lands, so the folder holds the server's whole configuration and state. (The privileged
 paths in the box above are the exception - they are the machine's, not the folder's.)

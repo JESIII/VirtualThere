@@ -1,0 +1,169 @@
+# The server's runtime log: before/after transcript
+
+Card: `t_b9a9808c` — "The server writes no runtime log, so capture/rebind failures are
+undiagnosable". Landed as commit `40f067d` on `main`. Host: ZUAN, 14 USB devices present (all
+driver-held), unelevated shell, `elevated=False`.
+
+Every run below is a real process on this machine, started from the built
+`tests/Vht.Acceptance.Tests/bin/Release/net10.0-windows/vht-server.exe`, and every log line quoted
+was read back out of the file on disk.
+
+## 1. The defect, restated in one line
+
+`[logging] file = ""` in the shipped template meant **no file**. The worker is a `WinExe` (PE
+subsystem 2): elevated, `ShellExecuteEx` redirects nothing and there is no console to inherit;
+unelevated, `WorkerProcessLauncher` redirected both streams and then drained and discarded them
+("Drained and discarded", `WorkerProcess.cs:65-73` before this change). So the log went nowhere in
+exactly the configuration that ships.
+
+## 2. Criterion: a GUI-launched server writes a runtime log, and its path is findable
+
+`vht status` prints it whether or not anything answers - the first question after a failure is
+"where would the log have gone?":
+
+```
+$ VHT_CONFIG=<config>/server.toml vht-server.exe status --pipe vht-log-none
+runtime log:   C:\Users\zirjo\AppData\Local\hermes\kanban\workspaces\t_b9a9808c\run2\config\logs\server.log
+log written:   never (no server has started from this configuration yet)
+server is not answering: no answer from \\.\pipe\vht-log-none within 10s; is the service running?
+```
+
+After a start the same verb reports the file's timestamp and size instead of "never".
+
+The worker invocation is `vht-server.exe --worker --pipe <name>`, which is what the window launches
+(with `Verb=runas` when it elevates). Its log is written, and the first line of it says where it is:
+
+```
+$ vht-server.exe serve --config <config>/server.toml --rebind --pipe vht-log-evidence   # 3400
+$ ls -l <config>/logs/server.log
+14284 bytes
+
+runtime log: C:\\...\\run2\\config\\logs\\server.log
+configuration loaded from C:\\...\\run2\\config\\server.toml: 9 key(s), 0 problem(s)
+configuration path: C:\\...\\run2\\config\\server.toml
+running in the foreground (not launched by the service control manager); Ctrl\u002BC to stop
+starting VirtualThere 0.1.0 (USB/IP 1.1.1)
+exporting 1-a0cf85fb [3710:5406] "3710:5406" - the function driver holds it; the P2 rebind runs when a client attaches
+... one DeviceExportAdded line per device (14)
+```
+
+(The same content is on that process's stdout, which a window-launched worker does not have - which
+is the point.)
+
+`--config` is only used to keep the runs off `%ProgramData%`; with no argument at all a worker
+started from the executable resolves `%ProgramData%\VirtualThere\logs\server.log`, the path the card
+observed as holding only the setup scripts' logs. `portable.marker` beside the executable redirects
+both the configuration *and* this log to `.\config\` — asserted by
+`ServerRuntimeLogTests.TheDefaultLogFileFollowsTheConfigDirectoryTheMarkerGoverns`.
+
+## 3. Criterion: the P2 rebind outcome is now visible, per device
+
+`capture.rebind.enabled = true`, real server, real USB/IP client: the request is the `OP_REQ_IMPORT`
+a stock `usbip attach` sends (big-endian `op_common` 0x0111/0x8003, then a 32-byte bus id), which is
+what makes the server reach its capture path.
+
+```
+$ python import_client.py 127.0.0.1 3400 1-a0cf85fb
+import 1-a0cf85fb: version=0x0111 OP_REP_IMPORT status=1
+```
+
+and in `logs/server.log`, on disk:
+
+```
+connection 1 from 127.0.0.1:1963 (PlainTcp)
+1-a0cf85fb: capture.rebind.enabled is set but this process is not elevated, so the P2 rebind path cannot run
+capture of 1-a0cf85fb failed at bind: driver_holds_device WinUsbIo.Open('\\?\usb#vid_3710&pid_5406#522098634735#{...}') failed (win32 8)
+import refused for connection 1: Error - cannot claim the device: driver_holds_device ...
+connection 1 closed
+```
+
+**The not-elevated outcome is RUN**, per device, in the persisted log — and it is served to the
+window's log pane through the existing `log.tail` verb as well, since the window tails the server's
+records. `WorkerProcessLauncher` no longer discards the unelevated worker's own copy either.
+
+### NOT RUN: `P2 rebind failed: <detail>` and `rebound onto the inbox winusb.sys`
+
+Both require an **elevated** server. Elevation on this host is an interactive UAC prompt that cannot
+be answered from an unattended run — the same limitation `docs/ACCEPTANCE.md` §2 and
+`artifacts/acceptance/p2-rebind-transcript.txt` already record. They are therefore NOT RUN, and no
+claim is made here that they were observed. What is asserted for them is:
+
+* the exact lines and their levels are in `WinUsbCaptureProvider` (Warn, `DeviceCaptureRefused`,
+  carrying `busid`, and `win32_error` / `inf` / `reboot_required` fields) — they are written through
+  the same logger whose file sink this card attached, so they land in the same file;
+* `docs/TROUBLESHOOTING.md` "Where the server's runtime log is, and what the rebind lines in it
+  mean" documents all four lines for the operator.
+
+## 4. Criterion: a worker that dies before it binds the control pipe still leaves its output
+
+Two routes, both real processes, both `--worker` (the window's invocation):
+
+**(a) killed on sight.** Startup on this machine turns out to be ~300 ms end to end, and the only
+kill available to an unattended run here — `TerminateProcess` on a pid found by watching
+`tasklist` — has ~100 ms of detection latency, so every attempt landed *after* the worker had
+already bound the pipe (`control plane listening on \\.\pipe\vht-log-onsight` is in the log). The
+racing kill is therefore **NOT RUN**; the property is shown by (b) instead, and by the automated
+test below.
+
+**(b) it gives up before the runtime is built** (`general.strict = true` plus an unknown key, so the
+process exits 2 before the control pipe can exist). This is the same property without a race:
+
+```
+$ vht-server.exe --worker --pipe vht-log-dead --config <bad>/server.toml
+exit code: 2
+
+$ ls -l <bad>/logs/server.log
+1188 bytes
+
+runtime log: C:\\...\\run4\\bad\\logs\\server.log
+configuration loaded from C:\\...\\run4\\bad\\server.toml: 11 key(s), 1 problem(s)
+configuration: unknown configuration key 'logging.nonsense_key'; it is not a key of the generated template ('vht config-template'), so it is ignored
+configuration rejected: 1 problem(s) with general.strict on; fix the file or remove the strict flag
+
+$ vht-server.exe status --pipe vht-log-dead
+server is not answering: no answer from \\.\pipe\vht-log-dead within 10s; is the service running?
+```
+
+The pipe does not exist, and everything the worker said on the way out is on disk. Before this
+change the file did not exist at all and those four lines were the ones an operator could not get.
+
+`ServerRuntimeLogTests.OutputSurvivesAWorkerThatDiesBeforeBindingTheControlPipe` asserts exactly
+this, and `WorkerOutputTests.AWorkerThatExitsBeforeBindingSaysWhereItsOutputWent` asserts the
+window's half: the supervisor's `LastError` carries "exited before it bound the control pipe" plus
+"its last output is shown below", with the lines themselves in `LastWorkerOutput` — for an elevated
+worker (nothing globally redirectable) it points at the runtime log and `vht status` instead.
+
+## 5. Both criteria together: an explicit `logging.file` does not lose the default
+
+`ServerRuntimeLogTests.AnExplicitLogFileIsAddedAlongsideTheDefaultAndNotInsteadOfIt` runs a server
+whose config names `elsewhere/extra.log` and asserts the default `logs/server.log` still exists and
+still holds the `runtime log:` line, plus the `also writing to ...` line in the named file.
+
+## 6. Whole suite and branding
+
+At commit `40f067d`:
+
+```
+dotnet test VirtualThere.slnx -c Release
+  Xtask.Tests           10 passed
+  Vht.Transport.Tests   69 passed
+  Vht.Core.Tests       160 passed
+  Vht.Ui.Tests          28 passed
+  Vht.Config.Tests      77 passed
+  Vht.Acceptance.Tests  60 passed
+  Vht.Client.Tests      50 passed
+  Failed: 0
+scripts/check-branding.sh: PASSED
+```
+
+454 tests, 0 failures. Four of the acceptance tests and four of the UI tests are new here.
+
+## 7. Housekeeping
+
+`Bounded`: the file is the existing `RollingFileLogSink` (8 MiB, one generation to `.1`); the
+window's copy is `WorkerOutputBuffer`, capped at 200 lines. Both are asserted
+(`TheBufferIsBoundedAndKeepsTheLastLines`).
+
+Stray processes started while measuring: every `vht-server.exe` this card started was terminated;
+`netstat`-verified free ports, no process left listening. `pid 26396` on port 3240 is not this
+card's and was left alone.
