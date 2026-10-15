@@ -37,7 +37,9 @@ dotnet test tests/Vht.Acceptance.Tests/Vht.Acceptance.Tests.csproj -c Release
 The same run proved **17/17 parity behaviours** (enumeration, export, attach, detach, hotplug, reconnect,
 per-device passwords, allow/ignore lists, nicknames, kick, auto-attach grant path, and the TLS/TLS+LZ4
 listeners), found **0** enforcement-shaped licence or device-count strings in every shipped binary, and
-held **8 devices for 120 s** with 0 failed URBs.
+held **8 devices for 120 s** with 0 failed URBs. *The suite has since grown to 18/18 - the nickname gap
+in §9 F1 was closed after that run and its characterisation test was replaced by two tests that pin the
+new behaviour. See §4.*
 
 Stated precisely, because the distinction matters:
 
@@ -123,11 +125,14 @@ passes with 32 devices in the parity suite (`Enumeration_Reports_No_Device_Limit
 `listed.Count == 32` and `Exports.Count == 32`), and the server card's own suite holds 32 sessions with a
 device each at once. The honest limit of *this* machine is the physical one in §2, not a software one.
 
-## 4. Parity test suite (`tests/Vht.Acceptance.Tests`, 17/17 pass)
+## 4. Parity test suite (`tests/Vht.Acceptance.Tests`, 18/18 pass)
 
 ```
-Passed!  - Failed: 0, Passed: 17, Skipped: 0, Total: 17, Duration: 445 ms
+Passed!  - Failed: 0, Passed: 18, Skipped: 0, Total: 18, Duration: 343 ms
 ```
+
+(The acceptance run below recorded 17; the characterisation test for finding F1 was replaced by the two
+tests that close it - see §9 F1 - so the suite carries one more test than that run measured.)
 
 Each test boots the production server stack on a real loopback port and speaks USB/IP to it. Coverage:
 
@@ -144,15 +149,19 @@ Each test boots the production server stack on a real loopback port and speaks U
 | Ignore beats allow; a narrow allow list hides the rest | `Ignore_List_Hides_A_Device_Even_When_It_Is_Also_Allowed` |
 | Allow list exports exactly the allowed devices | `Allow_List_Exports_Exactly_The_Allowed_Devices` |
 | Nickname retained by policy and shown in the operator view | `Nickname_Is_Retained_By_Policy_And_Reported_By_The_Operator_View` |
+| **Nickname reaches a client** through VirtualThere's own op (`OP_REP_VHT_DEVINFO`) | `The_Nickname_Reaches_A_Client_Through_VirtualTheres_Own_Op` |
+| Device name is asked for on its own connection, so a stock peer is unaffected | `TheNickname_IsAskedForOnAConnectionOfItsOwn` (client suite, `src/Vht.Client/Tests`) |
+| Peer without the extension still lists, with no names and no failure | `APeerWithoutTheExtension_StillLists_AndSimplyHasNoNames` (client suite) |
+| Stock `OP_REP_DEVLIST` frame, byte for byte, with no field repurposed | `The_Devlist_Record_Is_Byte_For_Byte_The_Stock_Layout` |
 | Per-device password: not offered on a plaintext listener | `A_Password_Protected_Device_Is_Not_Offered_On_The_Plaintext_Listener` |
 | …and an unprotected device next to it still is | `A_Device_With_No_Password_Is_Still_Offered_Next_To_A_Protected_One` |
 | Kick force-detaches the holder and frees the device | `Kick_Force_Detaches_The_Holder_And_Frees_The_Device` |
 | TLS listener carries the same parity surface | `The_Encrypted_Listeners_Carry_The_Same_Parity_Surface(Tls)` |
 | TLS+LZ4 listener carries the same parity surface | `The_Encrypted_Listeners_Carry_The_Same_Parity_Surface(TlsLz4)` |
-| **Characterisation:** the nickname is not carried on the wire | `Known_Gap_Nickname_Is_Not_Yet_Carried_On_The_USB_IP_Wire` |
 
-The last one is deliberate: see §9 finding F1. It asserts the current (gapped) behaviour so that closing
-the gap breaks the test loudly.
+Raw frame bytes for the nickname decision are in `artifacts/acceptance/nickname-op.txt`: the live
+`OP_REP_DEVLIST` frame with no field repurposed, and the `OP_REP_VHT_DEVINFO` request/reply that carries
+the name.
 
 ### Harness defects fixed while getting this suite green
 
@@ -249,8 +258,11 @@ Reading:
 - **Throughput is stable**: 760 → 696 MB/s per device (a 8.4 % drift over two minutes, on a busy desktop
   that was also running a build). No disconnect, no failed URB, no attach-table loss — all 8 devices were
   still attached at the end.
-- **Memory is not flat** — see finding F2 in §9. Retained managed memory grew ~1.1 MiB/s, and the working
-  set stepped up with it (+123 MiB). This is reported as a real soak finding, not explained away.
+- **Memory was not flat in this run — that is finding F2, now root-caused and fixed (§9).** The growth
+  was the server session's teardown-barrier list keeping one entry per URB ever served, whose backing
+  array doubles into the large object heap. On the same command at 600 s it reached +541.2 MiB retained
+  before the fix and 0 MiB after it, at the same ~15 GiB/s of allocation churn; both directions are
+  recorded verbatim in `artifacts/acceptance/soak-mem-*.txt`.
 
 ## 7. Device-class matrix (`artifacts/acceptance/classes.txt`)
 
@@ -304,27 +316,116 @@ medians.
 
 ## 9. Findings and follow-ups
 
-Findings recorded here; **fixing them is out of this card's scope** and each is filed as a separate card.
+Findings recorded here; **fixing them was out of the acceptance card's scope** and each was filed as a
+separate card. F1 has since been closed by its own card (`t_6973f425`); the fix is described in place.
 
-- **F1 — the operator's nickname is not carried on the wire.** The USB/IP `OP_REP_DEVLIST` record (312
-  bytes: 256-byte path, 32-byte bus id, then numeric fields) has no string field at all, so a stock
-  USB/IP client — and therefore the reference product's own client, and `usbip` on Linux — cannot see the
-  nickname VirtualThere stores. The server's own views do show it. Characterised by
-  `Known_Gap_Nickname_Is_Not_Yet_Carried_On_The_USB_IP_Wire`.
-- **F2 — retained memory grows during a sustained soak** (~1.1 MiB/s managed, +123 MiB working set over
-  120 s on 8 devices) with throughput unchanged. Either a genuine growth path under constant 64 KiB URB
-  churn or a genuinely lagging GC; needs a longer run and an allocation profile before it is called a
-  leak.
+- **F1 — the operator's nickname is not carried on the wire: CLOSED.** The USB/IP `OP_REP_DEVLIST`
+  record (312 bytes: 256-byte path, 32-byte bus id, then numeric fields) has no string field at all, so
+  the nickname cannot travel inside it without breaking every stock parser. It now travels *beside* it,
+  in VirtualThere's own op `OP_REQ_VHT_DEVINFO`/`OP_REP_VHT_DEVINFO` (`0x8f01`/`0x0f01`, magic `VHT1`),
+  specified in `docs/SERVER.md` §8 with the rationale for choosing an extension over repurposing slack
+  in the stock record. Evidence, all measured on this machine:
+  - `The_Nickname_Reaches_A_Client_Through_VirtualTheres_Own_Op` drives the production server and the
+    real client codec over loopback and reads `acceptance-stick` for bus id `1-1` while the stock record
+    still reports an empty `Product`/`Manufacturer`/`Serial`.
+  - `The_Devlist_Record_Is_Byte_For_Byte_The_Stock_Layout` compares the frame the live server sent
+    against one built by hand from the protocol documentation: 328 bytes, identical, so **what a stock
+    client sees is unchanged** (no field repurposed, no length reinterpreted).
+  - `A_Password_Protected_Device_Is_Not_Offered_On_The_Plaintext_Listener` now also asserts the
+    extension names nothing on the plaintext listener, so §6.4 containment holds for the new op too.
+  - Client side: `src/Vht.Client/Tests/NicknameExtensionTests.cs` (4 tests) proves the name reaches the
+    client's inventory and its control-plane `devices.list`, that the probe runs on a connection of its
+    own, and that a peer which does not implement the extension (a stock `usbipd`, which closes the
+    connection on an unknown op) still lists normally, with no names and no failure. Raw bytes:
+    `artifacts/acceptance/nickname-op.txt`.
+  - **NOT RUN:** a live stock Linux `usbip attach` cross-check (no `usbip`/`usbipd` in this environment,
+    and installing one needs an interactive sudo password). The "stock clients are unaffected" claim
+    rests on the byte-comparison test above, not on a Linux client run.
+- **F2 — retained memory grows during a sustained soak: ROOT-CAUSED AND FIXED** (card `t_9b590ee0`).
+  It is a real, unbounded retention bug, not GC lag, and the fix is one line of server code.
+
+  *What grew.* `UsbIpSession._pendingTransfers` is the list teardown waits on ("let the transfers still
+  running finish, at most 5 s"). It was appended to on every URB and never pruned, so it kept one entry
+  per URB ever served, and its backing array grew by doubling — 65,536 → 131,072 → … → 8,388,608 slots,
+  i.e. 0.5 MB → … → 64 MB per connection — in the large object heap. The soak now prints that list's
+  length every `--gc-sample` seconds, and it accounts for the growth exactly:
+
+  | measured run (frozen copy of the tree, identical command) | retained MiB `GC.GetTotalMemory(forceFullCollection: true)` at t=0 → end | entries in the pending list at end |
+  |---|---|---|
+  | 8 devices, 600 s, **before** (`soak-mem-before-8dev.txt`) | 1.0 → **532.3** | 37,662,641 |
+  | 1 device, 300 s, **before** (`soak-mem-before-1dev.txt`) | 0.8 → **211.8** | 9,283,585 |
+  | 8 devices, 600 s, **after** (`soak-mem-after-8dev.txt`) | 1.0 → **4.9–6.4, flat** | 8 (= in flight) |
+  | 1 device, 300 s, **after** (`soak-mem-after-1dev.txt`) | 0.8 → **1.0–1.1, flat** | 1 (= in flight) |
+
+  The before case was reproduced twice on the unfrozen tree as well (`soak-mem-before-repeat-*.txt`,
+  +554.0 MiB / 8 devices), so it is not an artifact of one run.
+
+  *The arithmetic closes.* 37,662,641 entries over 8 connections is 4.71 M per connection, and the next
+  power of two above that is 8,388,608 slots × 8 bytes = 64 MiB per connection = **512 MiB** for eight
+  connections, against 532.3 MiB retained — the remainder is the runtime baseline. The same arithmetic
+  predicts the plateau between t=300 s and t=480 s (4,194,304 slots × 8 = 256 MiB against 273 MiB
+  observed) and the step at t≈540 s when the count crossed the next doubling. The curve is therefore a
+  staircase whose steps **double**, and its short-run slope is the URB rate × 8 bytes plus doubling
+  slack — which is why the original 120 s sample read as a steady "~1.1 MiB/s" line and why it was not
+  obviously unbounded.
+
+  *What each entry costs, and why it is 8 bytes and not a state machine.* A `gcroot` on a live dump walks
+  `UsbIpSession` → `List<Task>` → the 16.7 MB `Task[]` backing array → the entry. `dumparray` on that
+  array shows most slots holding the **same address**, and `dumpobj` identifies it as
+  `Task<VoidTaskResult>.s_cachedCompleted`: the runtime's singleton completed task, which is what
+  `RunTransferAsync` returns whenever it completes synchronously (the synthetic capture answers without
+  suspending). So the cost of the bug is the list's array, not one async state machine per URB — which
+  is also why the process stayed at hundreds of MiB instead of tens of GiB.
+
+  *The harness is excluded by construction, and bounded by measurement.* The retained column is read
+  after a blocking full collection, so the harness's per-URB garbage (it allocates ~15 GiB/s here:
+  9,272 GiB over the 600 s before-run, 9,182 GiB over the same window after it) cannot appear in it. The
+  harness's own live objects — one client and one pending-URB map per device — are bounded by the same
+  figure: the whole process, harness included, holds 5–6 MiB after the fix.
+
+  *Fix.* `UsbIpSession.Track` now drops finished transfers before each add, so the teardown barrier holds
+  exactly the transfers still running (≤ `ConnectionResources.MaxInFlightUrbs`), never the history. The
+  list stays at 8 entries on 8 connections, the array never grows past a few slots, and `RemoveAll` over a
+  list that size is allocation-free.
+
+  *Verification.* `tests/Vht.Core.Tests` 160/160 and `tests/Vht.Acceptance.Tests` parity suite green with
+  the fix in place; the soak's own throughput is unchanged (before 491 → 490 MB/s per device, after
+  729 → 804 MB/s per device, the same run-to-run band the machine showed elsewhere), `failed URBs 0` in
+  all four runs, and the attach table still held 8. Working set, which grew 37.7 → 633.3 MiB before, is
+  flat at ~108 MiB after the first minute.
+
+  *Not explained by this fix, and left as an observation:* the thread count still rises during a soak
+  (+16 to +20 threads over 600 s, both before and after), so it is unrelated to this list and is not
+  investigated here.
+
+  *Measurement hygiene, since the tree was being edited by other cards while this card ran:* the four
+  numbers above were taken in a frozen copy of the working tree, where the only difference between the
+  "before" and "after" binaries is the one pruning line (`UsbIpSession.cs` sha256
+  `d55b280e…` before, `bd27f130…` after). The instrumentation the soak needed (`--gc-sample <s>`,
+  `--out <file>`, a post-forced-GC retained column and the pending-transfer count) is committed with it.
 - **F3 — LZ4 is a net loss on small (64 KiB) URBs**, including on compressible data (§8). Either the LZ4
   threshold or the framing needs revisiting for small URBs, or the default should be off for them.
+  **RESOLVED**, in two steps. The threshold was set from measurement (card t_97f18394,
+  `docs/TRANSPORT.md` §6.1/§9.4: `ThresholdBytes` 1024 → 65536, the smallest swept payload size at which
+  LZ4 beat plain TLS on compressible data with non-overlapping ranges in three consecutive runs). That
+  measurement also showed the loss at 64 KiB was not a threshold effect at all: through the production
+  session **0** frames ever compressed, at any URB size, because the payload kind never reached
+  `Vht.Transport` (card t_825b4f08). Carrying it through `Vht.Core.Transport` fixed that — §9.5 now
+  reports +19.4%/+22.4%/+26.1% for `TlsLz4` over `Tls` on compressible payload at 64 KiB URB, reproducing
+  run to run with non-overlapping ranges, and 0 compressed frames below the threshold. Incompressible payload
+  still loses on `TlsLz4` at every size (that is the CRC-32C item, `docs/TRANSPORT.md` §12 item 7); the
+  per-peer answer for such a peer is `Tls`, not a threshold.
 - **F4 — the acceptance and parity projects were not in `VirtualThere.slnx`.** FIXED (card
   t_02e30a1e). The solution file listed 15 of the 18 project files on disk, so
   `dotnet build/test VirtualThere.slnx` reported success while never building or running
   `tests/Vht.Acceptance` (the rig), `tests/Vht.Acceptance.Tests` (the parity suite) or
   `tools/Xtask` (the release build tool). All three are listed now, and
   `Vht.Core.Tests.SolutionFileTests` fails by name when a project file on disk is absent from the
-  solution file, so the omission cannot come back silently. A solution-wide run is now 18 built
-  projects and 361 tests in 5 suites.
+  solution file, so the omission cannot come back silently. A solution-wide run now builds 18
+  projects, compiles and runs the rig and the parity suite, and reports 0 failed across all 5
+  test suites (`dotnet build VirtualThere.slnx -c Release` -> 0 warnings, 0 errors; evidence in
+  `artifacts/solution/`). The project count is the number the guard enforces; the test count is
+  deliberately not written down here, because every card that lands adds suites to it.
   *Correction to this finding as it was first written:* it also named `Vht.Config`, `Vht.Client` and
   `Vht.Transport` as missing from the solution file; they were not, they were listed all along, and
   that is where the "five projects" figure came from. The real gap was three projects.

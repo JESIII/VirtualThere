@@ -1,0 +1,53 @@
+# VirtualThere - device nickname evidence (kanban t_6973f425)
+#
+# Generated 2026-10-14 16:49:07 PDT on this machine with:
+#   wireprobe (task workspace) booting AcceptanceRig over real loopback TCP + UsbIpClient
+# The same three claims are asserted, reproducibly, by
+#   tests/Vht.Acceptance.Tests/ParityTests.cs::The_Devlist_Record_Is_Byte_For_Byte_The_Stock_Layout
+#   tests/Vht.Acceptance.Tests/ParityTests.cs::The_Nickname_Reaches_A_Client_Through_VirtualTheres_Own_Op
+
+=== VirtualThere wire probe - device nickname (OP_REQ_VHT_DEVINFO) ===
+server listener : 127.0.0.1:1466 (plain USB/IP, stock protocol)
+exported device : busid 1-1  0781:5581  "VirtualThere acceptance mass-storage #0"
+nickname set    : "acceptance-stick" for 0781:5581:07815581-0000
+
+--- OP_REP_DEVLIST, exactly as it came off the wire ---
+frame length    : 328 bytes (8 op_common + 4 ndev + 312 record + 1 * 4 interface)
+01 11 00 05 00 00 00 00 00 00 00 01 5c 5c 3f 5c 61 63 63 65 70 74 61 6e 63 65 23 76 69 64 5f 30
+37 38 31 23 70 69 64 5f 35 35 38 31 23 30 37 38 31 35 35 38 31 2d 30 30 30 30 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 31 2d 31 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 02 00 00 00 03 07 81 55 81 01 00 08 06
+50 01 01 01 08 06 50 00
+
+decoded device record (stock fields only - there is no string field):
+  path            : \\?\acceptance#vid_0781#pid_5581#07815581-0000
+  busid           : 1-1
+  busnum/devnum   : 1/2   speed 3 (high)
+  vid:pid         : 0781:5581   bcdDevice 0100
+  class/sub/proto : 08/06/50   interfaces 1
+  Product         : ""   Manufacturer: ""   Serial: ""
+
+independent stock-layout comparison (built from the protocol doc, not from UsbIpCodec):
+  hand-built bytes  : 328
+  wire bytes        : 328
+  identical         : True
+
+--- OP_REQ_VHT_DEVINFO / OP_REP_VHT_DEVINFO (VirtualThere's own op) ---
+request  : 01 11 8f 01 00 00 00 00 56 48 54 31
+reply    : 01 11 0f 01 00 00 00 00 56 48 54 31 00 00 00 01 31 2d 31 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 10 61 63 63 65 70 74 61 6e 63 65 2d 73 74 69 63
+6b
+entries  : 1
+  1-1 -> "acceptance-stick"
+
+server-side log event for this op: LogEvent.DeviceEnumerated (src/Vht.Core/Server/UsbIpSession.cs,
+  HandleVhtDeviceInfoAsync) — "device info (nicknames) sent to connection N: M named of K device(s)".
+
+
+wireprobe exit code: 0
