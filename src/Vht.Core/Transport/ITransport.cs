@@ -89,3 +89,61 @@ public interface ITransport : IAsyncDisposable
     /// <summary>Authenticates the peer. Must fail closed on a transport with no auth.</summary>
     Task<AuthResult> AuthenticateAsync(AuthRequest request, CancellationToken ct);
 }
+
+/// <summary>Which USB transfer class a payload belongs to. Decides whether LZ4 may be applied.</summary>
+/// <remarks>
+/// Values are deliberately identical to the transport card's own <c>Vht.Transport.PayloadKind</c>
+/// member for member, so an adapter that bridges the two interfaces is a cast, not a mapping table.
+/// </remarks>
+public enum PayloadKind : byte
+{
+    /// <summary>Control transfers: never compressed (small, latency-critical).</summary>
+    Control = 0,
+
+    /// <summary>Bulk transfers: compressed above the threshold.</summary>
+    Bulk = 1,
+
+    /// <summary>Interrupt transfers: compressed above the threshold.</summary>
+    Interrupt = 2,
+
+    /// <summary>Isochronous transfers: never compressed (small per-packet, deadline-driven).</summary>
+    Isochronous = 3,
+}
+
+/// <summary>
+/// Optional and additive to the frozen <see cref="ITransport"/> shape (the same pattern
+/// <c>Vht.Transport.IPeerInfo</c> uses): a transport that can classify one write, so a caller can
+/// declare a data stage as bulk/interrupt and let a compression layer decide what to do with it.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This is the missing half of ARCHITECTURE.md §8's "applied only to declared payload frames".
+/// The compression opt-in lives in the transport card
+/// (<c>Vht.Transport.IPayloadCompressionTransport.WritePayloadAsync</c>), but the USB/IP session
+/// writes through <see cref="ITransport"/>, which had no way to declare anything — so every reply
+/// frame, data stage included, was classified control and never compressed. Adding the parameter
+/// to <see cref="WriteAsync"/> would break every existing implementation of the frozen interface,
+/// hence the narrow downcast: <see cref="Vht.Core.Server.UsbIpSession"/> uses it when it is
+/// present and falls back to a single plain <see cref="WriteAsync"/> when it is not, so a
+/// transport that cannot classify can only lose compression, never correctness.
+/// </para>
+/// <para>
+/// Callers must write a USB/IP URB header as <see cref="PayloadKind.Control"/>: that is what keeps
+/// "headers are never compressed" true, which is what lets the codec route a frame without
+/// decompressing it.
+/// </para>
+/// </remarks>
+public interface IPayloadKindTransport : ITransport
+{
+    /// <summary>True when this session may actually compress; a classified write is only useful then.</summary>
+    bool CompressionActive { get; }
+
+    /// <summary>Byte threshold below which compression is not attempted.</summary>
+    int CompressionThresholdBytes { get; }
+
+    /// <summary>
+    /// Writes one payload, declaring its transfer class. A transport that cannot compress it
+    /// writes it verbatim; the distinction is invisible on the wire beyond the frame header.
+    /// </summary>
+    ValueTask WritePayloadAsync(PayloadKind payloadKind, ReadOnlyMemory<byte> payload, CancellationToken ct);
+}

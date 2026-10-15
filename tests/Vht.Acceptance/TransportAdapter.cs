@@ -28,7 +28,7 @@ namespace Vht.Acceptance;
 /// <c>Func&lt;NetworkStream, TransportKind, CancellationToken, Task&lt;ITransport&gt;&gt;</c> factory.
 /// </para>
 /// </remarks>
-public sealed class CoreTransportAdapter : CoreTransport.ITransport
+public sealed class CoreTransportAdapter : CoreTransport.ITransport, CoreTransport.IPayloadKindTransport
 {
     private readonly Vht.Transport.ITransport _inner;
 
@@ -74,6 +74,32 @@ public sealed class CoreTransportAdapter : CoreTransport.ITransport
 
     public ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct) =>
         _inner.WriteAsync(buffer, ct);
+
+    // ---- payload classification (Vht.Core.Transport.IPayloadKindTransport) ------------------
+
+    /// <summary>
+    /// True only when the wrapped transport is the LZ4 decorator, i.e. when LZ4 was both configured
+    /// and negotiated. Every other inner transport reports false, so the session takes its single
+    /// whole-frame write and the plain TLS arm of a measurement is unchanged by this adapter.
+    /// </summary>
+    public bool CompressionActive =>
+        (_inner as Vht.Transport.IPayloadCompressionTransport)?.CompressionActive ?? false;
+
+    /// <inheritdoc />
+    public int CompressionThresholdBytes =>
+        (_inner as Vht.Transport.IPayloadCompressionTransport)?.CompressionThresholdBytes ?? int.MaxValue;
+
+    /// <summary>
+    /// Forwards a classified write to the LZ4 decorator's <c>WritePayloadAsync</c> (the two
+    /// <c>PayloadKind</c> enums are member-for-member identical, so this is a cast), and falls back
+    /// to a plain write for an inner transport that cannot compress — which is what the session
+    /// already does on its own, so the fallback is a belt, not a behaviour.
+    /// </summary>
+    public ValueTask WritePayloadAsync(
+        CoreTransport.PayloadKind payloadKind, ReadOnlyMemory<byte> payload, CancellationToken ct) =>
+        _inner is Vht.Transport.IPayloadCompressionTransport compression
+            ? compression.WritePayloadAsync((Vht.Transport.PayloadKind)payloadKind, payload, ct)
+            : _inner.WriteAsync(payload, ct);
 
     public async Task<CoreTransport.AuthResult> AuthenticateAsync(
         CoreTransport.AuthRequest request, CancellationToken ct)
