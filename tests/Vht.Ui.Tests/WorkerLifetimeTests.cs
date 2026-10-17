@@ -152,6 +152,8 @@ public sealed class WorkerLifetimeTests
 
         public string? LastError => null;
 
+        public IReadOnlyList<string> LastWorkerOutput => Array.Empty<string>();
+
         public Task<WorkerStartResult> EnsureRunningAsync(CancellationToken cancellationToken) =>
             Task.FromResult(WorkerStartResult.AlreadyRunning);
 

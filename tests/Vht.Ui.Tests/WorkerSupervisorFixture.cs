@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,6 +13,9 @@ internal sealed class FakeWorkerProcess : IWorkerProcess
     public int Id { get; init; } = 4242;
 
     public bool HasExited { get; set; }
+
+    /// <summary>Lines the fake worker "wrote", for the tests that check they survive its exit.</summary>
+    public IReadOnlyList<string> OutputTail { get; set; } = Array.Empty<string>();
 
     /// <summary>
     /// True when the process leaves on its own once <see cref="Terminate"/> is called.
