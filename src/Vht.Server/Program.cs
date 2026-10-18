@@ -156,18 +156,21 @@ public static class Program
                     FlagValue(rest, "--out") ?? ServerConfigLoader.DefaultPath);
 
             default:
-                return Dispatch(Console.Out, verb, rest, options);
+                return Dispatch(Console.Out, verb, rest, options, configPath);
         }
     }
 
-    private static int Dispatch(TextWriter output, string verb, string[] args, ServerOptions options)
+    private static int Dispatch(
+        TextWriter output, string verb, string[] args, ServerOptions options, string? configPath)
     {
         string? pipe = FlagValue(args, "--pipe");
 
         switch (verb)
         {
             case "status":
-                return ServerCommands.Status(output, pipe);
+                // Same rule as the CLI: the log line belongs to the configuration named on the
+                // command line, because that is the server whose log the user is looking for.
+                return ServerCommands.Status(output, pipe, configPath);
             case "list":
                 return ServerCommands.List(output, HasFlag(args, "--local"), pipe, options);
             case "kick":

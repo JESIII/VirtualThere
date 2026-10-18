@@ -16,11 +16,18 @@ namespace Vht.Server.Hosting;
 public static class ServerCommands
 {
     /// <summary><c>status</c> — asks the control plane whether a server is live.</summary>
-    public static int Status(TextWriter output, string? pipeName = null)
+    /// <remarks>
+    /// <paramref name="configPath"/> is the caller's <c>--config</c>, and it has to reach the log
+    /// line: this verb prints the path of the log a server started from <i>that</i> configuration
+    /// would write. Resolving without it made the verb report the environment or machine-wide
+    /// default while the configuration in question was somewhere else entirely - the one sentence a
+    /// user reads first when nothing answers pointed at another instance's log.
+    /// </remarks>
+    public static int Status(TextWriter output, string? pipeName = null, string? configPath = null)
     {
         // Printed whether or not a server answers, and from the same resolution the server itself
         // uses: when nothing answers, "where would its log have gone?" is the first question.
-        string logFile = ServerConfigLoader.DefaultLogFile(ServerConfigLoader.Resolve());
+        string logFile = ServerConfigLoader.DefaultLogFile(ServerConfigLoader.Resolve(configPath));
         output.WriteLine($"runtime log:   {logFile}");
 
         if (File.Exists(logFile))

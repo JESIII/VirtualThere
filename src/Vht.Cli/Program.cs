@@ -61,7 +61,8 @@ public static class Program
                 return Vht.Server.Program.Main(["serve", .. rest]);
 
             case "status":
-                return ServerCommands.Status(output, pipe);
+                // The log line follows the configuration the caller named, not the environment default.
+                return ServerCommands.Status(output, pipe, FlagValue(rest, "--config"));
 
             case "list":
                 return ServerCommands.List(output, HasFlag(rest, "--local"), pipe, LocalOptions(rest));

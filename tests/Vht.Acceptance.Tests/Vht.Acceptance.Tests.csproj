@@ -14,6 +14,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Vht.Acceptance\Vht.Acceptance.csproj" />
+    <!-- The CLI executable must sit beside this test assembly: the status verb's handling of an
+         explicit configuration path is tested through the built binary, because the defect was in
+         the wiring between its argument parser and the verb. -->
+    <ProjectReference Include="..\..\src\Vht.Cli\Vht.Cli.csproj" />
   </ItemGroup>
 
   <ItemGroup>
