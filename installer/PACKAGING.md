@@ -92,7 +92,62 @@ The privilege boundary is deliberate and each half fails loudly rather than half
 | `vht-client` process | Administrator (via the logon task) | the UDE host controller's device interface is opened with `GENERIC_READ|GENERIC_WRITE` and the driver enforces Administrator; `Vht.Client.Interop.Ude.UdeNative.OpenForIoctl` fails with an explicit message naming that requirement |
 | window half of `vht-server.exe` / `vht-client.exe` | unelevated | it only speaks the control pipe. The privileged work is the `--worker` process it starts - exactly one UAC prompt - or the installed service |
 | installer | elevated once (UAC) | service registration, driver package, firewall rules, logon task |
-| portable setup | elevated once, by hand | same three machine-wide items, see section 5 |
+| portable setup | elevated once, by hand | same three machine-wide items, see below and section 5 |
+
+### The first Start of a portable copy raises a Windows Firewall prompt
+
+The elevation table is complete about UAC and silent about the second dialog an operator meets. On a
+folder whose executables have never listened before, the worker's **first bind** raises Windows'
+own dialog - **Windows Security**, "Do you want to allow public and private networks to access this
+app?", publisher `VirtualThere` - and it sits in front of the window until answered. It is not UAC,
+it cannot be answered by the worker, and on a fresh copy the first Start is therefore a
+*two*-dialog affair: the consent prompt for the worker, then this one.
+
+**Decision: documented as a required operator step, not eliminated.** Windows Firewall's prompt is
+per **program path**, so it cannot be pre-empted for an application whose whole model is "copy the
+folder anywhere and run it":
+
+* The rule the answer creates is keyed to the full path. `netsh advfirewall firewall show rule
+  name=all verbose` on this machine lists one pair of rules per path that has ever bound -
+  `Rule Name: vht-server.exe | Program: C:\users\zirjo\<each folder>\vht-server.exe`, action `Allow`
+  where the prompt was answered and `Block` where it was not. A copy in a new folder is a new program
+  to the firewall and prompts again, so no rule shipped with the package can cover it.
+* A rule *can* be added for the folder an operator has actually unpacked to, and
+  `Setup-Portable.ps1 -Action Install` already does exactly that: two inbound TCP rules
+  (`VirtualThere USB/IP (TCP 3240)` and `... TLS (TCP 3241)`) scoped to
+  `program=<folder>\vht-server.exe`, the same pair the MSI declares for `%ProgramFiles%`. Once those
+  exist for a folder, its first Start does not prompt. Copying that folder elsewhere starts over.
+* Suppressing the dialog rather than answering it would mean shipping a silent-block posture, which
+  is worse: the listener comes up and logs `ListenerStarted` either way, so the operator would see a
+  server that looks healthy while every client on another machine is refused.
+
+So the operator's step, and what `PACKAGING.md`/`Setup-Portable.ps1` now say, is: **press Allow** on
+the first Start (or run `Setup-Portable.ps1 -Action Install` from an elevated prompt first, then there
+is no prompt). Measured on this host on 2026-10-18, on a fresh copy whose path had no rules
+(`C:\Users\zirjo\vhte2-a1`): the first Start produced
+
+```
+Rule Name: vht-server.exe   Action: Block   Program: C:\users\zirjo\vhte2-a1\vht-server.exe
+Rule Name: vht-server.exe   Action: Block   Program: C:\users\zirjo\vhte2-a1\vht-server.exe
+```
+
+because the dialog was left unanswered while the run was driven headlessly - the same two rules the
+prompt writes when the operator presses Cancel. **Cancel is not harmless**: the server binds and
+serves localhost, but inbound USB/IP from other machines stays blocked for that copy until the rules
+are removed:
+
+```
+netsh advfirewall firewall delete rule name="vht-server.exe" program="C:\path\to\vht-server.exe"
+```
+
+The dialog itself is captured in `docs/ui-shots/`/the verification screenshots for the GUI exes
+(`vht-server-gui.png`, card `t_689d8f60`): it covers the server window, which is what makes it a
+documentation problem rather than a cosmetic one.
+
+One ordering trap, because Windows Firewall lets a **block** win over an **allow**: if the dialog was
+cancelled earlier for a path, `Setup-Portable.ps1 -Action Install` adds its two Allow rules for that
+path but the leftover Block rules still decide the outcome. Delete them first (the `netsh ... delete`
+line above), then re-run Install.
 
 **Why a logon task and not a service for the client.** ARCHITECTURE.md §1 allows either, but the
 client binary has no service-control dispatcher in v1: it runs `vht-client serve` in the foreground,

@@ -40,9 +40,14 @@ process.
 - **Exit** (window button, or notification-area menu) stops the worker that window started, over the
   pipe (`server.stop`) and, if that does not take, by ending the process. A server it only attached to
   is left running.
-- A worker whose window process is gone - a crash, an End task - **keeps serving**. Nothing reaps it.
+- A worker whose window process is **killed outright** - End task, `taskkill /F`, a debugger
+  detaching - **keeps serving**. Nothing reaps it.
   Stop it explicitly with `vht-server stop-server --pipe vht-server` (or `vht stop-server --pipe
   vht-server`), or open `vht-server.exe` again: the window adopts the live worker and its Exit stops it.
+- A window that dies from an **unhandled exception** is the other case, and worth knowing before it
+  surprises you: the process teardown runs the same shutdown exchange as Exit, so the worker this
+  window started is stopped with it. Nothing is left serving. `docs/UI.md` section 1 carries the
+  measured timelines for all three endings (killed, crashed, Exit).
 
 The service remains the unattended option: `vht install` registers it and nothing about the window is
 needed for it. The full window semantics - including the notification-area affordances - are in

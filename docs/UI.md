@@ -57,6 +57,14 @@ control pipe. The privileged half is a **separate process** started from the win
    else travels with it), elevated with `Verb=runas`: Windows raises **exactly one** consent prompt,
    and the worker runs hidden with no console. It binds the pipe, and the window then attaches to it.
 
+   On a portable folder that has never bound a port before, the worker's first bind also raises
+   Windows' own **Windows Security** firewall dialog ("Do you want to allow public and private
+   networks to access this app?", publisher `VirtualThere`) - not a UAC prompt, and not something the
+   product can suppress for a folder it was copied into. So the first Start of a fresh copy is a
+   two-dialog affair: consent for the worker, then Allow for the listener. Answering it is a required
+   operator step and `installer/PACKAGING.md` section 3 documents what Cancel leaves behind; running
+   `Setup-Portable.ps1 -Action Install` once adds the two port rules and a later copy still prompts.
+
 ### The pipe both halves can use
 
 The split above works only if the pipe the **elevated** worker owns is writable by the **unelevated**
@@ -127,14 +135,41 @@ suite.
 | --- | --- | --- |
 | Closes the window (X), or minimises it | hides to the notification area; still running | untouched: it keeps serving, and connected clients and in-flight transfers are unaffected |
 | Picks **Exit** (window button, or the notification-area menu item) | exits for real | the worker *this* window started is stopped: the role's own shutdown exchange over the pipe (`server.stop`, or `clients.detachAll` for the client), then the process is ended. A worker it merely attached to is left running |
-| Does nothing; the window process is killed or crashes | gone | keeps serving. Nothing reaps it: the worker is deliberately **not** tied to the window that started it |
+| Does nothing; the window process is **killed outright** (`taskkill /F`, End task, a debugger detaching) | gone, and no code of ours runs | keeps serving. Nothing reaps it: the worker is deliberately **not** tied to the window that started it |
+| Does nothing; the window process **dies from an unhandled exception** | gone (a CLR abort, exit code `0xE0434352`) | **stopped**: the teardown that runs on a fatal exception is the same shutdown path Exit uses (`UiSession.Dispose` -> `Shutdown` -> the role's stop verb), so the worker goes too |
 | Runs the executable again while a worker is live | opens and attaches | unchanged - no second worker, no consent prompt |
+
+The two "does nothing" rows are not the same case, and the difference is measured rather than
+assumed (both runs on the shipping `dist/portable` build, worker started with `--no-elevate` so an
+unattended harness can press Start; the elevation differs in who authorises the worker, not in what
+runs):
+
+* **Killed outright.** A `TerminateProcess` of the window 1 ms after its worker bound the pipe left
+  the worker alive and the pipe bound for the whole 15 s watch window - `final: worker alive=True
+  pipe=True`, with `\\.\pipe\vht-m-b3` still enumerate-able. That is the row's design promise, and it
+  holds for a process that gets no chance to run any code: the worker is not job-object-bound,
+  parent-watched or otherwise reaped.
+* **Died from an unhandled exception.** The window's own log-pane exception (card `t_9e1f5f1e`)
+  killed the process, and the worker did **not** outlive it: `ServerStarted ... listeners:
+  0.0.0.0:33260 (PlainTcp)` and `ControlPlaneStarted` at `22:32:31.937`, then `ServerStopping:
+  stopping` at `22:32:32.324` (+0.39 s) and `ServerStopped: stopped` two milliseconds later, with the
+  worker process gone ~30 ms *before* the window process disappeared. A stop the worker logs
+  gracefully while the window is still alive can only be the stop verb arriving over the pipe, and
+  the only code that sends it is the session's shutdown exchange - which runs because
+  `UiHost.Run`'s `finally` disposes the session when `Application.Run` throws. So a crash stops the
+  worker by the same route as Exit; the supervisor is still not reaping anything.
+* **Exit.** Measured on the same build: `Exit` invoked at `t=2157 ms`, `worker: GONE` at `2248`,
+  `pipe: GONE` at `2249`, window gone at `2279` with exit code `0`.
+
+Consequence for the operator: after a **killed** window the worker is still serving and the next
+launch adopts it; after a **crashed** window there is nothing left to adopt, and Start brings a new
+worker up. Either way nothing is left running that the operator did not ask for.
 
 The notification-area icon is the operator's persistent affordance while the window process lives:
 double-click restores the window; right-click offers Open / Start / Stop / Show log / About / Exit.
 
-**When the window process is killed outright** there is no icon left to click, and the worker keeps
-serving - by design. That becomes the operator's explicit call:
+**When the window process is killed outright** there is no icon left to click either, and the worker
+keeps serving - by design. That becomes the operator's explicit call:
 
 ```bash
 vht-server stop-server --pipe vht-server      # server: clean stop over the frozen pipe verb
@@ -150,8 +185,11 @@ belonging to that window.
 `tests/Vht.Ui.Tests` asserts the lifetime rules by name: start, attach-instead-of-start (spawning no
 second worker), declined consent, timeout, the graceful stop, the fallback end, "not ours to stop",
 the case where the window may not end an elevated worker, a real child process that really goes away,
-**closing the window does not stop the worker**, and **Exit does**. `vht-ui-driver` asserts the same
-against the shipped executables (see section 7).
+**closing the window does not stop the worker**, **disposing the supervisor never stops the worker**
+(the killed-window row: a process that dies without running our code cannot stop anything), and
+**Exit does** - which is also the crash row's route, because the fatal-exception teardown runs the
+same `OnExitAsync` exchange (`WorkerLifetimeCrashTests` holds the first two and names the third).
+`vht-ui-driver` asserts the same against the shipped executables (see section 7).
 
 ## 2. Affordance map (frozen verbs from Appendix C)
 

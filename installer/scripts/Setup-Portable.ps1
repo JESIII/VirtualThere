@@ -27,6 +27,16 @@
     (util:FirewallException in installer\VirtualThere.wxs); Xtask's `verify` verb checks that the
     two agree, so the installed and portable layouts cannot drift.
 
+    Why the firewall part matters to the operator and not just to the auditor: Windows raises its own
+    'Windows Security' dialog ("Do you want to allow public and private networks to access this
+    app?") the first time a copy of vht-server.exe binds a listening port, and that dialog is keyed to
+    the executable's full path. Without this script's two rules, the first Start of a portable folder
+    is a second dialog after the worker's consent prompt, and pressing Cancel there leaves two Block
+    rules behind: the server still binds and serves localhost, but no other machine can reach it.
+    Run `-Action Install` once for the folder you unpacked to and the prompt does not appear; copy the
+    folder somewhere else and it will, because the rule names the old path. `-Action Status` reports
+    whether the two rules are present at all. Full account: installer\PACKAGING.md, section 3.
+
 .PARAMETER Action
     Install, Uninstall, or Status (the default). Status needs no elevation and is read-only.
 

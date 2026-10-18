@@ -351,6 +351,19 @@ privileged worker keeps serving. Use **Exit** (window button, or the notificatio
 item) to stop the worker this window started, or, if the window process is gone, `vht-server
 stop-server --pipe vht-server`. See `docs/UI.md` section 1.
 
+### The server stopped when the window disappeared
+
+Two different endings, and they look the same from the outside only until you check the pipe:
+
+* window **killed** (End task, `taskkill /F`, a debugger detaching): the worker keeps serving, and
+  `vht status` still answers. Start the window again and it adopts the worker, or `vht-server
+  stop-server --pipe vht-server` stops it.
+* window **crashed** (an unhandled exception - `.NET Runtime` event 1026 in the Application log): the
+  crash teardown runs the normal shutdown exchange, so the worker was stopped with the window. There
+  is no orphan to clean up; press Start in a new window. If it keeps happening, the exception is in
+  that event; also check the worker's own record, `logs\worker-<pid>.log`, beside the server's
+  runtime log (`docs/TROUBLESHOOTING.md` section on log locations).
+
 ### Something is attached and I cannot reconnect to it
 
 A device can be claimed by one client at a time. From the server: `vht kick <busid>` force-detaches
