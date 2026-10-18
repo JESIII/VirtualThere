@@ -191,7 +191,7 @@ public sealed class ServerViewModel : ObservableObject, IServerDeviceActions, ID
                 await _client.ListDevicesAsync(_cts.Token).ConfigureAwait(true);
             if (deviceStatus != ControlPlaneStatus.Ok)
             {
-                MarkUnreachable(deviceError?.Message);
+                MarkUnreachable(deviceError?.Message, statusAnswered: true);
                 return;
             }
 
@@ -220,8 +220,25 @@ public sealed class ServerViewModel : ObservableObject, IServerDeviceActions, ID
         }
     }
 
-    private void MarkUnreachable(string? reason)
+    /// <summary>
+    /// The poll got no answer. <paramref name="statusAnswered"/> says whether the server did answer
+    /// <c>server.status</c> first - a <c>devices.list</c> failure happens with the server still up,
+    /// while a lost pipe means nothing is running any more.
+    /// </summary>
+    /// <remarks>
+    /// The last snapshot is dropped when the server itself went away: the state pill already reads
+    /// "Not running" in that case (<see cref="StateText"/> asks <see cref="ServiceReachable"/>
+    /// first), and keeping a stale <c>Running</c> snapshot behind it left <see cref="IsRunning"/>
+    /// true and Start disabled forever - pressing Start again after a stop was impossible
+    /// (card t_9e1f5f1e, measured by the driver's three start/stop cycles).
+    /// </remarks>
+    private void MarkUnreachable(string? reason, bool statusAnswered = false)
     {
+        if (!statusAnswered)
+        {
+            _status = new ServerStatusSnapshot();
+        }
+
         ServiceReachable = false;
         ConnectionText = "No answer from \\\\.\\pipe\\" + _client.PipeName + " - " +
             (string.IsNullOrWhiteSpace(reason) ? "the service is not running." : reason);

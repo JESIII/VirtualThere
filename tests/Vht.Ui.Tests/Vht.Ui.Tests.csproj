@@ -13,6 +13,12 @@
     <AssemblyName>Vht.Ui.Tests</AssemblyName>
     <IsPackable>false</IsPackable>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!--
+      WPF lays text out through MS.Internal.FontCache, which needs real cultures: in
+      globalization-invariant mode (the repository default) the very first TextBlock measure
+      throws CultureNotFoundException for "en". The log-viewer tests lay out a real window.
+    -->
+    <InvariantGlobalization>false</InvariantGlobalization>
     <!-- WFO0003: inherited from the Vht.Ui subtree this project references (WPF + NotifyIcon). -->
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
   </PropertyGroup>

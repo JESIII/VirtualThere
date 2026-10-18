@@ -262,6 +262,9 @@ internal static class Program
             () => ReadText(FindById(window, "server-state")) is { } text && text.Contains("Running", StringComparison.Ordinal),
             TimeSpan.FromSeconds(45),
             "the worker bound the control pipe and the server reports Running");
+
+        // The crash this card is about happened here: the window died ~0.3s after the worker bound
+        // the pipe, so the state pill never reached "Running" and nothing below was reachable.
         Step("standalone.worker-running", true, ReadText(FindById(window, "server-state")));
 
         // The device list comes from the real server, over the real pipe: rows mean the window is
@@ -279,9 +282,77 @@ internal static class Program
             string.Join(", ", withWindow) + "], window pid " + _activeWindowPid +
             ", worker pid(s) [" + string.Join(", ", extra) + "]");
 
-        // ---- closing the window: hide to the notification area, worker keeps serving ----
-        // (docs/UI.md section 1, and the binding decision on this card: only Exit stops the worker.)
         int workerPid = extra.Length > 0 ? extra[0] : 0;
+
+        // ---- Exit, pressed on the window that is still on screen ----
+        // Exit is the one path that stops the worker this window started (docs/UI.md section 1).
+        Invoke(window, "exit", "exit the window (the worker it started must go with it)");
+
+        bool windowExited = standAloneWindow is not null && standAloneWindow.WaitForExit(30000);
+        Step("standalone.window-exited", windowExited, "window pid " + _activeWindowPid + " exited=" + windowExited);
+
+        Step("standalone.no-orphan-worker", WaitForNoExtraProcesses(options, baseline),
+            "after exit, process ids named " + ServerImageName(options.ServerExecutable) + ": [" +
+            string.Join(", ", ProcessIds(ServerImageName(options.ServerExecutable))) + "]");
+
+        // ---- second session: closing the window hides it and the worker keeps serving ----
+        // A hidden WPF window exposes no automation tree at all - not even the controls that were
+        // reachable a moment earlier - so the window cannot be driven again once it has been hidden
+        // to the notification area. (Restoring it with ShowWindow(SW_RESTORE) puts the Win32 frame
+        // back on screen but leaves WPF's own visibility state hidden: measured, the whole window
+        // still reports five automation descendants and no toolbar.) The two claims are therefore
+        // measured in two sessions against the real executable: Exit-from-the-visible-window above,
+        // close-to-tray-and-the-worker-keeps-serving below. What no automated run can do is click
+        // the notification-area icon, which is what brings the hidden window back for a person.
+        standAloneWindow = null;
+        WaitFor(() => ProcessIds(ServerImageName(options.ServerExecutable)).All(baseline.Contains),
+            TimeSpan.FromSeconds(20), "the first session's window has really gone (its instance claim is released)");
+
+        standAloneWindow = StartProcess(
+            options.ServerExecutable,
+            $"--pipe {options.WorkerPipe}-2 --port {options.WorkerPort} --no-elevate",
+            waitForReadyLine: false);
+        _activeWindowPid = standAloneWindow?.Id ?? 0;
+
+        window = WaitForWindow("VirtualThere Server", TimeSpan.FromSeconds(25), _activeWindowPid);
+
+        // Three start/stop cycles in one session: no exception, no crash (the acceptance criterion
+        // for this card). Each cycle has to leave the window running and reporting Stopped.
+        for (int cycle = 1; cycle <= 3; cycle++)
+        {
+            Invoke(window, "start-server", "server.start (cycle " + cycle + ")");
+            WaitFor(
+                () => ReadText(FindById(window, "server-state")) is { } text && text.Contains("Running", StringComparison.Ordinal),
+                TimeSpan.FromSeconds(45), "cycle " + cycle + ": the server reports Running");
+            bool alive = standAloneWindow is { HasExited: false };
+            Step("standalone.cycle" + cycle + ".running", alive, ReadText(FindById(window, "server-state")));
+
+            Invoke(window, "stop-server", "server.stop (cycle " + cycle + ")");
+            WaitFor(
+                () => ReadText(FindById(window, "server-state")) is { } text && !text.Contains("Running", StringComparison.Ordinal),
+                TimeSpan.FromSeconds(30), "cycle " + cycle + ": the server stopped again");
+            bool stillAlive = standAloneWindow is { HasExited: false };
+            Step("standalone.cycle" + cycle + ".stopped", stillAlive, ReadText(FindById(window, "server-state")));
+
+            // The worker the stop ended has to be gone before the next Start: the second cycle
+            // starts a fresh process on the same pipe and port.
+            bool workerGone = WaitForNoExtraProcesses(options,
+                baseline.Append(_activeWindowPid).ToArray(), TimeSpan.FromSeconds(20));
+            Step("standalone.cycle" + cycle + ".worker-exited", workerGone,
+                "process ids named " + ServerImageName(options.ServerExecutable) + ": [" +
+                string.Join(", ", ProcessIds(ServerImageName(options.ServerExecutable))) + "], window pid " + _activeWindowPid);
+        }
+
+        Invoke(window, "start-server", "server.start (the worker the close must not stop)");
+        WaitFor(
+            () => ReadText(FindById(window, "server-state")) is { } text && text.Contains("Running", StringComparison.Ordinal),
+            TimeSpan.FromSeconds(45), "the server reports Running before the close");
+
+        WaitFor(() => true, TimeSpan.FromSeconds(2), "settle before the close");
+        int[] beforeClose = ProcessIds(ServerImageName(options.ServerExecutable));
+        int[] workers = beforeClose.Where(id => id != _activeWindowPid && !baseline.Contains(id)).ToArray();
+        int liveWorkerPid = workers.Length > 0 ? workers[0] : 0;
+
         nint standaloneHandle = Handle(window);
         NativeMethods.PostMessage(standaloneHandle, NativeMethods.WmClose, 0, 0);
         WaitFor(() => !NativeMethods.IsWindowVisible(standaloneHandle), TimeSpan.FromSeconds(10),
@@ -289,46 +360,110 @@ internal static class Program
         WaitFor(() => true, TimeSpan.FromSeconds(2), "settle after the close");
 
         bool windowStillAlive = standAloneWindow is { HasExited: false };
-        bool workerStillAlive = workerPid != 0 && IsProcessRunning(workerPid);
+        bool workerStillAlive = liveWorkerPid != 0 && IsProcessRunning(liveWorkerPid);
         Step("standalone.close-hides-and-worker-survives",
             !NativeMethods.IsWindowVisible(standaloneHandle) && windowStillAlive && workerStillAlive,
             "window hidden=" + !NativeMethods.IsWindowVisible(standaloneHandle) +
             ", window process alive=" + windowStillAlive +
-            ", worker pid " + workerPid + " alive=" + workerStillAlive);
+            ", worker pid " + liveWorkerPid + " alive=" + workerStillAlive);
 
-        // Restore the way the notification-area icon does, then re-acquire the window element: a
-        // hidden WPF window leaves the automation tree.
-        NativeMethods.ShowWindow(standaloneHandle, NativeMethods.SwRestore);
-        NativeMethods.SetForegroundWindow(standaloneHandle);
-        window = WaitForWindow("VirtualThere Server", TimeSpan.FromSeconds(15), _activeWindowPid);
-        Step("standalone.restored-after-close", NativeMethods.IsWindowVisible(standaloneHandle),
-            ReadText(FindById(window, "server-state", TimeSpan.FromSeconds(5))));
+        // Nothing in this harness can reach the hidden window again (see above), so the session is
+        // ended here: the worker is stopped by pid before the window is killed, and then the window,
+        // so the run leaves nothing behind. This is the harness cleaning up, not the product.
+        if (workerStillAlive)
+        {
+            TryKillWorker(liveWorkerPid);
+        }
 
-        Invoke(window, "exit", "exit the window (the worker it started must go with it)");
+        if (standAloneWindow is { HasExited: false })
+        {
+            // By pid, not through the Process object: TryKill disposes it, and WaitForExit on a
+            // disposed Process throws "No process is associated with this object".
+            TryKill(standAloneWindow);
+            standAloneWindow = null;
 
-        bool windowExited = standAloneWindow is not null && standAloneWindow.WaitForExit(30000);
-        Step("standalone.window-exited", windowExited, "window pid " + _activeWindowPid + " exited=" + windowExited);
+            DateTime gone = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+            while (DateTime.UtcNow < gone && IsProcessRunning(_activeWindowPid))
+            {
+                Thread.Sleep(200);
+            }
+        }
 
-        // Exit is the one path that stops the worker: the supervisor stops the worker it owns
-        // (graceful verb, then the process). A worker whose window died keeps serving - measured
-        // above with the close step, which left it running.
-        DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+        Step("standalone.cleanup-after-close", WaitForNoExtraProcesses(options, baseline),
+            "process ids named " + ServerImageName(options.ServerExecutable) + ": [" +
+            string.Join(", ", ProcessIds(ServerImageName(options.ServerExecutable))) + "]");
+    }
+
+    /// <summary>Ends a worker left running after the harness could no longer reach its window.</summary>
+    private static void TryKillWorker(int pid)
+    {
+        try
+        {
+            using Process worker = Process.GetProcessById(pid);
+            TryKill(worker);
+        }
+        catch (ArgumentException)
+        {
+            // It exited between the measurement and here.
+        }
+    }
+
+    /// <summary>True when no process of the executable's image is left besides the ones that were there first.</summary>
+    private static bool WaitForNoExtraProcesses(DriverOptions options, int[] baseline, TimeSpan? timeout = null)
+    {
+        DateTime deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(20));
         int[] after = ProcessIds(ServerImageName(options.ServerExecutable));
-        while (DateTime.UtcNow < deadline && after.Any(id => id != _activeWindowPid && !baseline.Contains(id)))
+        while (DateTime.UtcNow < deadline && after.Any(id => !baseline.Contains(id)))
         {
             Thread.Sleep(500);
             after = ProcessIds(ServerImageName(options.ServerExecutable));
         }
 
-        int[] leftover = after.Where(id => id != _activeWindowPid && !baseline.Contains(id)).ToArray();
-        Step("standalone.no-orphan-worker", leftover.Length == 0,
-            "after exit, process ids named " + ServerImageName(options.ServerExecutable) + ": [" +
-            string.Join(", ", after) + "]; orphans [" + string.Join(", ", leftover) + "]");
+        return after.All(baseline.Contains);
     }
 
     /// <summary>The image name of an executable path, without its directory or extension.</summary>
     private static string ServerImageName(string executablePath) =>
         Path.GetFileNameWithoutExtension(executablePath);
+
+    /// <summary>TEMPORARY diagnostics: what the UI Automation tree looks like after a Win32-level restore.</summary>
+    private static string DescribeRestoredTree(AutomationElement root, nint handle)
+    {
+        var parts = new System.Collections.Generic.List<string>();
+        try
+        {
+            parts.Add("root name='" + root.Current.Name + "' class='" + root.Current.ClassName +
+                "' pid=" + root.Current.ProcessId + " hwnd=" + root.Current.NativeWindowHandle);
+        }
+        catch (Exception ex)
+        {
+            parts.Add("root unreadable: " + ex.GetType().Name);
+        }
+
+        try
+        {
+            parts.Add("root descendants=" + root.FindAll(TreeScope.Descendants, Condition.TrueCondition).Count);
+        }
+        catch (Exception ex)
+        {
+            parts.Add("root descendants failed: " + ex.GetType().Name + ": " + ex.Message);
+        }
+
+        try
+        {
+            AutomationElement byHandle = AutomationElement.FromHandle(handle);
+            parts.Add("from-handle name='" + byHandle.Current.Name + "' class='" + byHandle.Current.ClassName +
+                "' descendants=" + byHandle.FindAll(TreeScope.Descendants, Condition.TrueCondition).Count);
+        }
+        catch (Exception ex)
+        {
+            parts.Add("from-handle failed: " + ex.GetType().Name + ": " + ex.Message);
+        }
+
+        parts.Add("exit via root=" + (FindById(root, "exit", TimeSpan.FromSeconds(1)) is not null));
+        parts.Add("top-level: " + string.Join(" | ", TopLevelWindowNames()));
+        return string.Join("; ", parts);
+    }
 
     /// <summary>True while a process with that id is alive.</summary>
     private static bool IsProcessRunning(int pid)
@@ -692,14 +827,23 @@ internal static class Program
                     TreeScope.Children,
                     Condition.TrueCondition);
 
+                // A match by name alone is not enough: the privileged worker is the same executable
+                // and owns a top-level window with the role's caption, so "VirtualThere Server"
+                // matches the worker's window first as soon as the window has started one. The
+                // process that was launched for this step is the one that matters, and pidHint is
+                // it, so an exact pid wins and a name-only match is the fallback.
+                AutomationElement? byName = null;
+                AutomationElement? realWindow = null;
                 foreach (AutomationElement candidate in windows)
                 {
                     string? candidateName;
                     int candidatePid;
+                    int candidateHandle;
                     try
                     {
                         candidateName = candidate.Current.Name;
                         candidatePid = candidate.Current.ProcessId;
+                        candidateHandle = candidate.Current.NativeWindowHandle;
                     }
                     catch (Exception ex) when (IsTransient(ex))
                     {
@@ -719,11 +863,24 @@ internal static class Program
                     if (candidateName.Equals(name, StringComparison.Ordinal) ||
                         candidateName.Contains(name, StringComparison.OrdinalIgnoreCase))
                     {
-                        return candidate;
+                        if (pidHint != 0 && candidatePid == pidHint && candidateHandle != 0)
+                        {
+                            return candidate;
+                        }
+
+                        // A windowless proxy (the notification-area balloon is one: an empty class
+                        // name, no HWND, and the role's own caption) sorts beside the real window at
+                        // the top level, so a name-only match is the last resort.
+                        if (candidateHandle != 0)
+                        {
+                            realWindow ??= candidate;
+                        }
+
+                        byName ??= candidate;
                     }
                 }
 
-                return null;
+                return realWindow ?? byName;
             },
             timeout);
 
@@ -1326,6 +1483,15 @@ internal static partial class NativeMethods
 
     /// <summary>WM_CLOSE: what the window's X button sends. The window decides what it means.</summary>
     internal const uint WmClose = 0x0010;
+
+    /// <summary>WM_SYSKEYDOWN / WM_SYSKEYUP: an Alt+&lt;key&gt; mnemonic, as the keyboard sends it.</summary>
+    internal const uint WmSysKeyDown = 0x0104;
+
+    internal const uint WmSysKeyUp = 0x0105;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SetFocus(nint hWnd);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
