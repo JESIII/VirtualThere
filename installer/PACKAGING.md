@@ -21,9 +21,11 @@ never shipped. `build.ps1` is a thin wrapper around the same command for a Power
 
 `release` does, in order:
 
-1. **test** — the four test projects (`Vht.Core.Tests`, `Vht.Config.Tests`, `Vht.Transport.Tests`,
-   `src/Vht.Client/Tests/Vht.Client.Tests.csproj`). A failing test stops the release.
-2. **portable** (`xtask portable`) — publishes the four products as **self-contained single-file**
+1. **test** — the six test projects (`Vht.Core.Tests`, `Vht.Config.Tests`, `Vht.Transport.Tests`,
+   `Vht.Ui.Tests`, `Xtask.Tests`, `src/Vht.Client/Tests/Vht.Client.Tests.csproj`). A failing test
+   stops the release.
+2. **portable** (`xtask portable`) — publishes the three products (`vht-server`, `vht-client`,
+   `vht`) as **self-contained single-file**
    executables for `win-x64` into `dist/portable/`, plus the driver payload, the setup script and the
    `portable.marker` file that makes the config live next to the binaries.
 3. **installer** (`xtask installer`) — builds the MSI with WiX v5 from `installer/VirtualThere.wxs`,
@@ -294,16 +296,16 @@ Raw console output: `artifacts/packaging/release-and-verify.log`. Re-captured de
 `artifacts/packaging/` — every file carries the capture timestamp, the host and the **elevation state
 of the shell it was captured in** (this one is *not* elevated).
 
-* **The release build, end to end.** The four test projects pass; the four products publish as
+* **The release build, end to end.** The six test projects pass; the three products publish as
   self-contained single-file executables; the pinned vendor driver package is verified against its
   `SHA256SUMS` before it is copied; the MSI builds with WiX 5.0.2; `dist/release-manifest.txt` and
-  `dist/SHA256SUMS` list all 16 artifacts (373.3 MiB total) with sizes and SHA-256.
+  `dist/SHA256SUMS` list all 15 artifacts (463.5 MiB total) with sizes and SHA-256.
 * **`xtask verify` → PASS** (`dist/verify/verify-report.txt`). `wix msi decompile` of the built MSI,
   then: the expected tables exist (`ServiceInstall` for `vht-server`, both firewall rules with the
-  documented names and ports, the three shortcuts, the tray logon entry, all three custom actions, the
+  documented names and ports, the three shortcuts, all three custom actions, the
   pinned driver payload, the shipped packaging document); the package carries **no** wizard dialog
   table, no `LicenseAgreementDlg`, no `LicenseAcceptedCheckBox`, no `WixUILicenseRtf`, no `PIDKEY` and
-  no `WIXUI_INSTALLDIR`; and neither the MSI, its decompiled source, nor the four shipped executables
+  no `WIXUI_INSTALLDIR`; and neither the MSI, its decompiled source, nor the three shipped executables
   contain any of the forbidden tokens (the reference product's name, licence/activation/purchase
   wording, device-count wording).
 * **The MSI's own file table, laid out without installing anything.**
@@ -367,7 +369,7 @@ Elevated checklist for whoever has the clean VM (each command is also the manual
 corresponding custom action):
 
 ```powershell
-# 1. install (expected: %ProgramFiles%\VirtualThere with four exes, service running, two firewall
+# 1. install (expected: %ProgramFiles%\VirtualThere with three exes, service running, two firewall
 #    rules, driver present, logon task present, Start-menu folder present)
 msiexec /i VirtualThere-0.1.0-x64.msi /l*v install.log
 sc.exe query vht-server

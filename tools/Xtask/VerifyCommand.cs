@@ -70,10 +70,9 @@ internal static partial class VerifyCommand
         ("service display name", "VirtualThere USB Server"),
         ("firewall rule, plaintext listener", "VirtualThere USB/IP (TCP 3240)"),
         ("firewall rule, TLS listener", "VirtualThere USB/IP TLS (TCP 3241)"),
-        ("start-menu shortcut, server tray", "VirtualThere Server"),
-        ("start-menu shortcut, client tray", "VirtualThere Client"),
+        ("start-menu shortcut, server window", "VirtualThere Server"),
+        ("start-menu shortcut, client window", "VirtualThere Client"),
         ("start-menu shortcut, command line", "VirtualThere Command Line"),
-        ("tray logon entry", "VirtualThereTray"),
         ("driver install custom action", "Install-Driver.ps1"),
         ("driver uninstall custom action", "Uninstall-Driver.ps1"),
         ("client logon task custom action", "Install-ClientTask.ps1"),
@@ -94,6 +93,9 @@ internal static partial class VerifyCommand
         ("agreement text variable", "WixUILicenseRtf"),
         ("key-entry property", "PIDKEY"),
         ("install-directory wizard binding", "WIXUI_INSTALLDIR"),
+        // The tray binary was folded into vht-server/vht-client; packaging a fourth executable again
+        // would mean the two-window model silently reverted.
+        ("separate tray executable", "vht-tray"),
     ];
 
     internal static async Task<int> RunAsync(BuildContext context)

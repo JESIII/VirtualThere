@@ -4,7 +4,7 @@
     Makes a portable VirtualThere folder fully functional: driver, firewall, optional service.
 
 .DESCRIPTION
-    The portable build (dist/portable) is the no-installer path: the four executables run straight
+    The portable build (dist/portable) is the no-installer path: the three executables run straight
     from a folder, with their configuration kept next to them because the folder contains
     'portable.marker'. Nothing in the folder needs an installer to start:
 

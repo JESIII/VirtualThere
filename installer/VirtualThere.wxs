@@ -6,7 +6,7 @@
   deployment model, the driver strategy and the versioning/update story.
 
   What this package does, in one place, so it can be reviewed at a glance:
-    * installs the four binaries into %ProgramFiles%\VirtualThere
+    * installs the three binaries into %ProgramFiles%\VirtualThere
     * registers and starts the vht-server Windows service (name: vht-server)
     * installs the pinned third-party UDE host-controller driver via the upstream vendor package,
       hash-verified before it is executed (scripts\Install-Driver.ps1)
@@ -15,7 +15,7 @@
       and Windows Installer removes those rules again on uninstall
     * gives the client the privilege it needs without a UAC prompt at every logon: a logon task
       with the highest run level (scripts\Install-ClientTask.ps1)
-    * adds a logon entry for the tray UI, Start-menu shortcuts, and the Add/Remove Programs entry
+    * adds Start-menu shortcuts and the Add/Remove Programs entry
 
   Deliberately absent: any key-entry or agreement page, activation, purchase prompt, device count or
   "unlicensed" state. VirtualThere has no such concept (ARCHITECTURE.md §5.4), and Xtask's `verify`
@@ -24,7 +24,7 @@
 
   Preprocessor variables, all supplied by Xtask:
     var.Version    product version (from Directory.Build.props)
-    var.BinDir     directory holding the four published executables
+    var.BinDir     directory holding the three published executables
     var.DriverDir  third_party\usbip-win2-driver (pinned, verbatim)
     var.ScriptDir  installer\scripts
     var.DocDir     installer (for PACKAGING.md)
@@ -149,8 +149,8 @@
         </Component>
 
         <!--
-          There is no logon entry any more. It used to register the tray viewer at logon
-          (vht-tray.exe, with the server mode and the minimised flag); the management window is now
+          There is no logon entry any more. It used to register the old tray viewer at logon
+          (the separate tray executable, with the server mode and the minimised flag); the management window is now
           vht-server.exe, which a user opens when they want it, and nothing of VirtualThere's runs in
           the session unless the user asks for it. The optional service (installed by
           Setup-Portable.ps1 or `vht install`) is what runs unattended.

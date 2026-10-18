@@ -1,0 +1,5 @@
+# The pinned vendor payload under third_party/usbip-win2-driver is hash-verified against its
+# SHA256SUMS before it is packaged (xtask portable) and again at install time. Git's end-of-line
+# conversion would rewrite the text files there and make that pin fail on any fresh checkout with
+# core.autocrlf=true, so nothing under that directory is ever converted.
+third_party/usbip-win2-driver/** -text
