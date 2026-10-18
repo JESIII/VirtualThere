@@ -238,8 +238,11 @@ public sealed class WorkerSupervisor : IWorkerSupervisor, IDisposable
             }
             catch (Exception ex)
             {
-                // Expected for an elevated worker: an unelevated window may not end it. The
-                // worker's parent watch finishes the job the moment this process disappears.
+                // Expected for an elevated worker: an unelevated window may not end it, and nothing
+                // reaps it on this window's behalf - a worker outlives the window that started it
+                // (WorkerLifetime). So the failure is reported rather than retried: the operator's
+                // remaining route is the control pipe itself (server.stop / clients.detachAll,
+                // i.e. `vht-server stop-server`), which is why the graceful step is tried first.
                 LastError = "could not end the worker (pid " +
                     worker.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) + "): " + ex.Message;
             }

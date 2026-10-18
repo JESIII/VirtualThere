@@ -47,26 +47,7 @@ public sealed class WorkerProcessLauncher : IWorkerProcessHost
     {
         ArgumentNullException.ThrowIfNull(spec);
 
-        var info = new ProcessStartInfo
-        {
-            FileName = spec.ExecutablePath,
-            Arguments = spec.ArgumentsText(),
-            WorkingDirectory = spec.WorkingDirectory,
-            UseShellExecute = spec.Elevate,
-
-            // A WinExe worker has no console of its own, but when it is started without
-            // elevation it would inherit the window's standard handles; redirecting them keeps
-            // the worker's own log lines out of whatever console the window was launched from.
-            CreateNoWindow = !spec.Elevate,
-            RedirectStandardOutput = !spec.Elevate,
-            RedirectStandardError = !spec.Elevate,
-        };
-
-        if (spec.Elevate)
-        {
-            info.Verb = "runas";
-            info.WindowStyle = ProcessWindowStyle.Hidden;
-        }
+        ProcessStartInfo info = CreateStartInfo(spec);
 
         Process process = Process.Start(info)
             ?? throw new InvalidOperationException("the worker process could not be started");
@@ -86,6 +67,57 @@ public sealed class WorkerProcessLauncher : IWorkerProcessHost
         }
 
         return new WorkerProcess(process, output);
+    }
+
+    /// <summary>
+    /// The description Windows is handed for the worker: this is the whole of the elevation
+    /// contract, in one place, so it can be asserted instead of assumed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Elevated, <c>UseShellExecute</c> plus <c>Verb=runas</c> is the only combination that raises a
+    /// consent prompt, and it raises it for the one process it starts: exactly one prompt per spawn,
+    /// by construction rather than by retry logic. <c>WindowStyle.Hidden</c> is the worker's window
+    /// style, and <c>CreateNoWindow</c> is set for both modes: the role executables are WinExe
+    /// (PE subsystem 2), so there is no console to allocate in the first place, and the flag keeps
+    /// that true even if a console-subsystem binary were ever passed in here.
+    /// </para>
+    /// <para>
+    /// Unelevated (the automation path, <c>--no-elevate</c>) is started directly instead of through
+    /// the shell, because redirected handles are the only way to read what such a worker said, and
+    /// <c>ShellExecuteEx</c> hands over no handles at all.
+    /// </para>
+    /// </remarks>
+    internal static ProcessStartInfo CreateStartInfo(WorkerLaunchSpec spec)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+
+        var info = new ProcessStartInfo
+        {
+            FileName = spec.ExecutablePath,
+            Arguments = spec.ArgumentsText(),
+            WorkingDirectory = spec.WorkingDirectory,
+            UseShellExecute = spec.Elevate,
+
+            // No console window for the worker, ever - in either mode, elevated or not.
+            CreateNoWindow = true,
+
+            // Only asked for when the shell is not involved: a WinExe worker started unelevated
+            // would otherwise inherit the window's standard handles, and its own log lines would
+            // land in whatever console the window was launched from.
+            RedirectStandardOutput = !spec.Elevate,
+            RedirectStandardError = !spec.Elevate,
+        };
+
+        if (spec.Elevate)
+        {
+            // The one consent prompt. Windows allows one Verb per launch, and the worker is
+            // started with nothing that would start another process first.
+            info.Verb = "runas";
+            info.WindowStyle = ProcessWindowStyle.Hidden;
+        }
+
+        return info;
     }
 
     private sealed class WorkerProcess : IWorkerProcess
