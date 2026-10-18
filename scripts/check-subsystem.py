@@ -92,9 +92,24 @@ def main(argv):
     explicit = None
     if "--expect" in argv:
         index = argv.index("--expect")
+        if index + 1 >= len(argv):
+            print("--expect needs a value: a preset (%s) or comma-separated subsystem numbers"
+                  % ", ".join(sorted(PRESETS)), file=sys.stderr)
+            return 2
         value = argv[index + 1]
         argv = argv[:index] + argv[index + 2:]
-        explicit = PRESETS.get(value, {int(part) for part in value.split(",")})
+        # Look the value up as a preset FIRST; only parse numbers when it is not one. The two
+        # branches must stay exclusive - evaluating the numeric parse eagerly makes every preset
+        # name raise ValueError before the lookup can match.
+        if value.lower() in PRESETS:
+            explicit = PRESETS[value.lower()]
+        else:
+            try:
+                explicit = {int(part) for part in value.split(",")}
+            except ValueError:
+                print("--expect %r is neither a preset (%s) nor comma-separated subsystem numbers"
+                      % (value, ", ".join(sorted(PRESETS))), file=sys.stderr)
+                return 2
 
     paths = argv[1:]
     if not paths:
