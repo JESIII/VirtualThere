@@ -16,6 +16,7 @@
 
 using System;
 using Vht.Client.Cli;
+using Vht.Client.Config;
 using Vht.Ui;
 using Vht.Ui.Hosting;
 
@@ -58,14 +59,23 @@ internal static class Program
             // double-click with --help - it is shown in a dialog rather than vanishing.
             if (!HostConsole.EnsureForVerbs())
             {
-                return UiHost.Run(UiRole.Client, args);
+                return UiHost.Run(UiRole.Client, args, WorkerOutputLogDirectory());
             }
 
             return RunBlocking(ClientCli.RunAsync(["--help"], Console.Out, Console.Error), worker: false);
         }
 
-        return UiHost.Run(UiRole.Client, args);
+        return UiHost.Run(UiRole.Client, args, WorkerOutputLogDirectory());
     }
+
+    /// <summary>
+    /// The default log directory the window keeps its worker's output record in: the same rule the
+    /// server window uses (<c>&lt;resolved config directory&gt;\logs</c>), with the client's own
+    /// resolved config directory. Handed to the window rather than resolved inside it so the path
+    /// rule stays with the executables that own it.
+    /// </summary>
+    private static string WorkerOutputLogDirectory() =>
+        Path.Combine(ClientPaths.ConfigDirectory, "logs");
 
     /// <summary>Clients run a long-lived bridge; the console path has to be driven to completion here.</summary>
     private static int RunBlocking(System.Threading.Tasks.Task<int> run, bool worker)

@@ -17,6 +17,9 @@ internal sealed class FakeWorkerProcess : IWorkerProcess
     /// <summary>Lines the fake worker "wrote", for the tests that check they survive its exit.</summary>
     public IReadOnlyList<string> OutputTail { get; set; } = Array.Empty<string>();
 
+    /// <summary>The durable file the fake worker's output would be persisted to, if any.</summary>
+    public string? OutputLogFile { get; set; }
+
     /// <summary>
     /// True when the process leaves on its own once <see cref="Terminate"/> is called.
     /// <c>ExitOnTerminate=false</c> models the client worker, which has no shutdown verb at all; the

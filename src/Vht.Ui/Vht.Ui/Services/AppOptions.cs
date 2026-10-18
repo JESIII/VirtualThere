@@ -28,6 +28,14 @@ public sealed class AppOptions
     /// </summary>
     public UiRole Role { get; internal set; } = UiRole.Server;
 
+    /// <summary>
+    /// The default log directory the role executable resolved for the worker's durable output
+    /// record (see <see cref="Hosting.WorkerLaunchSpec.OutputLogDirectory"/>). Set by
+    /// <see cref="UiHost.Run"/> from the executable's own path resolution, so the window cannot
+    /// disagree with the worker about where logs go; the command line cannot override it.
+    /// </summary>
+    public string? WorkerOutputLogDirectory { get; internal set; }
+
     public string PipeName { get; private set; } = Branding.PipeServer;
 
     public bool PipeNameExplicit { get; private set; }

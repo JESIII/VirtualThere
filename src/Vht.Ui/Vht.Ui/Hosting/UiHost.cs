@@ -43,14 +43,24 @@ public static class UiHost
         return false;
     }
 
-    /// <summary>Runs the management window for <paramref name="role"/>. Returns the process exit code.</summary>
-    public static int Run(UiRole role, IReadOnlyList<string> args)
+    /// <summary>
+    /// Runs the management window for <paramref name="role"/>. Returns the process exit code.
+    /// <paramref name="workerOutputLogDirectory"/> is the default log directory the executable
+    /// resolved (the server runtime log's <c>&lt;resolved config directory&gt;\logs</c>); the
+    /// window hands it to the launcher so a worker's captured output lands next to the worker's
+    /// own log rather than somewhere of the window's choosing.
+    /// </summary>
+    public static int Run(
+        UiRole role,
+        IReadOnlyList<string> args,
+        string? workerOutputLogDirectory = null)
     {
         AppOptions options = AppOptions.Parse(args);
 
         // The executable decides the role; --mode is accepted but cannot change it. The default
         // control pipe follows from the role, so it is resolved only once the role is set.
         options.Role = role;
+        options.WorkerOutputLogDirectory = workerOutputLogDirectory;
         options.ResolveDefaultPipe();
 
         if (options.ShowHelp)

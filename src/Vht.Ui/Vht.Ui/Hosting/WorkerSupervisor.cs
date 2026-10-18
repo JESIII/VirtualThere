@@ -298,18 +298,27 @@ public sealed class WorkerSupervisor : IWorkerSupervisor, IDisposable
     /// <summary>
     /// The sentence that says where a worker's dying words ended up, appended to both failure
     /// messages so an operator is never told "it did not come up" without being told where to look.
+    /// The durable record is named whenever there is one: that file is what survives both this
+    /// window and the worker.
     /// </summary>
     private string WhereTheOutputIs()
     {
+        string? file = _worker?.OutputLogFile;
+        string kept = file is null
+            ? string.Empty
+            : LastWorkerOutput.Count > 0
+                ? "; every line it wrote is also kept in " + file
+                : "; the launch is recorded in " + file;
+
         if (LastWorkerOutput.Count > 0)
         {
-            return "; its last output is shown below";
+            return "; its last output is shown below" + kept;
         }
 
-        return _spec.Elevate
+        return (_spec.Elevate
             ? "; its output went to the server's runtime log (run 'vht status' for the path) - an " +
               "elevated worker cannot be redirected by this window"
-            : "; it wrote no output";
+            : "; it wrote no output") + kept;
     }
 
     public void Dispose()

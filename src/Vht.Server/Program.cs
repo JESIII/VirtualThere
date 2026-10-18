@@ -80,7 +80,7 @@ public static class Program
             // double-click with --help - it is shown in a dialog rather than vanishing.
             if (!HostConsole.EnsureForVerbs())
             {
-                return UiHost.Run(UiRole.Server, args);
+                return UiHost.Run(UiRole.Server, args, DefaultLogDirectory());
             }
 
             PrintHelp(Console.Out);
@@ -88,8 +88,18 @@ public static class Program
         }
 
         // No verb: this is the server, so this is the server window.
-        return UiHost.Run(UiRole.Server, args);
+        return UiHost.Run(UiRole.Server, args, DefaultLogDirectory());
     }
+
+    /// <summary>
+    /// The default log directory the window keeps its worker's output record in: the same
+    /// <c>&lt;resolved config directory&gt;\logs</c> the worker's own runtime log is written to,
+    /// resolved through the same rule (<see cref="ServerConfigLoader.Resolve"/>), so the two
+    /// records - the worker's and the window's - land in one place whichever way the worker was
+    /// launched.
+    /// </summary>
+    private static string DefaultLogDirectory() =>
+        ServerConfigLoader.DefaultLogDirectory(ServerConfigLoader.Resolve());
 
     /// <summary>The verb, when one was given explicitly. No verb means "open the window".</summary>
     private static string? VerbOf(string[] args) =>
@@ -227,9 +237,10 @@ public static class Program
 
         // Built before the configuration file is read, and always pointed at a real file. The
         // window's worker is a windowless WinExe (elevated: ShellExecuteEx with no redirection and
-        // no console to inherit; unelevated: the window drains and discards its stdout), so a
-        // default of "no file" means nothing it writes is ever recoverable - not the refusal, not
-        // the failure, not the lines it got out before it died.
+        // no console to inherit; unelevated: the window drains its stdout into a bounded tail and a
+        // per-pid record file of its own), so a default of "no file" means the worker's own account
+        // of its start-up is unrecoverable - not the refusal, not the failure, not the lines it got
+        // out before it died.
         var logger = BuildLogger(options, paths, out string defaultLogPath);
 
         if (paths.Source == ConfigSourceKind.Portable)

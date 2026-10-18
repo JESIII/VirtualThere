@@ -45,13 +45,18 @@ public static class ServerConfigLoader
     /// Derived from <see cref="Resolve"/> rather than assembled, so the log cannot end up somewhere
     /// the marker does not govern. Note that <c>%ProgramData%\VirtualThere\logs</c> is also where
     /// the setup scripts put <c>portable-setup.log</c>: the server's file is <c>server.log</c>, so
-    /// the two never collide.
+    /// the two never collide. The directory (not just the file) is public because the window keeps
+    /// its worker's own output record there too, and one rule must decide it.
     /// </remarks>
-    public static string DefaultLogFile(ConfigPaths paths)
+    public static string DefaultLogDirectory(ConfigPaths paths)
     {
         ArgumentNullException.ThrowIfNull(paths);
-        return Path.Combine(paths.Directory, LogDirectoryName, LogFileName);
+        return Path.Combine(paths.Directory, LogDirectoryName);
     }
+
+    /// <summary>The server's runtime log file inside <see cref="DefaultLogDirectory"/>.</summary>
+    public static string DefaultLogFile(ConfigPaths paths) =>
+        Path.Combine(DefaultLogDirectory(paths), LogFileName);
 
     /// <summary>
     /// Resolves where <c>server.toml</c> lives, through the product-wide rule

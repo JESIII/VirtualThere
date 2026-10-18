@@ -22,6 +22,16 @@ public interface IWorkerProcess : IDisposable
     /// </summary>
     IReadOnlyList<string> OutputTail { get; }
 
+    /// <summary>
+    /// The durable file this launch's record is written to
+    /// (<c>worker-&lt;pid&gt;.log</c> in the launch's log directory), or null when nothing is being
+    /// persisted - no directory was supplied, or the file could not be opened. It holds the launch
+    /// line and, when the output could be redirected, every line the worker wrote, stamped with
+    /// time and pid and flushed as it arrived: that is what survives a worker killed before it
+    /// binds the control pipe.
+    /// </summary>
+    string? OutputLogFile { get; }
+
     /// <summary>Waits up to <paramref name="timeout"/>; returns true if the process exited.</summary>
     bool WaitForExit(TimeSpan timeout);
 
@@ -73,35 +83,70 @@ public sealed class WorkerProcessLauncher : IWorkerProcessHost
 
         var output = new WorkerOutputBuffer();
 
+        // Written for both launch modes, before anything else can be known about the worker's
+        // output: a worker killed before it binds the pipe leaves at least this - pid, time, and
+        // the command line it was started with. For an elevated worker it is all the window can
+        // write at all.
+        WorkerOutputLog? log = WorkerOutputLog.TryCreate(
+            spec.OutputLogDirectory, process.Id, LaunchRecord(spec));
+
         if (!spec.Elevate)
         {
             // Retained, not discarded. An unelevated worker's own log lines are the only record of
-            // why it did not come up - and once it has exited there is nothing left to ask. The
+            // why it did not come up - and once it has exited there is nothing left to ask. They
+            // are kept twice: the bounded tail below for the window log, and the durable file
+            // (stamped and flushed line by line) for the worker that is killed mid-sentence. The
             // handler has to keep draining the pipes either way: undrained, the worker blocks once
-            // the buffer fills.
-            process.OutputDataReceived += (_, e) => output.Append(e.Data);
-            process.ErrorDataReceived += (_, e) => output.Append(e.Data, isError: true);
+            // the buffer fills. The file is written first, so a line visible in the tail is a line
+            // already on disk.
+            process.OutputDataReceived += (_, e) =>
+            {
+                log?.Append(e.Data);
+                output.Append(e.Data);
+            };
+            process.ErrorDataReceived += (_, e) =>
+            {
+                log?.Append(e.Data, isError: true);
+                output.Append(e.Data, isError: true);
+            };
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
         }
 
-        return new WorkerProcess(process, output);
+        return new WorkerProcess(process, output, log);
     }
+
+    /// <summary>
+    /// The durable record's first line: what was launched, and which channel its output has. The
+    /// two modes differ because the channels do - <c>ShellExecuteEx</c> hands over no handles, so
+    /// an elevated worker's lines only ever reach its own runtime log.
+    /// </summary>
+    internal static string LaunchRecord(WorkerLaunchSpec spec) =>
+        "launched " + (spec.Elevate ? "elevated (ShellExecuteEx, verb=runas)" : "unelevated") +
+        ": " + spec.ExecutablePath + " " + spec.ArgumentsText() +
+        (spec.Elevate
+            ? "; stdout and stderr cannot be redirected by this window - the worker writes its own " +
+              "runtime log in the default log directory ('vht status' prints the path)"
+            : "; its stdout and stderr are captured below");
 
     private sealed class WorkerProcess : IWorkerProcess
     {
         private readonly Process _process;
         private readonly WorkerOutputBuffer _output;
+        private readonly WorkerOutputLog? _log;
 
-        internal WorkerProcess(Process process, WorkerOutputBuffer output)
+        internal WorkerProcess(Process process, WorkerOutputBuffer output, WorkerOutputLog? log)
         {
             _process = process;
             _output = output;
+            _log = log;
         }
 
         public int Id => _process.Id;
 
         public IReadOnlyList<string> OutputTail => _output.Snapshot();
+
+        public string? OutputLogFile => _log?.Path;
 
         public bool HasExited
         {
@@ -140,7 +185,28 @@ public sealed class WorkerProcessLauncher : IWorkerProcessHost
             _process.Kill(entireProcessTree: true);
         }
 
-        public void Dispose() => _process.Dispose();
+        public void Dispose()
+        {
+            // An exited worker's last lines are still in flight on the reader threads; the
+            // parameterless WaitForExit is the documented drain point for asynchronous reads, and
+            // it returns at once once the process is gone. Without it a killed worker's dying
+            // words can be dropped here, after the file they belong in was flushed and before
+            // anyone gets to read it - which is exactly the case the durable record exists for.
+            try
+            {
+                if (HasExited)
+                {
+                    _process.WaitForExit();
+                }
+            }
+            catch (SystemException)
+            {
+                // The process is gone: nothing left to drain.
+            }
+
+            _process.Dispose();
+            _log?.Dispose();
+        }
     }
 }
 

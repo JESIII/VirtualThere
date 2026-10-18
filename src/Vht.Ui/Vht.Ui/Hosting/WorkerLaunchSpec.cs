@@ -38,6 +38,17 @@ public sealed class WorkerLaunchSpec
     /// <summary>True to raise the single UAC prompt; false only for the harness (<c>--no-elevate</c>).</summary>
     public bool Elevate { get; init; } = true;
 
+    /// <summary>
+    /// Where the window keeps the durable record of this launch: one <c>worker-&lt;pid&gt;.log</c>
+    /// per worker (see <see cref="WorkerOutputLog"/>), in the default log directory the role
+    /// executable resolved - the server runtime log's <c>&lt;resolved config directory&gt;\logs</c>,
+    /// so both records land in one place. Handed in through <see cref="AppOptions"/> rather than
+    /// resolved here: the product-wide path rule lives with the role executables, and the window
+    /// must not grow a second copy of it. Null (nothing supplied, or a harness test) means nothing
+    /// is persisted and the launch behaves exactly as it did before.
+    /// </summary>
+    public string? OutputLogDirectory { get; init; }
+
     /// <summary>The command line as one string, for <see cref="System.Diagnostics.ProcessStartInfo.Arguments"/>.</summary>
     public string ArgumentsText()
     {
@@ -82,6 +93,7 @@ public sealed class WorkerLaunchSpec
             Arguments = arguments,
             WorkingDirectory = Path.GetDirectoryName(executable) ?? AppContext.BaseDirectory,
             Elevate = !options.NoElevate,
+            OutputLogDirectory = options.WorkerOutputLogDirectory,
         };
     }
 
