@@ -33,6 +33,26 @@ public sealed class DeviceSnapshot
 
     public bool PasswordProtected { get; init; }
 
+    /// <summary>
+    /// False for a device the server saw but will not advertise (capture-unsupported, unsafe,
+    /// ignored). Such a device is still listed - with its reason - so it never silently
+    /// disappears from the window.
+    /// </summary>
+    public bool Exported { get; init; } = true;
+
+    /// <summary>The enumerator's operator-facing explanation for its verdict, when there is one.</summary>
+    public string? CaptureDetail { get; init; }
+
+    /// <summary>Which capture path the last attempt used: <c>P1</c>, <c>P2</c>, or <c>none</c>.</summary>
+    public string? CapturePath { get; init; }
+
+    /// <summary>
+    /// What the last capture/rebind attempt did, in the vocabulary the server distinguishes -
+    /// <c>not elevated</c>, <c>P2 rebind failed: &lt;detail&gt;</c>,
+    /// <c>rebound ... a reboot is required ...</c>. Null when nothing was attempted yet.
+    /// </summary>
+    public string? CaptureOutcome { get; init; }
+
     public string DisplayName =>
         string.IsNullOrWhiteSpace(Nickname)
             ? (string.IsNullOrWhiteSpace(Product) ? "(unnamed device)" : Product!)
@@ -54,6 +74,20 @@ public sealed class DeviceSnapshot
     };
 
     public string StatusText => CaptureText.StatusText(CaptureState, CaptureReason, Ignored);
+
+    /// <summary>
+    /// The per-device capture/rebind outcome line, empty when no attempt was made. This is what
+    /// tells the operator <em>which</em> of P1/P2 ran and what came of it - including the three
+    /// rebind outcomes ("not elevated", "P2 rebind failed: ...", "rebound ... a reboot is
+    /// required ...") that would otherwise only exist in the runtime log.
+    /// </summary>
+    public string OutcomeText => CaptureOutcome is null ? string.Empty : CaptureOutcome;
+
+    /// <summary>Status tooltip: the full reason, plus the capture outcome when there is one.</summary>
+    public string DetailText => CaptureOutcome is null
+        ? CaptureText.DescribeReason(CaptureReason)
+        : CaptureText.DescribeReason(CaptureReason) + "\n\nLast capture (" +
+          (CapturePath ?? "none") + "): " + CaptureOutcome;
 
     public bool Exportable => !Ignored && CaptureState == CaptureState.Capturable;
 }

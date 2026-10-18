@@ -34,10 +34,14 @@ internal sealed class MockState
     private void SeedDevices()
     {
         AddDevice("usb\\vid_046d&pid_c52b\\5&1a2b3c4d&0&2", "1-4", "Barcode scanner", 0x046d, 0xc52b,
-            "Logitech", "USB Receiver", CaptureStateCapturable, "None", attached: 1, ignored: false, password: false);
+            "Logitech", "USB Receiver", CaptureStateCapturable, "None", attached: 1, ignored: false, password: false,
+            capturePath: "P1",
+            captureOutcome: "claimed on the WinUSB interface the device already had (P1); no rebind was needed");
 
         AddDevice("usb\\vid_04b8&pid_0202\\5&2b3c4d5e&0&1", "1-5", "Label printer", 0x04b8, 0x0202,
-            "Seiko Epson", "TM-T88VI", CaptureStateCapturable, "None", attached: 0, ignored: false, password: false);
+            "Seiko Epson", "TM-T88VI", CaptureStateCapturable, "None", attached: 0, ignored: false, password: false,
+            capturePath: "P2",
+            captureOutcome: "rebound onto the inbox winusb.sys (oem42.inf)");
 
         AddDevice("usb\\vid_046d&pid_0a38\\5&3c4d5e6f&0&1", "1-6", "Conference microphone", 0x046d, 0x0a38,
             "Logitech", "USB Microphone", CaptureStateCapturable, "None", attached: 0, ignored: false, password: false);
@@ -46,13 +50,34 @@ internal sealed class MockState
             "SanDisk", "Ultra Fit", CaptureStateCapturable, "None", attached: 0, ignored: false, password: false);
 
         AddDevice("usb\\vid_0bda&pid_58e0\\5&5e6f7081&0&1", "1-8", "Internal webcam", 0x0bda, 0x58e0,
-            "Realtek", "Integrated Webcam", "CaptureUnsupported", "DriverHoldsDevice", attached: 0, ignored: false, password: false);
+            "Realtek", "Integrated Webcam", "CaptureUnsupported", "DriverHoldsDevice", attached: 0, ignored: false, password: false,
+            detail: "the device's function driver holds it exclusively and will not release it");
 
         AddDevice("usb\\vid_046d&pid_c31c\\5&6f708192&0&1", "1-9", "Built-in keyboard", 0x046d, 0xc31c,
-            "Logitech", "USB Keyboard", "UnsafeToExport", "SystemCritical", attached: 0, ignored: false, password: false);
+            "Logitech", "USB Keyboard", "UnsafeToExport", "SystemCritical", attached: 0, ignored: false, password: false,
+            detail: "Keyboard class device; exporting the console input device is never allowed");
 
         AddDevice("usb\\vid_10c4&pid_ea60\\5&708192a3&0&1", "1-10", "USB-to-serial adapter", 0x10c4, 0xea60,
             "Silicon Labs", "CP2102 USB to UART Bridge", CaptureStateCapturable, "None", attached: 0, ignored: false, password: false);
+
+        // Three driver-held devices whose P2 rebind was attempted and produced each of the three
+        // outcomes the server distinguishes. The window must show the outcome on the device's
+        // row: not elevated, rebind failed, and rebound-but-reboot-required.
+        AddDevice("usb\\vid_0531&pid_0101\\5&9a0b1c2d&0&1", "1-12", "Drawing tablet", 0x0531, 0x0101,
+            "Wacom", "Intuos Draw", "RebindOffered", "DriverHoldsDevice", attached: 0, ignored: false, password: false,
+            capturePath: "P2",
+            captureOutcome: "capture.rebind.enabled is set but this process is not elevated, so the P2 rebind path cannot run",
+            detail: "the device's function driver holds it exclusively; capture.rebind.enabled offers the P2 rebind path");
+        AddDevice("usb\\vid_0c27&pid_3b22\\5&0b1c2d3e&0&1", "1-13", "RFID reader", 0x0c27, 0x3b22,
+            "HID Global", "OMNIKEY 5022", "RebindOffered", "DriverHoldsDevice", attached: 0, ignored: false, password: false,
+            capturePath: "P2",
+            captureOutcome: "P2 rebind failed: SetupCopyOEMInf failed for C:\\ProgramData\\VirtualThere\\driver\\vht-0c273b22.inf (win32 740: the required image is in use)",
+            detail: "the device's function driver holds it exclusively; capture.rebind.enabled offers the P2 rebind path");
+        AddDevice("usb\\vid_07fd&pid_0002\\5&1c2d3e4f&0&1", "1-14", "MIDI controller", 0x07fd, 0x0002,
+            "Mark of the Unicorn", "MIDI Express XT", "RebindOffered", "DriverHoldsDevice", attached: 0, ignored: false, password: false,
+            capturePath: "P2",
+            captureOutcome: "rebound onto the inbox winusb.sys (oem42.inf); a reboot is required before the binding is effective, so the device was not taken - reboot the machine and attach it again",
+            detail: "the device's function driver holds it exclusively; capture.rebind.enabled offers the P2 rebind path");
 
         if (!string.Equals(_scenario, "minimal", StringComparison.OrdinalIgnoreCase))
         {
@@ -386,7 +411,8 @@ internal sealed class MockState
 
     private void AddDevice(
         string key, string busId, string nickname, int vid, int pid, string vendor, string product,
-        string captureState, string captureReason, int attached, bool ignored, bool password)
+        string captureState, string captureReason, int attached, bool ignored, bool password,
+        string capturePath = "none", string? captureOutcome = null, string? detail = null)
     {
         _devices.Add(new JsonObject
         {
@@ -402,6 +428,14 @@ internal sealed class MockState
             ["captureReason"] = captureReason,
             ["ignored"] = ignored,
             ["passwordProtected"] = password,
+            // Exported mirrors the claimability rule: a device the server refuses or skips is
+            // still listed (with its reason), but never advertised.
+            ["exported"] = captureState == CaptureStateCapturable ||
+                captureState == "RebindOffered" ||
+                captureState == "AlreadyAttached",
+            ["detail"] = detail,
+            ["capture_path"] = capturePath,
+            ["capture_outcome"] = captureOutcome,
         });
     }
 

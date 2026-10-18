@@ -2,6 +2,7 @@ using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Vht.Core.Capture;
 using Vht.Core.Concurrency;
 using Vht.Core.Hooks;
 using Vht.Core.Protocol;
@@ -287,10 +288,15 @@ public sealed class ControlPlaneServer : IAsyncDisposable
     {
         var devices = new JsonArray();
 
-        foreach (ExportEntry entry in _state.Exports.Snapshot())
+        // Every device the enumerator saw is listed - exported or refused - so a device that
+        // capture or rebind could not take is visible on the operator's window with its reason
+        // and its capture outcome, never silently absent. Only exported devices are advertised
+        // to clients; "exported" below is what distinguishes the two.
+        foreach (UsbDevice device in _state.ObservedDevices())
         {
-            UsbDevice device = entry.Device;
+            bool exported = _state.Exports.TryGet(device.Key, out ExportEntry entry);
             bool attached = _state.Attachments.TryGet(device.Key, out AttachRecord record);
+            _state.CaptureOutcomes.TryGet(device.Key, out CaptureOutcome? outcome);
 
             devices.Add(new JsonObject
             {
@@ -306,13 +312,20 @@ public sealed class ControlPlaneServer : IAsyncDisposable
                 ["class"] = UsbClass.Name(device.DeviceClass),
                 ["state"] = device.CaptureState.ToString(),
                 ["reason"] = device.CaptureReason.Describe(),
+                ["detail"] = device.CaptureDetail,
                 ["path"] = device.SysPath,
                 ["instance_path"] = device.InstancePath,
                 ["password_required"] = device.RequiresPassword,
+                ["exported"] = exported,
                 ["attached"] = attached,
                 ["attached_to"] = attached ? record.RemoteAddress : null,
                 ["connection_id"] = attached ? record.ConnectionId.Value : null,
-                ["binds"] = entry.BindCount,
+                ["binds"] = exported ? entry.BindCount : 0,
+                // The last capture/rebind attempt for this device: which of P1/P2 ran and what
+                // came of it ("not elevated", "P2 rebind failed: ...", "rebound ... a reboot is
+                // required ..."), or null when nothing was attempted yet.
+                ["capture_path"] = outcome?.Path,
+                ["capture_outcome"] = outcome?.Detail,
             });
         }
 
@@ -467,7 +480,22 @@ public sealed class ControlPlaneServer : IAsyncDisposable
     private UsbDevice? FindDevice(string busId)
     {
         DeviceKey key = DeviceKey.FromBusId(busId);
-        return _state.Exports.TryGet(key, out ExportEntry entry) ? entry.Device : null;
+        if (_state.Exports.TryGet(key, out ExportEntry entry))
+        {
+            return entry.Device;
+        }
+
+        // A device the server refuses to export is still listed in the operator's view, so its
+        // row actions (nickname, password, ignore) must resolve it too rather than 404.
+        foreach (UsbDevice observed in _state.ObservedDevices())
+        {
+            if (observed.Key == key)
+            {
+                return observed;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

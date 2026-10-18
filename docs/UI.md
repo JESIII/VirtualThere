@@ -147,7 +147,7 @@ against the shipped executables (see section 7).
 | Log viewer (Clear / Copy to clipboard / Close) | `toggle-log` + `Views/LogView.xaml` | `log.tail` (poll) |
 | About box | `about` | none (branding + Apache-2.0 notice, no licence text) |
 | Exit | `exit` | none (real shutdown) |
-| Device list: nickname, `[vid:pid]`, bus ID, attached-client count, password state, status | `Devices` rows | `devices.list` |
+| Device list: nickname, `[vid:pid]`, bus ID, attached-client count, password state, status, last capture/rebind outcome | `Devices` rows | `devices.list` |
 | Kick clients | `kick:<busid>` | `devices.kick` |
 | Ignore / Unignore | `ignore:<busid>` (label follows state) | `devices.ignore` / `devices.unignore` |
 | Rename | `nickname:<busid>` | `devices.nickname` |
@@ -157,6 +157,13 @@ Devices the server cannot export are listed with the reason string derived from
 `CaptureState`/`CaptureReason` (e.g. "Cannot capture - driver holds the device",
 "Not exportable - system-critical input device") instead of being hidden - the card requires
 that capture-unsupported is visible rather than silent.
+
+The Status cell carries a second line: the outcome of the last capture/rebind attempt for that
+device, in the same vocabulary as the runtime log (`devices.list` -> `capture_path` +
+`capture_outcome`). The three P2 outcomes are distinguishable on the row itself - "not elevated"
+(the rebind was refused before the attempt), "P2 rebind failed: <detail>" (Windows refused it),
+and "rebound ... a reboot is required ..." (it succeeded but only takes effect after a reboot) -
+so a device whose rebind did not succeed is never silently absent.
 
 ### Client window - `Views/ClientWindow.xaml`, `ViewModels/ClientViewModel.cs`
 

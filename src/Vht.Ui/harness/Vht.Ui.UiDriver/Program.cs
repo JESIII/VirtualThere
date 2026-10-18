@@ -54,6 +54,10 @@ internal static class Program
         Process? clientWindowProcess = null;
         Process? standAloneWindow = null;
 
+        // Server processes that already existed before this run: they are somebody else's and must
+        // never be killed. Anything named vht-server.exe that appears later is this run's.
+        int[] serverBaseline = ProcessIds(ServerImageName(options.ServerExecutable));
+
         try
         {
             // ---------------- server mode ----------------
@@ -90,6 +94,17 @@ internal static class Program
 
             WaitFor(() => true, TimeSpan.FromSeconds(1), "settle");
             Capture(serverWindow, Path.Combine(options.OutputDirectory, "server-devices.png"), "server-devices.png");
+
+            // ---- per-device capture/rebind outcomes, read off the real rows ----
+            // The mock serves three driver-held devices whose P2 rebind produced each of the three
+            // outcomes the server distinguishes. Each was absent from the window before this card;
+            // the assertion is on the text the row shows, found by the automation id the Status
+            // column's outcome line carries.
+            OutcomeStep(serverWindow, "1-12", "not elevated", "server.outcome.not-elevated");
+            OutcomeStep(serverWindow, "1-13", "P2 rebind failed:", "server.outcome.rebind-failed");
+            ScrollToEnd(serverWindow, "device-grid", "server.device-grid.scrolled-to-end");
+            OutcomeStep(serverWindow, "1-14", "a reboot is required", "server.outcome.reboot-required");
+            Capture(serverWindow, Path.Combine(options.OutputDirectory, "server-outcomes.png"), "server-outcomes.png");
 
             Invoke(serverWindow, "toggle-log", "show log viewer");
             WaitFor(() => true, TimeSpan.FromSeconds(2), "log refresh");
@@ -151,6 +166,35 @@ internal static class Program
             // ---------------- stand-alone pass: the window starts its own worker ----------------
             if (!options.SkipWorkerPass)
             {
+                // A window is a single instance per role: the mock-driven server window above still
+                // holds the per-role instance claim, and a second vht-server.exe would hand off to it
+                // (showing "already running") and never open a window. That is the product's rule, not
+                // a failure of the pass, so this run's server processes - the mock-driven window and
+                // the worker its Start button launched - are stopped first; every mock step is done.
+                if (serverWindowProcess is not null)
+                {
+                    TryKill(serverWindowProcess);
+                    serverWindowProcess = null;
+                }
+
+                foreach (int pid in ProcessIds(ServerImageName(options.ServerExecutable)))
+                {
+                    if (serverBaseline.Contains(pid)) continue;
+
+                    try
+                    {
+                        TryKill(Process.GetProcessById(pid));
+                    }
+                    catch (ArgumentException)
+                    {
+                        // It exited between the enumeration and the handle being opened.
+                    }
+                }
+
+                WaitFor(() => ProcessIds(ServerImageName(options.ServerExecutable))
+                        .All(pid => serverBaseline.Contains(pid)),
+                    TimeSpan.FromSeconds(15), "this run's earlier server processes are gone before the stand-alone pass");
+
                 WorkerPass(options, ref standAloneWindow);
             }
 
@@ -369,6 +413,63 @@ internal static class Program
     }
 
     // ------------------------------------------------------------------ steps
+
+    /// <summary>
+    /// Scrolls a scrollable control to the row it needs: a virtualizing list realises only the rows
+    /// in view, so a device near the bottom of the list is not in the automation tree at all until
+    /// the grid is scrolled there.
+    /// </summary>
+    private static void ScrollToEnd(AutomationElement window, string automationId, string stepName)
+    {
+        AutomationElement? element = FindById(window, automationId, TimeSpan.FromSeconds(5));
+        bool ok = false;
+        string detail = "no '" + automationId + "' element";
+
+        if (element is not null)
+        {
+            try
+            {
+                if (element.TryGetCurrentPattern(ScrollPattern.Pattern, out object? pattern))
+                {
+                    var scroll = (ScrollPattern)pattern;
+                    if (scroll.Current.VerticallyScrollable)
+                    {
+                        scroll.SetScrollPercent(ScrollPattern.NoScroll, 100);
+                    }
+
+                    ok = true;
+                    detail = "scrolled to the end (" + scroll.Current.VerticalScrollPercent.ToString("0", System.Globalization.CultureInfo.InvariantCulture) + "%)";
+                }
+                else
+                {
+                    detail = "'" + automationId + "' does not expose ScrollPattern";
+                }
+            }
+            catch (Exception ex) when (IsTransient(ex) || ex is InvalidOperationException)
+            {
+                detail = "'" + automationId + "' could not be scrolled: " + ex.GetType().Name;
+            }
+        }
+
+        Step(stepName, ok, detail);
+    }
+
+    /// <summary>
+    /// Asserts what one device's row says about its last capture/rebind attempt: the outcome line
+    /// carries the expected phrase, and the row exists at all (a device that cannot be exported
+    /// used to be omitted, which is the defect this reads for).
+    /// </summary>
+    private static void OutcomeStep(AutomationElement window, string busId, string expected, string stepName)
+    {
+        AutomationElement? outcome = null;
+        WaitFor(() => (outcome = FindById(window, "outcome:" + busId, TimeSpan.FromSeconds(2))) is not null,
+            TimeSpan.FromSeconds(8),
+            "the outcome line of device " + busId + " appears");
+
+        string? text = ReadText(outcome);
+        bool ok = text is not null && text.Contains(expected, StringComparison.Ordinal);
+        Step(stepName, ok, "device " + busId + " row says: " + (text ?? "(no text)"));
+    }
 
     private static void Step(string name, bool ok, string? detail)
     {

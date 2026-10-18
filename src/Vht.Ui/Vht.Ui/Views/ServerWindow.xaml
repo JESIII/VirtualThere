@@ -71,13 +71,15 @@
               AutomationProperties.Name="Exit the tray application" />
     </WrapPanel>
 
-    <!-- Exported devices -->
+    <!-- Every device the server enumerated: exported ones and the ones it refuses or skips, the
+         latter carrying their reason and the outcome of the last capture/rebind attempt. -->
     <Grid Grid.Row="2">
       <Border Style="{StaticResource PanelBorderStyle}">
         <DataGrid x:Name="DeviceGrid"
                   ItemsSource="{Binding Devices}"
                   SelectionMode="Single"
-                  AutomationProperties.Name="Exported devices"
+                  AutomationProperties.AutomationId="device-grid"
+                  AutomationProperties.Name="Devices"
                   ColumnWidth="Auto">
           <DataGrid.Columns>
             <DataGridTextColumn Header="Nickname" Binding="{Binding DisplayName}" Width="2*" />
@@ -88,8 +90,17 @@
             <DataGridTemplateColumn Header="Status" Width="2*">
               <DataGridTemplateColumn.CellTemplate>
                 <DataTemplate>
-                  <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                             ToolTip="{Binding ReasonText}" />
+                  <!-- Line 1: the capture verdict. Line 2: what the last capture/rebind attempt
+                       did ("not elevated", "P2 rebind failed: ...", "rebound ... a reboot is
+                       required ..."), so a failed or skipped device says why on its row. -->
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="{Binding StatusText}" TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding DetailText}" />
+                    <TextBlock Text="{Binding OutcomeText}" TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding DetailText}"
+                               AutomationProperties.AutomationId="{Binding OutcomeAutomationId}"
+                               AutomationProperties.Name="{Binding OutcomeText}" />
+                  </StackPanel>
                 </DataTemplate>
               </DataGridTemplateColumn.CellTemplate>
             </DataGridTemplateColumn>

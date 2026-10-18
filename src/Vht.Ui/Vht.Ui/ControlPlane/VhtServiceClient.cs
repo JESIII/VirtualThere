@@ -217,6 +217,15 @@ public sealed class VhtServiceClient
             CaptureReason = CaptureText.ParseReason(
                 JsonRead.String(item, "captureReason") ?? JsonRead.String(item, "reason")),
             Ignored = JsonRead.Bool(item, "ignored"),
+            // A device the server saw but will not advertise is still listed, so the window can
+            // show it with its reason instead of omitting it. An absent field means exported
+            // (the mock and older servers predate it).
+            Exported = JsonRead.Bool(item, "exported", fallback: true),
+            CaptureDetail = JsonRead.String(item, "detail") ?? JsonRead.String(item, "capture_detail"),
+            CapturePath = JsonRead.String(item, "capture_path") ?? JsonRead.String(item, "capturePath"),
+            CaptureOutcome = JsonRead.String(item, "capture_outcome") ??
+                JsonRead.String(item, "captureOutcome") ??
+                JsonRead.String(item, "rebind_outcome"),
             PasswordProtected = JsonRead.Bool(item, "passwordProtected") ||
                 JsonRead.Bool(item, "password_required") || JsonRead.Bool(item, "password"),
         };

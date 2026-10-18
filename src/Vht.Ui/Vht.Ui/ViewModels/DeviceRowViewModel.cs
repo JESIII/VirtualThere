@@ -41,6 +41,17 @@ public sealed class DeviceRowViewModel : ObservableObject
 
     public string StatusText => _snapshot.StatusText;
 
+    /// <summary>
+    /// The per-device capture/rebind outcome ("not elevated", "P2 rebind failed: ...",
+    /// "rebound ... a reboot is required ..."), empty when nothing was attempted yet.
+    /// </summary>
+    public string OutcomeText => _snapshot.OutcomeText;
+
+    /// <summary>Status tooltip: the full capture reason plus the outcome of the last attempt.</summary>
+    public string DetailText => _snapshot.DetailText;
+
+    public bool Exported => _snapshot.Exported;
+
     public bool Exportable => _snapshot.Exportable;
 
     public bool Ignored => _snapshot.Ignored;
@@ -67,6 +78,9 @@ public sealed class DeviceRowViewModel : ObservableObject
 
     public string PasswordAutomationId => "password:" + RowAutomationKey;
 
+    /// <summary>Automation id of this row's capture/rebind outcome text, for the harness.</summary>
+    public string OutcomeAutomationId => "outcome:" + RowAutomationKey;
+
     public AsyncRelayCommand KickCommand { get; }
 
     public AsyncRelayCommand ToggleIgnoreCommand { get; }
@@ -88,6 +102,9 @@ public sealed class DeviceRowViewModel : ObservableObject
         Raise(nameof(AttachedClients));
         Raise(nameof(AttachedText));
         Raise(nameof(StatusText));
+        Raise(nameof(OutcomeText));
+        Raise(nameof(DetailText));
+        Raise(nameof(Exported));
         Raise(nameof(Exportable));
         Raise(nameof(Ignored));
         Raise(nameof(PasswordProtected));
@@ -99,6 +116,7 @@ public sealed class DeviceRowViewModel : ObservableObject
         Raise(nameof(IgnoreAutomationId));
         Raise(nameof(NicknameAutomationId));
         Raise(nameof(PasswordAutomationId));
+        Raise(nameof(OutcomeAutomationId));
         KickCommand.RaiseCanExecuteChanged();
         ToggleIgnoreCommand.RaiseCanExecuteChanged();
     }

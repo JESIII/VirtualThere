@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Vht.Core.Capture;
 using Vht.Core.Concurrency;
 using Vht.Core.Hooks;
@@ -26,7 +27,8 @@ public sealed class VhtServerState
         ICaptureProvider capture,
         ILogger logger,
         HookRunner? hooks = null,
-        DevicePolicy? policy = null)
+        DevicePolicy? policy = null,
+        CaptureOutcomeLog? captureOutcomes = null)
     {
         Options = options ?? throw new ArgumentNullException(nameof(options));
         Capture = capture ?? throw new ArgumentNullException(nameof(capture));
@@ -34,6 +36,7 @@ public sealed class VhtServerState
         Hooks = hooks;
         Policy = policy ?? options.BuildPolicy();
         Resources = new ConnectionResources(options.MaxInFlightUrbs, options.MaxTransferBuffer);
+        CaptureOutcomes = captureOutcomes ?? new CaptureOutcomeLog();
     }
 
     public ServerOptions Options { get; }
@@ -46,8 +49,31 @@ public sealed class VhtServerState
     /// <summary>Every device the server is willing to export.</summary>
     public ExportTable Exports { get; } = new();
 
+    /// <summary>
+    /// Every device the last enumeration saw, exported or not, so the operator's view can show
+    /// a refused or skipped device with its reason instead of omitting it. Keyed like
+    /// <see cref="Exports"/>; the export table stays "willing to export" only.
+    /// </summary>
+    private readonly ConcurrentDictionary<DeviceKey, UsbDevice> _observed = new();
+
+    /// <summary>
+    /// Last capture/rebind outcome per device. The capture provider records into this and the
+    /// control plane reports it per device, which is how the server window shows <em>which</em>
+    /// of P1/P2 ran and what came of it (see <see cref="CaptureOutcome"/>).
+    /// </summary>
+    public CaptureOutcomeLog CaptureOutcomes { get; }
+
     /// <summary>Which connection holds which device. Zero or one holder per device.</summary>
     public AttachTable Attachments { get; } = new();
+
+    /// <summary>
+    /// Every device the last enumeration saw - exported or refused - in stable bus-id order.
+    /// The operator's view (the control plane's <c>devices.list</c>, and the server window built
+    /// on it) is built from this, so a device that cannot be exported is listed with its reason
+    /// and its capture outcome rather than being missing. The export table alone would omit it.
+    /// </summary>
+    public IReadOnlyList<UsbDevice> ObservedDevices() =>
+        _observed.Values.OrderBy(d => d.BusId, StringComparer.Ordinal).ToArray();
 
     /// <summary>Every live client connection.</summary>
     public ConnectionRegistry Connections { get; } = new();
@@ -87,6 +113,11 @@ public sealed class VhtServerState
         {
             UsbDevice applied = Policy.Apply(device);
             seen.Add(applied.Key);
+
+            // Observed regardless of the verdict: a device this server refuses or skips must
+            // still be visible to the operator with its reason, not silently absent from the
+            // window (ARCHITECTURE.md §4.3, docs/UI.md section 2).
+            _observed[applied.Key] = applied;
 
             // A device that cannot be claimed at all is not advertised - but a driver-held device
             // the operator permitted a rebind for is: the P2 rebind runs when a client attaches,
@@ -157,6 +188,16 @@ public sealed class VhtServerState
             await RunHookAsync(HookEvent.OnDeviceUnplug, entry.Device, ct).ConfigureAwait(false);
         }
 
+        // A device that is no longer present leaves the operator's view too, and takes its
+        // capture outcome with it: a re-plugged device starts with no outcome rather than
+        // inheriting the previous one's story.
+        foreach (DeviceKey key in _observed.Keys)
+        {
+            if (seen.Contains(key)) continue;
+            _observed.TryRemove(key, out _);
+            CaptureOutcomes.Forget(key);
+        }
+
         ExportCountChanged?.Invoke(exportable);
         return exportable;
     }
@@ -170,6 +211,17 @@ public sealed class VhtServerState
         ArgumentNullException.ThrowIfNull(device);
         UsbDevice applied = Policy.Apply(device);
         long generation = Interlocked.Increment(ref _generation);
+
+        if (present)
+        {
+            // Observed even when it cannot be claimed: see RefreshExportsAsync.
+            _observed[applied.Key] = applied;
+        }
+        else
+        {
+            _observed.TryRemove(applied.Key, out _);
+            CaptureOutcomes.Forget(applied.Key);
+        }
 
         if (present && applied.CaptureState.IsClaimable())
         {

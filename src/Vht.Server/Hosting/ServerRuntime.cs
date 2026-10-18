@@ -1,4 +1,5 @@
 using System.Net.Sockets;
+using Vht.Core.Capture;
 using Vht.Core.Hooks;
 using Vht.Core.Concurrency;
 using Vht.Core.Logging;
@@ -68,13 +69,14 @@ public sealed class ServerRuntime : IAsyncDisposable
 
         var enumerator = new UsbDeviceEnumerator(options, log);
         WinUsbRebinder? rebinder = options.RebindEnabled ? new WinUsbRebinder(string.Empty, log) : null;
-        var capture = new WinUsbCaptureProvider(enumerator, options, log, rebinder);
+        var captureOutcomes = new CaptureOutcomeLog();
+        var capture = new WinUsbCaptureProvider(enumerator, options, log, rebinder, captureOutcomes);
 
         HookRunner? hooks = options.Hooks.Scripts.Count > 0
             ? new HookRunner(options.Hooks, new ShellProcessRunner(), log)
             : null;
 
-        var state = new VhtServerState(options, capture, log, hooks);
+        var state = new VhtServerState(options, capture, log, hooks, captureOutcomes: captureOutcomes);
         var hotplug = new HotplugWatcher(state);
         var tcp = new UsbIpTcpServer(state, transportFactory);
 

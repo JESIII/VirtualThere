@@ -96,7 +96,7 @@ public sealed class ServerViewModel : ObservableObject, IServerDeviceActions, ID
     public bool EmptyStateVisible => !HasDevices;
 
     public string EmptyStateText => ServiceReachable
-        ? "No capturable USB devices are currently enumerated on this machine."
+        ? "No USB devices are currently enumerated on this machine."
         : "Not running. Click Start to begin.";
 
     public event EventHandler? MinimizeRequested;

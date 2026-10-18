@@ -52,6 +52,13 @@ public sealed class WinUsbCaptureProvider : ICaptureProvider
     private readonly ILogger _log;
     private readonly IDeviceRebinder? _rebinder;
 
+    /// <summary>
+    /// Where each device's last capture/rebind outcome is recorded for the operator's view.
+    /// The window reads this through the control plane, so a refused, failed or reboot-pending
+    /// rebind shows up on the device's row instead of only in the runtime log.
+    /// </summary>
+    private readonly CaptureOutcomeLog? _outcomes;
+
     /// <summary>Devices this run claimed through P2, for <see cref="ReboundCount"/> only.</summary>
     private readonly ConcurrentDictionary<DeviceKey, byte> _rebound = new();
 
@@ -59,12 +66,14 @@ public sealed class WinUsbCaptureProvider : ICaptureProvider
         IDeviceEnumerator enumerator,
         ServerOptions options,
         ILogger log,
-        IDeviceRebinder? rebinder = null)
+        IDeviceRebinder? rebinder = null,
+        CaptureOutcomeLog? outcomes = null)
     {
         _enumerator = enumerator ?? throw new ArgumentNullException(nameof(enumerator));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _log = log ?? throw new ArgumentNullException(nameof(log));
         _rebinder = rebinder;
+        _outcomes = outcomes;
     }
 
     /// <summary>Number of devices this provider has rebound to <c>winusb.sys</c> in this run.</summary>
@@ -92,33 +101,48 @@ public sealed class WinUsbCaptureProvider : ICaptureProvider
             // Two honest refusals land here: a device that can never be claimed (unsafe, no
             // interface, ignored by policy), and a device whose rebind offer has been withdrawn
             // since it was enumerated (capture.rebind.enabled or capture.mode changed under it).
-            // Both are reported with the reason the enumerator recorded.
-            return CaptureOpenResult.Failure(device.CaptureReason,
-                string.IsNullOrEmpty(device.CaptureDetail)
-                    ? device.CaptureReason.Describe()
-                    : device.CaptureDetail);
+            // Both are reported with the reason the enumerator recorded - and recorded as the
+            // device's capture outcome, so the operator sees why on the device's row.
+            string refusal = string.IsNullOrEmpty(device.CaptureDetail)
+                ? device.CaptureReason.Describe()
+                : device.CaptureDetail;
+            Record(device, "none", CaptureOutcomeStatus.Refused, refusal);
+            return CaptureOpenResult.Failure(device.CaptureReason, refusal);
         }
 
         if (string.IsNullOrWhiteSpace(device.DevicePath))
         {
+            Record(device, "none", CaptureOutcomeStatus.Refused,
+                "the device exposes no openable device interface path");
             return CaptureOpenResult.Failure(CaptureReason.NoWinUsbInterface,
                 "the device exposes no openable device interface path");
         }
 
         // ---- P1: the prebound attempt, in every capture mode ----------------------------------
         CaptureOpenResult prebound = TryPrebound(device);
-        if (prebound.Ok) return prebound;
+        if (prebound.Ok)
+        {
+            Record(device, "P1", CaptureOutcomeStatus.Claimed,
+                "claimed on the WinUSB interface the device already had (P1); no rebind was needed");
+            return prebound;
+        }
 
         // ---- P2: the rebind attempt, behind explicit opt-in ----------------------------------
         if (!mayRebind)
+        {
+            Record(device, "P1", CaptureOutcomeStatus.Refused, "P1 claim failed: " + prebound.Detail);
             return prebound;
+        }
 
         if (!_rebinder!.CanRebind)
         {
+            const string notElevated =
+                "capture.rebind.enabled is set but this process is not elevated, " +
+                "so the P2 rebind path cannot run";
             _log.Write(LogLevel.Warn, LogEvent.DeviceCaptureRefused,
-                $"{device.BusId}: capture.rebind.enabled is set but this process is not elevated, " +
-                "so the P2 rebind path cannot run",
+                $"{device.BusId}: {notElevated}",
                 new Dictionary<string, object?> { ["busid"] = device.BusId });
+            Record(device, "P2", CaptureOutcomeStatus.NotElevated, notElevated);
             return prebound;
         }
 
@@ -132,6 +156,7 @@ public sealed class WinUsbCaptureProvider : ICaptureProvider
                     ["busid"] = device.BusId,
                     ["win32_error"] = rebind.Win32Error,
                 });
+            Record(device, "P2", CaptureOutcomeStatus.RebindFailed, $"P2 rebind failed: {rebind.Detail}");
             return CaptureOpenResult.Failure(CaptureReason.DriverHoldsDevice, rebind.Detail, rebind.Win32Error);
         }
 
@@ -149,6 +174,10 @@ public sealed class WinUsbCaptureProvider : ICaptureProvider
                     ["inf"] = rebind.InfPath,
                     ["reboot_required"] = true,
                 });
+            Record(device, "P2", CaptureOutcomeStatus.RebootRequired,
+                $"rebound onto the inbox winusb.sys ({rebind.InfPath}); a reboot is required before " +
+                "the binding is effective, so the device was not taken - reboot the machine and " +
+                "attach it again");
 
             HandBack(device, why: "the rebind needed a reboot, so the device was never taken");
 
@@ -161,6 +190,8 @@ public sealed class WinUsbCaptureProvider : ICaptureProvider
         _log.Write(LogLevel.Info, LogEvent.DeviceCaptureRefused,
             $"{device.BusId}: rebound onto the inbox winusb.sys ({rebind.InfPath})",
             new Dictionary<string, object?> { ["busid"] = device.BusId, ["inf"] = rebind.InfPath });
+        Record(device, "P2", CaptureOutcomeStatus.Rebound,
+            $"rebound onto the inbox winusb.sys ({rebind.InfPath})");
 
         // The interface path changes when the driver changes, so the enumerator is asked again
         // rather than reusing a stale path.
@@ -170,6 +201,8 @@ public sealed class WinUsbCaptureProvider : ICaptureProvider
         if (refreshed is null)
         {
             HandBack(device, why: "the device disappeared while it was being rebound");
+            Record(device, "P2", CaptureOutcomeStatus.ClaimAfterRebindFailed,
+                "the device disappeared while it was being rebound and was handed back");
             return CaptureOpenResult.Failure(CaptureReason.DriverHoldsDevice,
                 "device disappeared while being rebound");
         }
@@ -179,11 +212,31 @@ public sealed class WinUsbCaptureProvider : ICaptureProvider
         {
             // The rebind left the device unusable: give it back rather than leaving it here.
             HandBack(device, why: $"the device could not be claimed after the rebind ({claimed.Detail})");
+            Record(device, "P2", CaptureOutcomeStatus.ClaimAfterRebindFailed,
+                $"rebound onto the inbox winusb.sys ({rebind.InfPath}), but the device could not be " +
+                $"claimed afterwards ({claimed.Detail}); it was handed back");
             return claimed;
         }
 
         return claimed;
     }
+
+    /// <summary>
+    /// Records what this attempt did, for the per-device status the operator's view shows. The
+    /// three rebind outcomes it must distinguish are <see cref="CaptureOutcomeStatus.NotElevated"/>,
+    /// <see cref="CaptureOutcomeStatus.RebindFailed"/> and
+    /// <see cref="CaptureOutcomeStatus.RebootRequired"/>; the wording is the status text the
+    /// window shows, in the same vocabulary as this class's runtime-log lines.
+    /// </summary>
+    private void Record(UsbDevice device, string path, string status, string detail) =>
+        _outcomes?.Record(new CaptureOutcome
+        {
+            Key = device.Key,
+            BusId = device.BusId,
+            Path = path,
+            Status = status,
+            Detail = detail,
+        });
 
     /// <inheritdoc />
     public ValueTask ReleaseAsync(UsbDevice device, CancellationToken ct)
