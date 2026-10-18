@@ -30,38 +30,117 @@ default location**, not "no file":
 <resolved config directory>\logs\server.log
 ```
 
-which is `.\config\logs\server.log` in a portable folder (a `portable.marker` beside the
-executable) and `%ProgramData%\VirtualThere\logs\server.log` otherwise. The file is JSON lines,
-capped at 8 MiB, rolling one generation to `server.log.1`. `vht status` prints it, whether or not a
-server is answering:
+where `<resolved config directory>` is the one rule the whole product uses to find its
+configuration (`--config`, then `VHT_CONFIG`, then a `portable.marker` beside the executable, then
+the installed default): `.\config\logs\server.log` in a portable folder, and
+`%ProgramData%\VirtualThere\logs\server.log` otherwise. A portable build therefore logs inside its
+own folder and never touches the machine-wide directory. The file is JSON lines, capped at 8 MiB,
+rolling one generation to `server.log.1`. `vht status` prints it, whether or not a server is
+answering:
 
 ```
 runtime log:   C:\ProgramData\VirtualThere\logs\server.log
 log written:   2026-10-15 02:00:12 (19844 bytes)
 ```
 
-This is the only reason a GUI-launched worker is diagnosable at all. That worker is a `WinExe`
-started with `Verb=runas`: elevated, `ShellExecuteEx` redirects nothing and there is no console to
-inherit; unelevated, the window redirects its two streams and keeps the last 200 lines for its own
-log. Anything a worker says *before* it binds the control pipe - including the lines it wrote on the
-way to a crash - exists only in this file.
+A portable folder prints its own directory instead - that is the marker's whole effect, and the
+reason a portable copy neither reads nor writes the machine-wide one:
+
+```
+runtime log:   G:\Tools\VirtualThere\config\logs\server.log
+log written:   never (no server has started from this configuration yet)
+```
+
+`log written:   never ...` means the line above is where the log *would* go - check that it is the
+directory you expect, because that is the whole diagnosis when a portable and an installed copy
+disagree about which configuration they read.
 
 An explicit `logging.file` (or `--log-file`) is a **second** destination. The default sink is never
 dropped: the pre-configuration lines exist only in it.
 
-The three outcomes of a P2 rebind (`capture.rebind.enabled = true`) are distinguishable in it, and
-each names the `busid` it applies to. Filter the file on the bus id of the device that never
-appeared and read one of:
+#### A window-launched worker: two records, one directory
+
+A GUI-launched worker is a `WinExe`, and the window cannot show you its output in every case, which is
+why two files matter and why they land in the same directory:
+
+* `logs\server.log` - the worker's own runtime log, as above. It is opened before the configuration
+  file is even read, so the worker's whole account of starting up is in it - including the lines it
+  wrote before it bound the control pipe - and it is the **only** place an *elevated* worker's lines
+  ever appear: `ShellExecuteEx` hands the window no handles to redirect, and a `WinExe` has no console
+  to inherit.
+* `logs\worker-<pid>.log` - the window's durable record of one launch, opened and written before
+  anything else can fail. Both roles produce one (the client window's record lives under the
+  client's resolved config directory), and it survives the worker *and* the window.
+
+The record's first line is the launch record, and it says which channel the worker's output has:
+
+```
+2026-10-18 22:03:03.490Z [pid 9728] launched unelevated: G:\Repos\VirtualThere\src\Vht.Server\bin\Debug\net10.0-windows\vht-server.exe --worker --pipe vht-card-de4b0a3f-b --port 33240; its stdout and stderr are captured below
+2026-10-18 22:03:03.551Z [pid 9728] 2026-10-18 22:03:03.543Z [4] Info     ServerStarting: runtime log: C:\ProgramData\VirtualThere\logs\server.log path=C:\ProgramData\VirtualThere\logs\server.log
+```
+
+An elevated launch's record is the same shape with the other sentence and nothing below it (pid and
+time illustrative):
+
+```
+2026-10-18 22:14:40.002Z [pid 14088] launched elevated (ShellExecuteEx, verb=runas): C:\ProgramData\VirtualThere\vht-server.exe --worker --pipe vht-server; stdout and stderr cannot be redirected by this window - the worker writes its own runtime log in the default log directory ('vht status' prints the path)
+```
+
+For an **unelevated** launch every line the worker writes is appended below the record, stamped with
+the time and the worker's pid, `stderr: ` prefixed, and flushed as it arrives - so a worker killed
+mid-sentence leaves everything it managed to write, and a line visible in the window's log pane is
+already on disk. The file is appended, never truncated: a reused pid keeps the earlier launch's
+record above the new one. The window's in-memory pane keeps the last 200 lines; the file keeps all
+of them.
+
+#### A worker that exited before binding the control pipe
+
+The window says where to look, and that sentence is the shortest route to the record:
+
+```
+the worker (pid 9728) exited before it bound the control pipe; the launch is recorded in C:\ProgramData\VirtualThere\logs\worker-9728.log
+```
+
+* `; the launch is recorded in <file>` - the window had nothing to redirect (an elevated launch), so
+  the file holds the launch record only. `server.log` has what the worker said after it opened its
+  own log; if it died before that, the record is all there is, and its pid and launch time are what
+  tie a crash in the Windows event log to this launch.
+* `; every line it wrote is also kept in <file>` - the launch was unelevated, and the file holds the
+  whole tail plus everything the worker said before it bound the pipe.
+
+If the window is gone as well, list the directory and open the newest record:
+
+```
+Get-ChildItem C:\ProgramData\VirtualThere\logs\worker-*.log |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 5 Name, LastWriteTime
+```
+
+(`vht status` reports only `server.log`'s written state; the `worker-*.log` files sit in the
+directory it prints.) There is nothing else left to ask - the process is gone and the pipe never
+answered - so this file, and the worker's own runtime log, are the whole post-mortem.
+
+#### The three outcomes of a P2 rebind
+
+The three outcomes of a P2 rebind (`capture.rebind.enabled = true`) are distinguishable in the
+runtime log, and each names the `busid` it applies to (the lines are JSON, with `win32_error`, `inf`
+and `reboot_required` fields where they apply). Filter the file on the bus id of the device that
+never appeared and read one of:
 
 | line | meaning |
 |---|---|
-| `<busid>: capture.rebind.enabled is set but this process is not elevated, so the P2 rebind path cannot run` | The window's worker is not elevated. Nothing changed on the device: the operator has to start the server window and accept the consent prompt, or run `vht-server serve --rebind` from an elevated shell. |
+| `<busid>: capture.rebind.enabled is set but this process is not elevated, so the P2 rebind path cannot run` | The server process is not elevated: a worker started without a consent prompt (`--no-elevate`), or `vht serve --rebind` from an ordinary shell. Nothing changed on the device: start the server window and accept the consent prompt, or run `vht-server serve --rebind` from an elevated shell. |
 | `<busid>: P2 rebind failed: <detail>` (with `win32_error` when there is one) | The rebind was attempted and Windows refused. The device is untouched and still held by its original driver. `<detail>` is the real Win32 failure, not a summary. |
 | `<busid>: rebound onto the inbox winusb.sys (<inf>)` | The rebind succeeded and the device is being claimed now. |
 | `<busid>: the rebind onto the inbox winusb.sys (<inf>) only takes effect after a reboot, so the device is not being taken; reboot and attach it again` | The rebind only exists after a restart. Nothing was taken and the device was handed straight back - reboot, then attach again. |
 
 The `rebound` case never leaves a half-bound device behind: a rebinding that cannot be used is
 followed by the hand-back line for the same bus id.
+
+The window's device row states the same outcome as the second line of its Status cell, taken from
+the same record: without the `<busid>: ` prefix for the not-elevated and failed cases, and for the
+reboot case as `rebound onto the inbox winusb.sys (<inf>); a reboot is required before the binding is
+effective, so the device was not taken - reboot the machine and attach it again`. Matching the row to
+the log line is how you confirm you are reading the attempt for the device that never appeared.
 
 ### The worker is running (elevated, one consent prompt), yet the window says it is not
 
@@ -166,15 +245,21 @@ That is the rebind being offered, which is what you asked for with `capture.rebi
 `--rebind`. The device is still driver-held; the rebind runs when a client claims it, so this state
 means "exportable once a client attaches", not "exportable now" (`docs/SERVER.md` §3.1).
 
-If a client then attaches and the rebind does not happen, the log says which of the three outcomes it
-was, and they mean different things:
+If a client then attaches and the rebind does not happen, the runtime log says which of the three
+outcomes it was; the exact lines, and what each one means, are in
+"Where the server's runtime log is, and what the rebind lines in it mean" above. With `1-3` as the
+bus id, the four lines are:
 
-| Log line | Meaning |
-|---|---|
-| `1-3: rebound onto the inbox winusb.sys (oem42.inf)` | P2 ran and Windows accepted the INF. The device is now on WinUSB. |
-| `1-3: rebound onto the inbox winusb.sys (...); a reboot is required before the binding is effective` | As above, but Windows wants a restart before the new binding takes effect. |
-| `1-3: P2 rebind failed: <detail>` | The INF could not be staged or the driver re-select failed; the Win32 error is in the detail. Nothing was changed. |
-| `1-3: capture.rebind.enabled is set but this process is not elevated, so the P2 rebind path cannot run` | The server is running unelevated. Restart it from an elevated shell (or let the service run it); nothing was changed. |
+* `1-3: rebound onto the inbox winusb.sys (oem42.inf)` - P2 ran and Windows accepted the INF. The
+  device is now on WinUSB.
+* `1-3: the rebind onto the inbox winusb.sys (oem42.inf) only takes effect after a reboot, so the
+  device is not being taken; reboot and attach it again` - as above, but Windows applies the new
+  binding only after a restart, so the device was handed straight back.
+* `1-3: P2 rebind failed: <detail>` - the INF could not be staged or the driver re-select failed;
+  the Win32 error is in the detail. Nothing was changed.
+* `1-3: capture.rebind.enabled is set but this process is not elevated, so the P2 rebind path cannot
+  run` - the server is running unelevated. Restart it from an elevated shell (or let the service run
+  it); nothing was changed.
 
 A held device that states `CaptureUnsupported` instead has **not** been offered the rebind - check
 `capture.rebind.enabled` and `capture.mode` (the rebind is only offered under `auto`; `prebound-only`
