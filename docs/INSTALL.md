@@ -77,21 +77,29 @@ when this was written; the count grows with every card, the zero does not move).
 
 Executables:
 
-| Binary | Path |
-|---|---|
-| `vht.exe` (CLI, and the service-mode entry point) | `src/Vht.Cli/bin/Release/net10.0-windows/vht.exe` |
-| `vht-server.exe` | `src/Vht.Server/bin/Release/net10.0-windows/vht-server.exe` |
-| `vht-client.exe` | `src/Vht.Client/bin/Release/net10.0-windows/vht-client.exe` |
-| `vht-server.exe` / `vht-client.exe` | `src/Vht.Server/bin/Release/.../vht-server.exe`, `src/Vht.Client/bin/Release/.../vht-client.exe` |
+| Binary | Path | What it opens |
+|---|---|---|
+| `vht.exe` (CLI, and the service-mode entry point) | `src/Vht.Cli/bin/Release/net10.0-windows/vht.exe` | nothing: a console only, no window |
+| `vht-server.exe` | `src/Vht.Server/bin/Release/net10.0-windows/vht-server.exe` | the `VirtualThere Server` window with no arguments; `serve` runs the server in the console; `--worker` is the hidden, privileged half the window starts |
+| `vht-client.exe` | `src/Vht.Client/bin/Release/net10.0-windows/vht-client.exe` | the `VirtualThere Client` window with no arguments; `serve` runs it in the console; `--worker` is the hidden, privileged half the window starts |
 
-Put `vht.exe`'s directory on `PATH` for convenience, or call the binaries by full path.
+Put `vht.exe`'s directory on `PATH` for convenience, or call the binaries by full path. The two
+role executables are the whole GUI: there is nothing else to start and no tray executable.
 
 ## 3. First run (server, no service, no config)
 
 ```bash
+vht-server.exe          # the management window; press Start to export them
 vht list --local        # what this machine has, and whether each device can be captured
-vht serve               # export them; Ctrl+C to stop
+vht serve               # the same thing with no window; Ctrl+C to stop
 ```
+
+`vht-server.exe` with no arguments opens the **VirtualThere Server** window unelevated. Pressing
+**Start** there launches the same executable as a hidden, elevated `--worker` behind exactly one
+consent prompt, which binds `\\.\pipe\vht-server` and does the capturing; the window only speaks
+that pipe. Closing the window leaves the worker serving, and **Exit** stops the worker that window
+started. `docs/UI.md` section 1 has the whole lifetime model, `docs/SERVER.md` section 1 the
+server-specific view. The commands below are the CLI equivalent of what the window does.
 
 In another shell:
 

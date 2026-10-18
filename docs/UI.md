@@ -15,13 +15,32 @@ executables host it:
 | `vht-server.exe` | `VirtualThere Server` | `\\.\pipe\vht-server` | `vht-server.exe --worker` |
 | `vht-client.exe` | `VirtualThere Client` | `\\.\pipe\vht-client` | `vht-client.exe --worker` |
 
-Starting either executable with **no verb** opens its window; no `--mode` argument exists any more
-(it is still accepted and ignored, so a shortcut written for the old single tray executable keeps
-working, but it cannot change the role of the binary it points at).
+Starting either executable with **no verb** opens its window. There is no `--mode` argument any
+more: the role is a property of the executable, not of the command line. A shortcut that still
+passes `--mode server|client` keeps working because the argument is accepted and ignored, but it
+cannot turn one role's executable into the other role.
 
 `--pipe <name>` overrides the pipe (used by the harness), `--port <n>` sets the server worker's
 plaintext port, `--minimized` starts hidden in the notification area, `--no-elevate` starts the
 worker without a consent prompt (automation only), `--help` prints the usage.
+
+### Where it runs from
+
+Both role executables are portable by construction: copy them anywhere and start them from there.
+Run one from a folder and nothing is registered - no registry key, no Start-menu entry, no service -
+and nothing elevates at launch: the window opens unelevated from whatever folder the executable sits
+in. Configuration and state follow the folder. When `portable.marker` is beside the executables the
+server reads and writes `.\config\server.toml` and `.\config\state.toml`, and the client
+`.\config\config.toml`, its peers and its grants; without the marker they fall back to
+`%ProgramData%\VirtualThere` and `%LOCALAPPDATA%\VirtualThere\client`. The paths that need elevation
+belong to the machine, not to the folder, and stay under `%ProgramData%\VirtualThere` either way
+(staged rebind INFs, TLS keys, the setup scripts' log - `docs/SERVER.md` section 2 lists them).
+
+Neither the window nor the worker it starts needs an installed service. A service is an option,
+and it is not the GUI path: `Setup-Portable.ps1 -Action Install` (or `vht install`) is what adds
+it, together with the two other machine-wide items that do need elevation - the virtual host
+controller driver and the firewall rules. `docs/INSTALL.md` section 0 and
+`installer/PACKAGING.md` section 3 own the detail.
 
 ### The window stays unelevated; the worker does not
 

@@ -13,7 +13,7 @@ contains no third-party product's code (`LEGAL.md`).
 
 | Component | Executable | What it does |
 |---|---|---|
-| Server | `vht-server.exe`, driven by `vht.exe` | Enumerates this machine's USB devices, claims them in user mode (WinUSB), exports them over USB/IP, applies policy (nicknames, allow/ignore, per-device password, script hooks) |
+| Server | `vht-server.exe`, driven by `vht.exe` or its own window | Enumerates this machine's USB devices, claims them in user mode (WinUSB), exports them over USB/IP, applies policy (nicknames, allow/ignore, per-device password, script hooks) |
 | Client | `vht-client.exe` | Connects to peers, lists their exports, attaches/detaches devices through the virtual host controller, hotplug + reconnect, auto-attach policy |
 | CLI | `vht.exe` | Operator surface for the server: `serve`, `status`, `list`, `kick`, `ignore`, `nickname`, `password`, service install/start/stop |
 | Server window | `vht-server.exe` | The USB/IP server **and** its management window: start it with no arguments and the window opens, with a notification-area icon, device/peer lists and the log viewer. Clicking Start launches the same executable as a hidden, elevated worker (one consent prompt) that binds the control pipe |
@@ -76,6 +76,12 @@ therefore belong to the machine rather than to the folder, stay machine-wide in 
 `%ProgramData%\VirtualThere\tls`, the setup scripts' own log under `%ProgramData%\VirtualThere\logs` -
 `docs/SERVER.md` section 2 lists them). Delete `portable.marker` and the installed defaults apply
 again (server `%ProgramData%\VirtualThere\server.toml`, client `%LOCALAPPDATA%\VirtualThere\client`).
+
+Nothing in that folder is registered, and **no service is required**: both windows run from wherever
+the folder sits, unelevated, and reach their privileged worker over a named pipe. The machine-wide
+parts are optional and come from one elevated command, `Setup-Portable.ps1 -Action Install` - the
+virtual host controller driver, the firewall rules, and, only if you want unattended operation, the
+server service or the client logon task.
 
 **From source**
 

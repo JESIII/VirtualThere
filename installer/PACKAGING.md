@@ -256,13 +256,16 @@ step above is skipped. Logs: `%ProgramData%\VirtualThere\logs\driver-uninstall.l
 3. **Reboot-pending is not forced.** If the vendor package reports that a restart is needed, the
    install still succeeds and the log says so; the client reports the driver as unavailable until the
    restart.
-4. **The management window runs unelevated while the client it drives runs elevated.** Whether an
-   unelevated process can write to a named pipe created by an elevated one under the default security
-   descriptor is process-integrity dependent; the architecture assumes it works (§1: "lets the UI run
-   unelevated"). The window attaches to an elevated client worker over `\\.\pipe\vht-client` - so this
-   is the same question. It is **not verified on this machine** (it needs an elevated client). If it
-   turns out to be blocked, the client worker's pipe needs its DACL set explicitly, or the window has
-   to be started elevated - whichever the UI card prefers.
+4. **An unelevated window writing to its elevated worker's pipe.** The architecture assumes it works
+   (§1: "lets the UI run unelevated"), and it is now implemented rather than assumed: every control
+   pipe is created through `Vht.Interop.Control.NamedPipeSecurity` with an explicit descriptor that
+   gives the interactive user read/write and sets a Medium no-write-up label (`docs/UI.md` section
+   1), and `tests/Vht.Acceptance.Tests/ControlPipeAccessTests` opens a live pipe **by name** and
+   asserts the kernel's own DACL and label plus a real request/response round trip from both real
+   clients. The window attaches to an elevated client worker over `\\.\pipe\vht-client`, which is the
+   same question. What is **still not verified on this machine** is the High-integrity half - a real
+   elevated worker deflecting a Medium caller - because answering the consent prompt cannot be
+   automated.
 5. **Config is left in place on uninstall.** `%ProgramData%\VirtualThere` (server) and
    `%LOCALAPPDATA%\VirtualThere\client` (client) hold configuration, peers, grants and logs. Removing
    them is not the uninstaller's job (silently deleting user data is worse than leaving it), and the
@@ -363,7 +366,8 @@ than assumed:**
 * Driver installation and removal (both need Administrator).
 * Firewall rule creation/removal (`netsh advfirewall` writes need Administrator).
 * Service registration/start/reboot survival.
-* The tray-versus-elevated-client pipe question in section 7.4.
+* The live elevated-worker half of the pipe question in section 7, item 4: a High-integrity worker
+  deflecting a Medium-integrity window cannot be exercised without answering a consent prompt.
 
 Elevated checklist for whoever has the clean VM (each command is also the manual equivalent of the
 corresponding custom action):

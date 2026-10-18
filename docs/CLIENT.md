@@ -153,3 +153,22 @@ wsk_events 1129, stride 1132`. The `plugin_hardware` (1120), `plugout_hardware` 
 5. The `GET_IMPORTED_DEVICES` reply layout is inferred and validated against two candidate layouts;
    both are exercised by tests, but only a real driver confirms which one ships in 0.9.8.1. This is
    the highest-value thing `hardware-validation-workstream` can confirm for this card.
+
+## 7. Running it: one executable, one window, one hidden worker
+
+`vht-client.exe` is both the client and its management window. Started with **no arguments** it
+opens the **VirtualThere Client** window - unelevated, from whatever folder the executable sits in -
+and drives the client over `\\.\pipe\vht-client`. The privileged half is a separate process: the one
+that owns the UDE controller and the USB/IP connections. **Refresh** (and Start) probes the pipe
+first, so a live worker is adopted rather than duplicated - a worker an earlier window started, or
+the logon-task `vht-client serve`, answers and the window attaches and spawns nothing. Only when
+nothing answers does the window start its own executable as `vht-client.exe --worker` with
+`Verb=runas`: exactly one consent prompt, hidden, no console.
+
+The window is a view of that pipe and nothing more, which is why it can stay unelevated. Closing it
+(X, or minimising) hides it to the notification area and leaves the worker serving, so attached
+devices stay enumerated. **Exit** stops the worker *that window started* - over the pipe, then by
+ending the process - and leaves a worker it merely attached to alone. A window process that dies any
+other way (crash, End task) leaves its worker serving too; the next launch attaches to it. `vht-client
+serve` remains the unattended form and `vht-client <verb>` the scriptable one. The full lifetime table
+and the pipe's security descriptor are in `docs/UI.md` section 1.
