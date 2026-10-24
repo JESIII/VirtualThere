@@ -16,6 +16,7 @@ internal sealed class TrayService : IDisposable
     private readonly ToolStripMenuItem _startItem;
     private readonly ToolStripMenuItem _stopItem;
     private readonly Func<bool> _isRunning;
+    private readonly Func<string> _startText;
     private readonly string _baseTooltip;
     private bool _disposed;
     private bool _hinted;
@@ -28,17 +29,19 @@ internal sealed class TrayService : IDisposable
         Action stop,
         Action showLog,
         Action about,
-        Action exit)
+        Action exit,
+        Func<string>? startText = null)
     {
         _baseTooltip = tooltip;
         _isRunning = isRunning;
+        _startText = startText ?? (() => "Start");
         _ownedIcon = Branding.CreateTrayIcon();
 
         var menu = new ContextMenuStrip();
         menu.Items.Add(new ToolStripMenuItem("Open " + tooltip + " window", null, (_, _) => show()));
         menu.Items.Add(new ToolStripSeparator());
 
-        _startItem = new ToolStripMenuItem("Start", null, (_, _) => start());
+        _startItem = new ToolStripMenuItem(_startText(), null, (_, _) => start());
         _stopItem = new ToolStripMenuItem("Stop", null, (_, _) => stop());
         menu.Items.Add(_startItem);
         menu.Items.Add(_stopItem);
@@ -73,6 +76,7 @@ internal sealed class TrayService : IDisposable
         _notifyIcon.Text = Truncate(_baseTooltip + (running ? " - running" : " - stopped"), 63);
         _startItem.Enabled = !running;
         _stopItem.Enabled = running;
+        _startItem.Text = _startText();
     }
 
     /// <summary>Explains, once per process, that closing the window did not exit.</summary>

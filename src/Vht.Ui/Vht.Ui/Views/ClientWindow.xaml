@@ -57,9 +57,9 @@
       <Button x:Name="AddPeerButton" Content="_Add server..." Style="{StaticResource ToolbarButton}" MinWidth="104"
               Command="{Binding AddPeerCommand}" AutomationProperties.AutomationId="add-server"
               AutomationProperties.Name="Add a server by address" />
-      <Button x:Name="RefreshButton" Content="Re_fresh" Style="{StaticResource ToolbarButton}"
+      <Button x:Name="RefreshButton" Content="{Binding StartOrRefreshText}" Style="{StaticResource ToolbarButton}"
               Command="{Binding RefreshCommand}" AutomationProperties.AutomationId="refresh"
-              AutomationProperties.Name="Refresh discovered servers" />
+              AutomationProperties.Name="{Binding StartOrRefreshText}" />
       <Button x:Name="MinimizeButton" Content="Minimi_ze to tray" Style="{StaticResource ToolbarButton}" MinWidth="120"
               Command="{Binding MinimizeCommand}" AutomationProperties.AutomationId="minimize"
               AutomationProperties.Name="Minimize to notification area" />

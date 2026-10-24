@@ -87,8 +87,37 @@ internal static partial class SetupApi
         nint deviceInfoSet, ref SP_DEVINFO_DATA deviceInfoData, uint property,
         out uint propertyRegDataType, byte[]? propertyBuffer, int propertyBufferSize, out int requiredSize);
 
+    /// <summary><c>DEVPROPKEY</c> for unified device property queries (<c>SetupDiGetDevicePropertyW</c>).</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct DEVPROPKEY
+    {
+        public Guid fmtid;
+        public uint pid;
+    }
+
+    [LibraryImport("setupapi.dll", EntryPoint = "SetupDiGetDevicePropertyW",
+        SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool SetupDiGetDeviceProperty(
+        nint deviceInfoSet, ref SP_DEVINFO_DATA deviceInfoData,
+        in DEVPROPKEY propertyKey, out uint propertyType,
+        byte[]? propertyBuffer, int propertyBufferSize, out int requiredSize, uint flags);
+
+    public const uint DEVPROP_TYPE_STRING = 0x00000012;
+
+    /// <summary>
+    /// <c>DEVPKEY_Device_BusReportedDeviceDesc</c> — the USB product string descriptor cached by
+    /// the hub driver when the device was enumerated, available without opening a WinUSB handle.
+    /// </summary>
+    internal static readonly DEVPROPKEY DEVPKEY_Device_BusReportedDeviceDesc = new()
+    {
+        fmtid = new Guid("540b947e-8b40-45bc-a8a2-6a0b894cbda2"),
+        pid = 4,
+    };
+
     public const uint SPDRP_DEVICEDESC = 0x00000000;
     public const uint SPDRP_HARDWAREID = 0x00000001;
+    public const uint SPDRP_SERVICE = 0x00000004;
     public const uint SPDRP_MFG = 0x0000000B;
     public const uint SPDRP_FRIENDLYNAME = 0x0000000C;
     public const uint SPDRP_CLASS = 0x00000007;

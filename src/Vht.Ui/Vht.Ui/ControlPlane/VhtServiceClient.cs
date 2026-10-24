@@ -202,21 +202,23 @@ public sealed class VhtServiceClient
             attachedClients = 1;
         }
 
+        CaptureState captureState = CaptureText.ParseState(
+            JsonRead.String(item, "captureState") ?? JsonRead.String(item, "state"));
+
         return new DeviceSnapshot
         {
             Key = JsonRead.String(item, "key") ?? JsonRead.String(item, "busid") ?? "device-" + index,
             BusId = JsonRead.String(item, "busid") ?? JsonRead.String(item, "busId"),
-            Nickname = JsonRead.String(item, "nickname"),
-            VendorId = JsonRead.Int(item, "vid", JsonRead.Int(item, "vendorId")),
-            ProductId = JsonRead.Int(item, "pid", JsonRead.Int(item, "productId")),
-            Vendor = JsonRead.String(item, "vendor") ?? JsonRead.String(item, "manufacturer"),
-            Product = JsonRead.String(item, "product") ?? JsonRead.String(item, "display_name"),
+            Nickname = JsonRead.NonEmptyString(item, "nickname"),
+            VendorId = JsonRead.HexOrInt(item, "vid", JsonRead.Int(item, "vendorId")),
+            ProductId = JsonRead.HexOrInt(item, "pid", JsonRead.Int(item, "productId")),
+            Vendor = JsonRead.NonEmptyString(item, "vendor") ?? JsonRead.NonEmptyString(item, "manufacturer"),
+            Product = JsonRead.NonEmptyString(item, "product") ?? JsonRead.NonEmptyString(item, "display_name"),
             AttachedClients = attachedClients,
-            CaptureState = CaptureText.ParseState(
-                JsonRead.String(item, "captureState") ?? JsonRead.String(item, "state")),
+            CaptureState = captureState,
             CaptureReason = CaptureText.ParseReason(
                 JsonRead.String(item, "captureReason") ?? JsonRead.String(item, "reason")),
-            Ignored = JsonRead.Bool(item, "ignored"),
+            Ignored = JsonRead.Bool(item, "ignored") || captureState == CaptureState.Ignored,
             // A device the server saw but will not advertise is still listed, so the window can
             // show it with its reason instead of omitting it. An absent field means exported
             // (the mock and older servers predate it).
@@ -299,6 +301,18 @@ public sealed class VhtServiceClient
                 });
             }
         }
+        else if (JsonRead.NonEmptyString(response.Result, "text") is { } text)
+        {
+            int index = 0;
+            foreach (string line in text.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                string trimmed = line.TrimEnd('\r');
+                if (trimmed.Length > 0)
+                {
+                    entries.Add(new LogEntry { Sequence = index++, Text = trimmed });
+                }
+            }
+        }
 
         return (ControlPlaneStatus.Ok, entries, null);
     }
@@ -371,10 +385,10 @@ public sealed class VhtServiceClient
                 devices.Add(new RemoteDeviceSnapshot
                 {
                     BusId = JsonRead.String(device, "busid") ?? JsonRead.String(device, "busId") ?? "1-1",
-                    Nickname = JsonRead.String(device, "nickname"),
-                    Product = JsonRead.String(device, "product"),
-                    VendorId = JsonRead.Int(device, "vid", JsonRead.Int(device, "vendorId")),
-                    ProductId = JsonRead.Int(device, "pid", JsonRead.Int(device, "productId")),
+                    Nickname = JsonRead.NonEmptyString(device, "nickname"),
+                    Product = JsonRead.NonEmptyString(device, "product"),
+                    VendorId = JsonRead.HexOrInt(device, "vid", JsonRead.Int(device, "vendorId")),
+                    ProductId = JsonRead.HexOrInt(device, "pid", JsonRead.Int(device, "productId")),
                     Attached = JsonRead.Bool(device, "attached"),
                     AutoAttach = JsonRead.Bool(device, "autoAttach", JsonRead.Bool(device, "auto")),
                     PasswordRequired = JsonRead.Bool(device, "passwordRequired"),

@@ -328,6 +328,111 @@ public sealed class DeviceCaptureOutcomeTests
         Assert.Contains("not elevated", outcome, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task UiServiceClient_RapidPollAndRowActions_RoundTripThroughRealControlPlane()
+    {
+        string pipeName = "vht-ui-poll-" + Guid.NewGuid().ToString("N");
+        var options = Options(rebind: true);
+        options.ControlPlaneEnabled = true;
+        options.ControlPlanePipeName = pipeName;
+
+        // Two devices with hex vid/pids that previously broke JsonRead.Int ("1050" parsed as
+        // decimal 0x041a, "0fd9" failed integer parse to 0x0000) and empty Product strings.
+        var yubikey = new UsbDevice
+        {
+            Key = DeviceKey.FromBusId("1-10"),
+            InstancePath = @"USB\VID_1050&PID_0120\8&2D69411B&0&10",
+            BusNum = 1,
+            DevNum = 10,
+            VendorId = 0x1050,
+            ProductId = 0x0120,
+            Product = string.Empty,
+            Serial = "8&2D69411B&0&10",
+            CaptureState = CaptureState.RebindOffered,
+            CaptureReason = CaptureReason.DriverHoldsDevice,
+            DevicePath = HeldInterfacePath,
+        };
+        var streamDeck = new UsbDevice
+        {
+            Key = DeviceKey.FromBusId("1-8"),
+            InstancePath = @"USB\VID_0FD9&PID_0063\A00DA5221P38BQ",
+            BusNum = 1,
+            DevNum = 8,
+            VendorId = 0x0fd9,
+            ProductId = 0x0063,
+            Product = "Stream Deck Mini",
+            Serial = "A00DA5221P38BQ",
+            CaptureState = CaptureState.RebindOffered,
+            CaptureReason = CaptureReason.DriverHoldsDevice,
+            DevicePath = HeldInterfacePath,
+        };
+
+        var outcomes = new CaptureOutcomeLog();
+        var log = new AcceptanceRig.CapturingLogger();
+        var rebinder = new RecordingRebinder(canRebind: false);
+        var enumerator = new MultiEnumerator(yubikey, streamDeck);
+        var provider = new WinUsbCaptureProvider(enumerator, options, log, rebinder, outcomes);
+        var state = new VhtServerState(options, provider, log, captureOutcomes: outcomes);
+        var ring = new Vht.Server.Logging.RingBufferLogSink();
+        ring.Write(new LogRecord
+        {
+            Timestamp = DateTimeOffset.UtcNow,
+            Level = LogLevel.Info,
+            Event = LogEvent.ServerStarted,
+            Message = "serving test devices",
+        });
+
+        await state.RefreshExportsAsync(CancellationToken.None);
+
+        await using var control = new ControlPlaneServer(state, ring: ring, stopServer: null);
+        control.Start();
+        await WaitForPipeAsync(pipeName);
+
+        var uiClient = new Vht.Ui.ControlPlane.VhtServiceClient(
+            new Vht.Ui.ControlPlane.ControlPlaneClient(pipeName));
+
+        // Simulate ServerViewModel.RefreshAsync(): three back-to-back pipe connections with no delay.
+        for (int poll = 0; poll < 3; poll++)
+        {
+            Vht.Ui.ControlPlane.StatusResult status =
+                await uiClient.GetServerStatusAsync(CancellationToken.None);
+            Assert.Equal(Vht.Ui.ControlPlane.ControlPlaneStatus.Ok, status.Status);
+
+            var (devStatus, devices, _) = await uiClient.ListDevicesAsync(CancellationToken.None);
+            Assert.Equal(Vht.Ui.ControlPlane.ControlPlaneStatus.Ok, devStatus);
+            Assert.Equal(2, devices.Count);
+
+            var (logStatus, lines, _) = await uiClient.TailLogAsync(50, CancellationToken.None);
+            Assert.Equal(Vht.Ui.ControlPlane.ControlPlaneStatus.Ok, logStatus);
+            Assert.NotEmpty(lines);
+        }
+
+        var (_, listed, _) = await uiClient.ListDevicesAsync(CancellationToken.None);
+        var byBusId = listed.ToDictionary(d => d.BusId!, StringComparer.Ordinal);
+
+        // Hex VID/PIDs ("1050:0120", "0fd9:0063") and empty-Product fallback ("1050:0120") are intact.
+        Assert.Equal(0x1050, byBusId["1-10"].VendorId);
+        Assert.Equal(0x0120, byBusId["1-10"].ProductId);
+        Assert.Equal("1050:0120", byBusId["1-10"].DisplayName);
+
+        Assert.Equal(0x0fd9, byBusId["1-8"].VendorId);
+        Assert.Equal(0x0063, byBusId["1-8"].ProductId);
+        Assert.Equal("Stream Deck Mini", byBusId["1-8"].DisplayName);
+
+        // Per-row UI commands pass "key" (busid): nickname, ignore, unignore, password all succeed.
+        Assert.True((await uiClient.SetNicknameAsync("1-10", "YubiKey", CancellationToken.None)).IsOk);
+        Assert.True((await uiClient.SetIgnoredAsync("1-10", true, CancellationToken.None)).IsOk);
+
+        var (_, afterIgnore, _) = await uiClient.ListDevicesAsync(CancellationToken.None);
+        var ignoredRow = afterIgnore.Single(d => d.BusId == "1-10");
+        Assert.Equal("YubiKey", ignoredRow.DisplayName);
+        Assert.True(ignoredRow.Ignored);
+
+        Assert.True((await uiClient.SetIgnoredAsync("1-10", false, CancellationToken.None)).IsOk);
+        var (_, afterUnignore, _) = await uiClient.ListDevicesAsync(CancellationToken.None);
+        Assert.False(afterUnignore.Single(d => d.BusId == "1-10").Ignored);
+    }
+
     private static async Task WaitForPipeAsync(string pipeName)
     {
         for (int attempt = 0; attempt < 100; attempt++)

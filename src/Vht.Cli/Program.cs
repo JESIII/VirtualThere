@@ -126,6 +126,10 @@ public static class Program
     {
         var options = new ServerOptions();
 
+        // The TOML layer first, so `vht list --local` sees the operator's config and CLI flags win.
+        ServerConfigLoader.Apply(FlagValue(args, "--config") ?? ServerConfigLoader.DefaultPath, options,
+            new StructuredLogger(LogLevel.Critical));
+
         if (FlagValue(args, "--capture-mode") is { Length: > 0 } mode)
             options.CaptureMode = mode;
 
@@ -138,10 +142,6 @@ public static class Program
         if (FlagValue(args, "--log-level") is { Length: > 0 } level &&
             Enum.TryParse(level, ignoreCase: true, out LogLevel parsed))
             options.LogLevel = parsed;
-
-        // The TOML layer as well, so `vht list --local` sees the operator's ignore list.
-        ServerConfigLoader.Apply(FlagValue(args, "--config") ?? ServerConfigLoader.DefaultPath, options,
-            new StructuredLogger(LogLevel.Critical));
 
         return options;
     }

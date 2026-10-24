@@ -262,12 +262,24 @@ public sealed class DevicePolicy
         DeviceIdentity identity = device.Identity;
 
         if (IsIgnored(identity))
-            return PolicyVerdict.Ignore($"ignored by policy ({identity})");
+        {
+            return PolicyVerdict.Ignore($"ignored by policy ({identity})") with
+            {
+                Nickname = GetNickname(identity),
+                RequiresPassword = RequiresPassword(identity),
+            };
+        }
 
         DeviceRule[] allow;
         lock (_gate) allow = _allow.ToArray();
         if (allow.Length > 0 && !allow.Any(r => r.Matches(identity, ServerName)))
-            return PolicyVerdict.Ignore($"not in the allow list ({identity})");
+        {
+            return PolicyVerdict.Ignore($"not in the allow list ({identity})") with
+            {
+                Nickname = GetNickname(identity),
+                RequiresPassword = RequiresPassword(identity),
+            };
+        }
 
         // A device the OS will not give us stays reported as unexportable, with its reason -
         // except a driver-held device the operator permitted a rebind for, which is claimable by

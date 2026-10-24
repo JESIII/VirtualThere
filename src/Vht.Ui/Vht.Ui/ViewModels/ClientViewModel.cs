@@ -48,7 +48,9 @@ public sealed class ClientViewModel : ObservableObject, IDisposable
         DetachSelectedCommand = new AsyncRelayCommand(
             () => DetachAsync(SelectedDevice),
             () => CanControl && SelectedDevice is { Attached: true });
-        AddPeerCommand = new AsyncRelayCommand(AddPeerAsync, () => CanControl);
+        // AddPeerCommand is always enabled - adding a server just stores the address.
+        // The worker is started lazily when the user attaches a device or explicitly starts it.
+        AddPeerCommand = new AsyncRelayCommand(AddPeerAsync);
 
         // Refresh is the client window's way in when nothing answers on the pipe: it is the only
         // control that stays enabled with no service, and pressing it starts the elevated worker
@@ -112,6 +114,7 @@ public sealed class ClientViewModel : ObservableObject, IDisposable
             {
                 Raise(nameof(CanControl));
                 Raise(nameof(StateText));
+                Raise(nameof(StartOrRefreshText));
                 RaiseCanExecute();
             }
         }
@@ -146,6 +149,12 @@ public sealed class ClientViewModel : ObservableObject, IDisposable
             }
         }
     }
+
+    /// <summary>
+    /// Label for the toolbar start/refresh button. Shows "Start" when no service,
+    /// "Refresh" when connected.
+    /// </summary>
+    public string StartOrRefreshText => ServiceReachable ? "Refresh" : "Start";
 
     /// <summary>Label for the toolbar attach/detach button, which follows the selection.</summary>
     public string ToggleAttachText => SelectedDevice is { Attached: true } ? "Detach selected" : "Attach selected";

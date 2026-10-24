@@ -124,7 +124,8 @@ internal sealed class UiSession : IDisposable
                 window.RestoreFromTray();
             },
             about: () => ShowAbout(window),
-            exit: window.ExitApplication);
+            exit: window.ExitApplication,
+            startText: () => _client.StartOrRefreshText);
 
         window.MinimizedToTray += (_, _) =>
         {
@@ -164,8 +165,22 @@ internal sealed class UiSession : IDisposable
     {
         // A management window must not die silently: report and keep the notification-area icon
         // (and the worker this session owns) alive.
-        _server?.Log.AppendLocal("Unhandled error: " + e.Exception.Message);
-        _client?.Log.AppendLocal("Unhandled error: " + e.Exception.Message);
+        //
+        // Reporting is the last thing between a caught exception and the process dying, so it is
+        // not allowed to throw: an exception raised here is not handed back to
+        // DispatcherUnhandledException, it terminates the process (and with it the worker it was
+        // supervising). That is exactly what a log line once did - appending it forced a layout
+        // pass from inside this handler, on a visual tree that was already mid-exception.
+        try
+        {
+            _server?.Log.AppendLocal("Unhandled error: " + e.Exception.Message);
+            _client?.Log.AppendLocal("Unhandled error: " + e.Exception.Message);
+        }
+        catch (Exception)
+        {
+            // The log is a diagnostic; losing it is better than losing the window.
+        }
+
         Dialogs.ShowWarning("An unexpected error occurred:\n\n" + e.Exception.Message);
         e.Handled = true;
     }

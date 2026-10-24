@@ -81,18 +81,26 @@ public sealed class ControlPlaneServer : IAsyncDisposable
             new Dictionary<string, object?> { ["pipe"] = PipePath });
     }
 
-    private async Task RunAsync(CancellationToken ct)
-    {
-        bool first = true;
+    private int _reportedSecurity;
 
+    private Task RunAsync(CancellationToken ct) =>
+        Task.WhenAll(
+            AcceptLoopAsync(ct),
+            AcceptLoopAsync(ct),
+            AcceptLoopAsync(ct),
+            AcceptLoopAsync(ct));
+
+    private async Task AcceptLoopAsync(CancellationToken ct)
+    {
         while (!ct.IsCancellationRequested)
         {
+            NamedPipeServerStream? pipe = null;
             try
             {
                 // Created through Vht.Interop.Control so that the pipe this *elevated* worker owns
                 // is still writable by the unelevated window that started it: an explicit DACL plus
                 // a Medium mandatory integrity label (docs/UI.md section 1).
-                NamedPipeServerStream pipe = NamedPipeSecurity.CreateServerPipe(
+                pipe = NamedPipeSecurity.CreateServerPipe(
                     PipeName,
                     PipeDirection.InOut,
                     NamedPipeServerStream.MaxAllowedServerInstances,
@@ -102,34 +110,59 @@ public sealed class ControlPlaneServer : IAsyncDisposable
 
                 PipeSecurity = security;
 
-                if (first)
+                if (Interlocked.CompareExchange(ref _reportedSecurity, 1, 0) == 0)
                 {
-                    first = false;
                     ReportPipeSecurity(security);
                 }
 
-                await using (pipe.ConfigureAwait(false))
-                {
-                    await pipe.WaitForConnectionAsync(ct).ConfigureAwait(false);
-                    await ServeConnectionAsync(pipe, ct).ConfigureAwait(false);
-                }
+                await pipe.WaitForConnectionAsync(ct).ConfigureAwait(false);
+
+                NamedPipeServerStream connected = pipe;
+                pipe = null;
+                _ = Task.Run(() => ServeAndDisposeAsync(connected, ct), CancellationToken.None);
             }
             catch (OperationCanceledException)
             {
+                if (pipe is not null)
+                    await pipe.DisposeAsync().ConfigureAwait(false);
                 return;
             }
             catch (IOException ex)
             {
+                if (pipe is not null)
+                    await pipe.DisposeAsync().ConfigureAwait(false);
                 _log.Write(LogLevel.Warn, LogEvent.ControlPlaneFailed,
                     $"control plane pipe error: {ex.Message}");
-                await Task.Delay(250, CancellationToken.None).ConfigureAwait(false);
+                await Task.Delay(50, CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
+                if (pipe is not null)
+                    await pipe.DisposeAsync().ConfigureAwait(false);
                 _log.Write(LogLevel.Error, LogEvent.ControlPlaneFailed,
                     $"control plane failed: {ex.Message}");
-                await Task.Delay(500, CancellationToken.None).ConfigureAwait(false);
+                await Task.Delay(250, CancellationToken.None).ConfigureAwait(false);
             }
+        }
+    }
+
+    private async Task ServeAndDisposeAsync(NamedPipeServerStream pipe, CancellationToken ct)
+    {
+        try
+        {
+            await using (pipe.ConfigureAwait(false))
+            {
+                await ServeConnectionAsync(pipe, ct).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException)
+        {
+            // Normal client disconnect at the end of a one-shot exchange.
+        }
+        catch (Exception ex)
+        {
+            _log.Write(LogLevel.Warn, LogEvent.ControlPlaneFailed,
+                $"control plane connection error: {ex.Message}");
         }
     }
 
@@ -227,6 +260,7 @@ public sealed class ControlPlaneServer : IAsyncDisposable
     private JsonObject Dispatch(string verb, JsonObject request) => verb switch
     {
         "server.status" => Status(),
+        "server.start" => StartServer(),
         "server.stop" => Stop(),
         "devices.list" => List(),
         "devices.kick" => Kick(request),
@@ -239,6 +273,12 @@ public sealed class ControlPlaneServer : IAsyncDisposable
             Error($"'{verb}' is a vht-client verb; it is served on \\\\.\\pipe\\vht-client"),
         _ => Error($"unknown verb '{verb}'"),
     };
+
+    private JsonObject StartServer()
+    {
+        RefreshExportsSync();
+        return Status();
+    }
 
     private JsonObject Status()
     {
@@ -313,6 +353,7 @@ public sealed class ControlPlaneServer : IAsyncDisposable
                 ["state"] = device.CaptureState.ToString(),
                 ["reason"] = device.CaptureReason.Describe(),
                 ["detail"] = device.CaptureDetail,
+                ["ignored"] = device.CaptureState == CaptureState.Ignored,
                 ["path"] = device.SysPath,
                 ["instance_path"] = device.InstancePath,
                 ["password_required"] = device.RequiresPassword,
@@ -340,7 +381,9 @@ public sealed class ControlPlaneServer : IAsyncDisposable
 
     private JsonObject Kick(JsonObject request)
     {
-        string busId = request["busid"]?.GetValue<string>() ?? string.Empty;
+        string busId = request["busid"]?.GetValue<string>()
+            ?? request["key"]?.GetValue<string>()
+            ?? string.Empty;
         if (busId.Length == 0)
             return Error("devices.kick requires 'busid'");
 
@@ -360,10 +403,16 @@ public sealed class ControlPlaneServer : IAsyncDisposable
     {
         string rule = request["rule"]?.GetValue<string>()
             ?? request["device"]?.GetValue<string>()
+            ?? request["key"]?.GetValue<string>()
+            ?? request["busid"]?.GetValue<string>()
             ?? string.Empty;
 
         if (!DeviceRule.TryParse(rule, out DeviceRule parsed))
-            return Error($"'{rule}' is not in vvvv:pppp[:serial][@server] form");
+        {
+            UsbDevice? byBusId = FindDevice(rule);
+            if (byBusId is null || !DeviceRule.TryParse(byBusId.Identity.VpKey, out parsed))
+                return Error($"'{rule}' is not in vvvv:pppp[:serial][@server] form");
+        }
 
         if (ignore)
         {
@@ -409,7 +458,9 @@ public sealed class ControlPlaneServer : IAsyncDisposable
 
     private JsonObject SetNickname(JsonObject request)
     {
-        string busId = request["busid"]?.GetValue<string>() ?? string.Empty;
+        string busId = request["busid"]?.GetValue<string>()
+            ?? request["key"]?.GetValue<string>()
+            ?? string.Empty;
         string nickname = request["nickname"]?.GetValue<string>() ?? string.Empty;
 
         if (busId.Length == 0)
@@ -437,7 +488,9 @@ public sealed class ControlPlaneServer : IAsyncDisposable
 
     private JsonObject SetPassword(JsonObject request)
     {
-        string busId = request["busid"]?.GetValue<string>() ?? string.Empty;
+        string busId = request["busid"]?.GetValue<string>()
+            ?? request["key"]?.GetValue<string>()
+            ?? string.Empty;
         string password = request["password"]?.GetValue<string>() ?? string.Empty;
 
         if (busId.Length == 0)
@@ -465,14 +518,18 @@ public sealed class ControlPlaneServer : IAsyncDisposable
 
     private JsonObject LogTail(JsonObject request)
     {
-        int lines = request["lines"]?.GetValue<int>() ?? 100;
+        int lines = request["lines"]?.GetValue<int>()
+            ?? request["max"]?.GetValue<int>()
+            ?? 100;
         if (_ring is null)
             return Error("no in-memory log buffer is configured for this server instance");
 
+        IReadOnlyList<string> tail = _ring.Tail(lines);
         return new JsonObject
         {
             ["ok"] = true,
             ["lines"] = lines,
+            ["entries"] = new JsonArray(tail.Select(l => (JsonNode)l).ToArray()),
             ["text"] = _ring.TailText(lines),
         };
     }

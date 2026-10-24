@@ -201,6 +201,12 @@ public static class JsonRead
             : value.ToJsonString();
     }
 
+    public static string? NonEmptyString(JsonNode? container, string name)
+    {
+        string? text = String(container, name);
+        return string.IsNullOrWhiteSpace(text) ? null : text;
+    }
+
     public static int Int(JsonNode? container, string name, int fallback = 0)
     {
         JsonNode? value = container?[name];
@@ -220,13 +226,54 @@ public static class JsonRead
             return parsed;
         }
 
-        // vht-server writes vid/pid as hex strings ("0x046d"), the mock writes integers. Both
-        // shapes have to arrive at the same number or the device list shows [0000:0000].
+        // vht-server writes vid/pid as hex strings ("046d" or "0x046d"), the mock writes integers.
+        // Both shapes have to arrive at the same number or the device list shows [0000:0000].
         string text = value.GetValueKind() == JsonValueKind.String ? value.GetValue<string>() : string.Empty;
         if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase) &&
             int.TryParse(text[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int hex))
         {
             return hex;
+        }
+
+        if (text.Length > 0 &&
+            int.TryParse(text, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int bareHex))
+        {
+            return bareHex;
+        }
+
+        return fallback;
+    }
+
+    /// <summary>
+    /// Reads a USB vendor or product id: JSON numbers are read as-is (the mock service), while
+    /// strings are always hexadecimal (<c>"046d"</c>, <c>"1050"</c>, or <c>"0x046d"</c>).
+    /// </summary>
+    public static int HexOrInt(JsonNode? container, string name, int fallback = 0)
+    {
+        JsonNode? value = container?[name];
+        if (value is null || value.GetValueKind() == JsonValueKind.Null)
+        {
+            return fallback;
+        }
+
+        if (value.GetValueKind() == JsonValueKind.Number && value.AsValue().TryGetValue(out int number))
+        {
+            return number;
+        }
+
+        if (value.GetValueKind() == JsonValueKind.String)
+        {
+            string text = value.GetValue<string>().Trim();
+            if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                text = text[2..];
+            }
+
+            if (text.Length > 0 &&
+                int.TryParse(text, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int hex))
+            {
+                return hex;
+            }
         }
 
         return fallback;

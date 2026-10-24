@@ -219,8 +219,9 @@ public sealed class UsbDeviceEnumerator : IDeviceEnumerator
             string devicePath = Marshal.PtrToStringUni(detail + 4) ?? string.Empty;
             string instancePath = InstanceId(devInfo.DevInst);
             string className = ReadProperty(set, ref devInfo, SetupApi.SPDRP_CLASS);
-            string friendlyName = ReadProperty(set, ref devInfo, SetupApi.SPDRP_FRIENDLYNAME);
-            string service = ReadProperty(set, ref devInfo, SetupApi.SPDRP_DRIVER);
+            string friendlyName = ReadProductDescription(set, ref devInfo);
+            string manufacturerName = ReadManufacturer(set, ref devInfo);
+            string service = ReadProperty(set, ref devInfo, SetupApi.SPDRP_SERVICE);
 
             (string busId, uint devNum) = BusIdDerivation.FromInstancePath(instancePath);
             if (!usedBusIds.Add(busId))
@@ -237,7 +238,7 @@ public sealed class UsbDeviceEnumerator : IDeviceEnumerator
                 busId = candidate;
             }
 
-            return Build(devicePath, instancePath, className, friendlyName, service, busId, devNum);
+            return Build(devicePath, instancePath, className, friendlyName, manufacturerName, service, busId, devNum);
         }
         catch (Exception ex)
         {
@@ -257,6 +258,7 @@ public sealed class UsbDeviceEnumerator : IDeviceEnumerator
         string instancePath,
         string className,
         string friendlyName,
+        string manufacturerName,
         string service,
         string busId,
         uint devNum)
@@ -286,9 +288,9 @@ public sealed class UsbDeviceEnumerator : IDeviceEnumerator
                 DeviceProtocol = descriptor.bDeviceProtocol,
                 ConfigurationValue = 1,
                 NumConfigurations = descriptor.bNumConfigurations == 0 ? (byte)1 : descriptor.bNumConfigurations,
-                Manufacturer = manufacturer ?? string.Empty,
-                Product = product ?? friendlyName,
-                Serial = serial,
+                Manufacturer = !string.IsNullOrWhiteSpace(manufacturer) ? manufacturer : manufacturerName,
+                Product = !string.IsNullOrWhiteSpace(product) ? product : friendlyName,
+                Serial = !string.IsNullOrEmpty(serial) ? serial : FallbackSerial(instancePath),
                 Interfaces = interfaces ?? Array.Empty<UsbIpInterface>(),
                 Endpoints = endpoints ?? Array.Empty<EndpointDescriptor>(),
                 CaptureState = state,
@@ -296,6 +298,12 @@ public sealed class UsbDeviceEnumerator : IDeviceEnumerator
                 CaptureDetail = detail,
                 DevicePath = devicePath,
             };
+
+        if (IsHubService(service) || IsClass(className, "USBHub"))
+        {
+            return Role(CaptureState.CaptureUnsupported, CaptureReason.NoWinUsbInterface,
+                "device is a USB hub, not an exportable function device");
+        }
 
         // ---- refuse-export rules (never a licence or a count; all three are physical safety) --
         if (IsClass(className, "Keyboard") || IsClass(className, "Mouse"))
@@ -370,7 +378,7 @@ public sealed class UsbDeviceEnumerator : IDeviceEnumerator
                 }
             }
 
-            if (string.Equals(service, "usbhub", StringComparison.OrdinalIgnoreCase))
+            if (IsHubService(service))
             {
                 return Role(CaptureState.CaptureUnsupported, CaptureReason.NoWinUsbInterface,
                     "device is a USB hub, not an exportable function device",
@@ -403,6 +411,19 @@ public sealed class UsbDeviceEnumerator : IDeviceEnumerator
 
     private ushort FallbackProductId(string instancePath) =>
         BusIdDerivation.TryParseVidPid(instancePath, out _, out ushort pid) ? pid : (ushort)0;
+
+    private static string FallbackSerial(string instancePath)
+    {
+        int lastSlash = instancePath.LastIndexOf('\\');
+        return lastSlash >= 0 && lastSlash + 1 < instancePath.Length
+            ? instancePath[(lastSlash + 1)..]
+            : string.Empty;
+    }
+
+    private static bool IsHubService(string service) =>
+        string.Equals(service, "usbhub", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(service, "USBHUB3", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(service, "iuahub", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsClass(string className, string expected) =>
         string.Equals(className, expected, StringComparison.OrdinalIgnoreCase);
@@ -472,6 +493,61 @@ public sealed class UsbDeviceEnumerator : IDeviceEnumerator
         var buffer = new byte[1024];
         if (!SetupApi.SetupDiGetDeviceRegistryProperty(
                 set, ref devInfo, property, out _, buffer, buffer.Length, out int required) || required <= 0)
+            return string.Empty;
+
+        int bytes = Math.Min(required, buffer.Length);
+        return Encoding.Unicode.GetString(buffer, 0, bytes).TrimEnd('\0');
+    }
+
+    /// <summary>
+    /// Reads the best human-readable product name SetupAPI has for a USB device before WinUSB is
+    /// opened: <c>SPDRP_FRIENDLYNAME</c>, then <c>DEVPKEY_Device_BusReportedDeviceDesc</c> (the
+    /// USB <c>iProduct</c> string cached by the hub driver), then <c>SPDRP_DEVICEDESC</c> when it
+    /// is more specific than the generic composite-device label.
+    /// </summary>
+    private static string ReadProductDescription(nint set, ref SetupApi.SP_DEVINFO_DATA devInfo)
+    {
+        string friendly = ReadProperty(set, ref devInfo, SetupApi.SPDRP_FRIENDLYNAME);
+        if (!string.IsNullOrWhiteSpace(friendly))
+            return friendly;
+
+        string busReported = ReadDevicePropertyString(
+            set, ref devInfo, in SetupApi.DEVPKEY_Device_BusReportedDeviceDesc);
+        if (!string.IsNullOrWhiteSpace(busReported))
+            return busReported;
+
+        string deviceDesc = ReadProperty(set, ref devInfo, SetupApi.SPDRP_DEVICEDESC);
+        if (!string.IsNullOrWhiteSpace(deviceDesc) &&
+            !string.Equals(deviceDesc, "USB Composite Device", StringComparison.OrdinalIgnoreCase))
+        {
+            return deviceDesc;
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>
+    /// Reads <c>SPDRP_MFG</c> when it is an actual manufacturer string rather than a Windows
+    /// placeholder like <c>(Standard USB Host Controller)</c> or <c>(Standard system devices)</c>.
+    /// </summary>
+    private static string ReadManufacturer(nint set, ref SetupApi.SP_DEVINFO_DATA devInfo)
+    {
+        string mfg = ReadProperty(set, ref devInfo, SetupApi.SPDRP_MFG).Trim();
+        if (mfg.Length == 0 || (mfg.StartsWith('(') && mfg.EndsWith(')')))
+            return string.Empty;
+
+        return mfg;
+    }
+
+    private static string ReadDevicePropertyString(
+        nint set, ref SetupApi.SP_DEVINFO_DATA devInfo, in SetupApi.DEVPROPKEY key)
+    {
+        var buffer = new byte[1024];
+        if (!SetupApi.SetupDiGetDeviceProperty(
+                set, ref devInfo, in key, out uint type, buffer, buffer.Length, out int required, 0))
+            return string.Empty;
+
+        if (type != SetupApi.DEVPROP_TYPE_STRING || required <= 0)
             return string.Empty;
 
         int bytes = Math.Min(required, buffer.Length);
