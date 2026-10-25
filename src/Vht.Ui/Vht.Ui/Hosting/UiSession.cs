@@ -100,6 +100,7 @@ internal sealed class UiSession : IDisposable
 
         _server.Start();
         Present(window);
+        StartWorkerIfAsked(window.Dispatcher, () => _server.StartCommand.Execute(null));
     }
 
     private void StartClientMode()
@@ -142,6 +143,32 @@ internal sealed class UiSession : IDisposable
 
         _client.Start();
         Present(window);
+        StartWorkerIfAsked(window.Dispatcher, () => _client.RefreshCommand.Execute(null));
+    }
+
+    /// <summary>
+    /// <c>--start-worker</c>: presses the very command the Start affordance invokes, once the
+    /// dispatcher is pumping - nothing parallel, nothing that bypasses the view model.
+    /// </summary>
+    /// <remarks>
+    /// Automation only. The worker-lifecycle acceptance test needs a real window process that
+    /// starts its own worker without a click, because the behaviour it measures ("this process
+    /// dies; its worker keeps serving; the next window attaches instead of spawning") is a property
+    /// of the window's lifetime, not of the supervisor's. A human never passes this flag.
+    /// </remarks>
+    private void StartWorkerIfAsked(Dispatcher dispatcher, Action? startCommand)
+    {
+        if (!_options.StartWorker || startCommand is null)
+        {
+            return;
+        }
+
+        // Queued, not invoked inline: the window has to finish coming up first (tray icon, window
+        // state, polling) before its Start command runs, and the command must run on the UI thread.
+        // The two-argument overload is deliberate - BeginInvoke(priority, Delegate, object[]) with
+        // a null argument list hands the callback one parameter, which a parameterless Action
+        // rejects at dispatch time ("Parameter count mismatch").
+        dispatcher.BeginInvoke(DispatcherPriority.Background, startCommand);
     }
 
     private void Present(TrayWindow window)

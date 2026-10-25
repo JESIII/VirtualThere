@@ -166,8 +166,9 @@ public sealed class WorkerSupervisorTests
 
         bool stopped = await supervisor.StopOwnedWorkerAsync(CancellationToken.None);
 
-        // The window cannot kill an elevated process and says so rather than pretending; the
-        // worker's own parent watch is what actually reaps it, a second after the window exits.
+        // The window cannot kill an elevated process and says so rather than pretending. Nothing
+        // reaps it either: a worker outlives its window on purpose (WorkerLifetime), so the operator
+        // stops it over the control pipe - `vht-server stop-server` - and the failure is reported.
         Assert.False(stopped);
         Assert.Contains("could not end the worker", supervisor.LastError, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(1, worker.DisposeCount);

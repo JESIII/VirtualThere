@@ -22,7 +22,10 @@ cannot turn one role's executable into the other role.
 
 `--pipe <name>` overrides the pipe (used by the harness), `--port <n>` sets the server worker's
 plaintext port, `--minimized` starts hidden in the notification area, `--no-elevate` starts the
-worker without a consent prompt (automation only), `--help` prints the usage.
+worker without a consent prompt (automation only), `--start-worker` presses the real **Start**
+command (server) or **Refresh** command (client) as soon as the window is up (automation only; it
+exists so the worker-lifecycle test can measure a window that started its own worker without a human
+clicking, and a human never passes it), `--help` prints the usage.
 
 ### Where it runs from
 

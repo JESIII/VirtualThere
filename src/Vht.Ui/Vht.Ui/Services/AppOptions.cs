@@ -53,6 +53,14 @@ public sealed class AppOptions
     /// </summary>
     public bool NoElevate { get; private set; }
 
+    /// <summary>
+    /// True when the window must press its own Start as soon as it is up: the exact command the
+    /// Start button executes, without a human to click it. Automation only (the acceptance test
+    /// that measures "the window process dies, its worker keeps serving, the next window attaches"),
+    /// and it is what makes that measurement possible without UI Automation and a desktop.
+    /// </summary>
+    public bool StartWorker { get; private set; }
+
     public bool ShowHelp { get; private set; }
 
     public static AppOptions Parse(IReadOnlyList<string> args)
@@ -83,6 +91,10 @@ public sealed class AppOptions
 
                 case "--no-elevate":
                     options.NoElevate = true;
+                    break;
+
+                case "--start-worker":
+                    options.StartWorker = true;
                     break;
 
                 case "--minimized":
@@ -149,6 +161,7 @@ public sealed class AppOptions
             "  --port <n>             plaintext listener port for the server worker (default: 3240)\n" +
             "  --minimized            start hidden in the notification area\n" +
             "  --no-elevate           start the privileged worker without a consent prompt (automation only)\n" +
+            "  --start-worker         press Start as soon as the window is up (automation only)\n" +
             "  --help                 this text\n" +
             "\n" +
             "The window runs unelevated. Starting the service from it launches this same\n" +

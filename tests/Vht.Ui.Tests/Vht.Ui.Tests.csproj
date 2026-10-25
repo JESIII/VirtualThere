@@ -36,6 +36,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Vht.Ui\Vht.Ui\Vht.Ui.csproj" />
+
+    <!--
+      Built, not referenced: the worker-lifecycle test launches the real role executables, so they
+      have to exist when the tests run. ReferenceOutputAssembly=false keeps their types out of this
+      project while making the build produce them in the same configuration.
+    -->
+    <ProjectReference Include="..\..\src\Vht.Server\Vht.Server.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\src\Vht.Client\Vht.Client.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>
