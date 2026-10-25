@@ -178,9 +178,15 @@ internal sealed class UdeDeviceController : IDeviceController
         }
     }
 
-    public IReadOnlyList<ImportedDeviceSnapshot> GetImportedDevices()
+    public IReadOnlyList<ImportedDeviceSnapshot> GetImportedDevices() =>
+        TryGetImportedDevices(out IReadOnlyList<ImportedDeviceSnapshot> devices)
+            ? devices
+            : Array.Empty<ImportedDeviceSnapshot>();
+
+    public bool TryGetImportedDevices(out IReadOnlyList<ImportedDeviceSnapshot> devices)
     {
-        if (!IsAvailable) return Array.Empty<ImportedDeviceSnapshot>();
+        devices = Array.Empty<ImportedDeviceSnapshot>();
+        if (!IsAvailable) return false;
 
         int capacity = InitialReadCapacity;
         for (int attempt = 0; attempt < MaxReadAttempts; attempt++)
@@ -202,7 +208,7 @@ internal sealed class UdeDeviceController : IDeviceController
                 {
                     _log.Warn("ude", $"get_imported_devices asked for {required} bytes (buffer was {buffer.Length}); " +
                                      "that is not a usable size, giving up rather than retrying blindly");
-                    return Array.Empty<ImportedDeviceSnapshot>();
+                    return false;
                 }
 
                 capacity = (int)((required - UdeBufferCodec.GetImportedDevicesHeaderOffset)
@@ -211,14 +217,15 @@ internal sealed class UdeDeviceController : IDeviceController
             }
             catch (Win32Exception ex)
             {
-                _log.Warn("ude", $"get_imported_devices failed: {ex.Message}");
-                return Array.Empty<ImportedDeviceSnapshot>();
+                _log.Warn("ude", $"get_imported_devices failed (Win32 {ex.NativeErrorCode}): {ex.Message}");
+                return false;
             }
 
-            return DecodeImportedDevices(buffer, returned);
+            devices = DecodeImportedDevices(buffer, returned);
+            return true;
         }
 
-        return Array.Empty<ImportedDeviceSnapshot>();
+        return false;
     }
 
     private IReadOnlyList<ImportedDeviceSnapshot> DecodeImportedDevices(byte[] buffer, int byteCount)

@@ -31,7 +31,7 @@ internal static class Program
         if (UiHost.IsWorkerInvocation(args))
         {
             return RunBlocking(
-                ClientCli.RunAsync(WithoutWorkerFlag(args), Console.Out, Console.Error),
+                ClientCli.RunAsync(WorkerArguments(args), Console.Out, Console.Error),
                 worker: true);
         }
 
@@ -106,6 +106,17 @@ internal static class Program
         }
 
         return kept.ToArray();
+    }
+
+    internal static string[] WorkerArguments(string[] args)
+    {
+        var workerArgs = new System.Collections.Generic.List<string>(args.Length + 2)
+        {
+            "serve",
+        };
+        workerArgs.AddRange(WithoutWorkerFlag(args));
+        workerArgs.Add("--log");
+        return workerArgs.ToArray();
     }
 
     private static bool HasFlag(string[] args, string flag)

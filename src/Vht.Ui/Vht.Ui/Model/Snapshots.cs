@@ -84,10 +84,18 @@ public sealed class DeviceSnapshot
     public string OutcomeText => CaptureOutcome is null ? string.Empty : CaptureOutcome;
 
     /// <summary>Status tooltip: the full reason, plus the capture outcome when there is one.</summary>
-    public string DetailText => CaptureOutcome is null
-        ? CaptureText.DescribeReason(CaptureReason)
-        : CaptureText.DescribeReason(CaptureReason) + "\n\nLast capture (" +
-          (CapturePath ?? "none") + "): " + CaptureOutcome;
+    public string DetailText
+    {
+        get
+        {
+            string reason = string.IsNullOrWhiteSpace(CaptureDetail)
+                ? CaptureText.DescribeReason(CaptureReason)
+                : CaptureDetail;
+            return CaptureOutcome is null
+                ? reason
+                : reason + "\n\nLast capture (" + (CapturePath ?? "none") + "): " + CaptureOutcome;
+        }
+    }
 
     public bool Exportable => !Ignored && CaptureState == CaptureState.Capturable;
 }

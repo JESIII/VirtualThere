@@ -13,6 +13,15 @@ namespace Vht.Ui.Tests;
 /// </remarks>
 public sealed class DeviceOutcomeTextTests
 {
+    [Theory]
+    [InlineData("driver_holds_device", CaptureReason.DriverHoldsDevice)]
+    [InlineData("system_critical", CaptureReason.SystemCritical)]
+    [InlineData("no_winusb_interface", CaptureReason.NoWinUsbInterface)]
+    public void Machine_readable_capture_reasons_parse(string value, CaptureReason expected)
+    {
+        Assert.Equal(expected, CaptureText.ParseReason(value));
+    }
+
     private static DeviceSnapshot Device(
         string? outcome = null, string? path = null, bool exported = true, CaptureState state = CaptureState.RebindOffered) =>
         new()
@@ -37,7 +46,7 @@ public sealed class DeviceOutcomeTextTests
         DeviceSnapshot device = Device();
 
         Assert.Equal(string.Empty, device.OutcomeText);
-        Assert.Equal(CaptureText.DescribeReason(CaptureReason.DriverHoldsDevice), device.DetailText);
+        Assert.Equal("the device's function driver holds it exclusively", device.DetailText);
     }
 
     [Fact]
@@ -53,6 +62,7 @@ public sealed class DeviceOutcomeTextTests
         // The tooltip says which path ran, so "not elevated" is not mistaken for the P1 attempt.
         Assert.Contains("Last capture (P2):", device.DetailText, StringComparison.Ordinal);
         Assert.Contains(outcome, device.DetailText, StringComparison.Ordinal);
+        Assert.Contains("the device's function driver holds it exclusively", device.DetailText, StringComparison.Ordinal);
     }
 
     [Fact]

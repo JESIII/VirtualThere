@@ -6,6 +6,7 @@ using Vht.Core.Protocol;
 using Vht.Core.Server;
 using Vht.Server.Control;
 using Vht.Server.Devices;
+using UiCaptureReason = Vht.Ui.Model.CaptureReason;
 
 namespace Vht.Acceptance.Tests;
 
@@ -414,10 +415,12 @@ public sealed class DeviceCaptureOutcomeTests
         Assert.Equal(0x1050, byBusId["1-10"].VendorId);
         Assert.Equal(0x0120, byBusId["1-10"].ProductId);
         Assert.Equal("1050:0120", byBusId["1-10"].DisplayName);
+        Assert.Equal(UiCaptureReason.DriverHoldsDevice, byBusId["1-10"].CaptureReason);
 
         Assert.Equal(0x0fd9, byBusId["1-8"].VendorId);
         Assert.Equal(0x0063, byBusId["1-8"].ProductId);
         Assert.Equal("Stream Deck Mini", byBusId["1-8"].DisplayName);
+        Assert.Equal(UiCaptureReason.DriverHoldsDevice, byBusId["1-8"].CaptureReason);
 
         // Per-row UI commands pass "key" (busid): nickname, ignore, unignore, password all succeed.
         Assert.True((await uiClient.SetNicknameAsync("1-10", "YubiKey", CancellationToken.None)).IsOk);

@@ -314,7 +314,26 @@ internal sealed class ClientControlServer : IAsyncDisposable
 
     private object AddPeer(JsonElement request)
     {
-        string spec = RequiredString(request, "spec");
+        string spec;
+        if (request.TryGetProperty("spec", out JsonElement specElement) &&
+            specElement.ValueKind == JsonValueKind.String)
+        {
+            spec = specElement.GetString()!;
+        }
+        else
+        {
+            string host = RequiredString(request, "host");
+            string? name = request.TryGetProperty("name", out JsonElement nameElement) &&
+                nameElement.ValueKind == JsonValueKind.String
+                    ? nameElement.GetString()
+                    : null;
+            int? port = OptionalInt(request, "port");
+
+            spec = (string.IsNullOrWhiteSpace(name) ? string.Empty : name + "@") +
+                host +
+                (port is null ? string.Empty : ":" + port.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
         bool useTls = OptionalBool(request, "useTls") ?? false;
         Peer peer = PeerStore.Parse(spec, useTls);
         _peers.Add(peer);

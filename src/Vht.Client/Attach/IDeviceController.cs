@@ -77,8 +77,14 @@ internal interface IDeviceController : IDisposable
     /// <summary>True when the controller is usable (driver present and opened).</summary>
     bool IsAvailable { get; }
 
-    /// <summary>Every device currently imported into the controller.</summary>
+    /// <summary>Every device currently imported into the controller; empty on query failure.</summary>
     IReadOnlyList<ImportedDeviceSnapshot> GetImportedDevices();
+
+    /// <summary>
+    /// Tries to read the imported-device list. False means the controller state is unknown, not empty;
+    /// callers must not infer that devices disappeared from a failed query.
+    /// </summary>
+    bool TryGetImportedDevices(out IReadOnlyList<ImportedDeviceSnapshot> devices);
 
     /// <summary>Imports a device. `host`/`service` are the loopback bridge endpoint, never a peer.</summary>
     DeviceAttachOutcome Attach(string host, string service, string busId, string? serial, bool onceOnly = false);

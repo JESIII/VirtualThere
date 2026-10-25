@@ -254,6 +254,22 @@ public sealed class AttachManagerTests
     }
 
     [Fact]
+    public async Task AFailedControllerSnapshotDoesNotLookLikeEveryAttachedPortDisappeared()
+    {
+        await using var fixture = new ClientTestFixture();
+        await fixture.AddPeerAsync("lab", "1-2");
+        fixture.StartBridge();
+        InventoryEntry entry = (await fixture.RefreshAsync())[0];
+        await fixture.Manager.AttachAsync(entry, AttachReason.Manual, CancellationToken.None);
+
+        fixture.Controller.ImportedDevicesQuerySucceeds = false;
+        await fixture.Manager.ReconcileAsync(CancellationToken.None);
+
+        Assert.Equal(1, fixture.Manager.AttachedCount);
+        Assert.Equal(0, fixture.Controller.DetachCallCount);
+    }
+
+    [Fact]
     public async Task AutoAttachHappensOnlyAfterAGrant_AndTheGrantIsRecordedOnlyAfterSuccess()
     {
         await using var fixture = new ClientTestFixture();

@@ -47,7 +47,9 @@ public static class CaptureText
 
     public static CaptureReason ParseReason(string? value)
     {
-        return Enum.TryParse(value, ignoreCase: true, out CaptureReason parsed)
+        string? normalized = value?.Replace("_", string.Empty, StringComparison.Ordinal);
+        return Enum.TryParse(value, ignoreCase: true, out CaptureReason parsed) ||
+            Enum.TryParse(normalized, ignoreCase: true, out parsed)
             ? parsed
             : CaptureReason.None;
     }

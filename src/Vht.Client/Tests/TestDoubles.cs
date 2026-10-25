@@ -407,11 +407,24 @@ internal sealed class FakeDeviceController : IDeviceController
 
     public bool IsAvailable { get; set; } = true;
 
+    public bool ImportedDevicesQuerySucceeds { get; set; } = true;
+
     public event EventHandler<ImportedDeviceSnapshot>? DeviceChanged;
 
     public IReadOnlyList<ImportedDeviceSnapshot> GetImportedDevices()
     {
         lock (_sync) return _ports.Values.OrderBy(p => p.Port).ToArray();
+    }
+
+    public bool TryGetImportedDevices(out IReadOnlyList<ImportedDeviceSnapshot> devices)
+    {
+        lock (_sync)
+        {
+            devices = ImportedDevicesQuerySucceeds
+                ? _ports.Values.OrderBy(p => p.Port).ToArray()
+                : Array.Empty<ImportedDeviceSnapshot>();
+            return ImportedDevicesQuerySucceeds;
+        }
     }
 
     public DeviceAttachOutcome Attach(string host, string service, string busId, string? serial, bool onceOnly = false)

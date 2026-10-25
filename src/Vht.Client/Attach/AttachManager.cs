@@ -22,7 +22,7 @@ namespace Vht.Client.Attach;
 internal sealed record AttachManagerOptions
 {
     /// <summary>How often the inventory is re-read and the desired state re-applied.</summary>
-    internal TimeSpan ReconcileInterval { get; init; } = TimeSpan.FromSeconds(2);
+    internal TimeSpan ReconcileInterval { get; init; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
     /// Ports the driver should be able to allocate before we consider the machine constrained. Used
@@ -183,10 +183,15 @@ internal sealed class AttachManager : IAsyncDisposable
         int failures = 0;
 
         // --- 1. did the driver lose a device? (remote unplug, or the peer dropped the import) ------
-        var livePorts = _controller.GetImportedDevices().Select(d => d.Port).ToHashSet();
+        bool haveControllerSnapshot = _controller.TryGetImportedDevices(
+            out IReadOnlyList<ImportedDeviceSnapshot> importedDevices);
+        var livePorts = haveControllerSnapshot
+            ? importedDevices.Select(d => d.Port).ToHashSet()
+            : null;
         foreach (AttachedDevice device in _attached.Values.ToArray())
         {
-            if (livePorts.Contains(device.Port))
+            // A failed controller query means its state is unknown, not that all ports vanished.
+            if (livePorts is null || livePorts.Contains(device.Port))
             {
                 continue;
             }

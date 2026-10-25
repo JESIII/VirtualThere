@@ -239,6 +239,19 @@ Options, in order of preference:
 3. Accept it as a documented limitation (README "Known limitations" 8). A server-side filter driver
    is future work.
 
+For a portable folder, put these settings in `<portable folder>\config\server.toml` and restart the
+server worker:
+
+```toml
+[capture]
+mode = "auto"
+rebind.enabled = true
+```
+
+This only offers P2 for devices held by a function driver; it does not make system-critical devices
+safe to export or conjure a WinUSB interface where none exists. Try it only with a device you can
+afford to have rebound away from its current Windows driver.
+
 ### `vht list --local` shows `state=RebindOffered reason=driver_holds_device`
 
 That is the rebind being offered, which is what you asked for with `capture.rebind.enabled` /
