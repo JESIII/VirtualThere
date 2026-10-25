@@ -109,7 +109,7 @@ public sealed class WorkerOutputTests
 
         Assert.Equal(WorkerStartResult.TimedOut, result);
         Assert.Empty(supervisor.LastWorkerOutput);
-        Assert.Contains("vht status", supervisor.LastError!, StringComparison.Ordinal);
+        Assert.Contains("worker's runtime log", supervisor.LastError!, StringComparison.Ordinal);
         Assert.Contains("runtime log", supervisor.LastError!, StringComparison.OrdinalIgnoreCase);
     }
 

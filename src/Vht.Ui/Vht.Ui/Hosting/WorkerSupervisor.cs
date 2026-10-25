@@ -42,8 +42,7 @@ public interface IWorkerSupervisor
 
     /// <summary>
     /// The last lines the worker wrote to its standard output and error, oldest first. Empty for an
-    /// elevated worker, whose handles cannot be redirected: its lines are in the server's runtime
-    /// log, and <see cref="LastError"/> names that file in that case.
+    /// elevated worker, whose handles cannot be redirected: its output is in the role's runtime log.
     /// </summary>
     IReadOnlyList<string> LastWorkerOutput { get; }
 
@@ -316,7 +315,7 @@ public sealed class WorkerSupervisor : IWorkerSupervisor, IDisposable
         }
 
         return (_spec.Elevate
-            ? "; its output went to the server's runtime log (run 'vht status' for the path) - an " +
+            ? "; its output went to the worker's runtime log - an " +
               "elevated worker cannot be redirected by this window"
             : "; it wrote no output") + kept;
     }
