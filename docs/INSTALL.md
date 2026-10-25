@@ -36,9 +36,9 @@ msiexec /x VirtualThere-0.1.0-x64.msi /qn          # uninstall: service, driver,
 
 The portable folder is used in place: copy `dist/portable/` anywhere (it is not under
 `%ProgramFiles%` and is not registered with the SCM) and run `vht-server.exe`, `vht-client.exe` or
-`vht.exe` from there. Configuration and state stay in `./config` next to the binaries, because the
-folder contains `portable.marker`: the server reads and writes `config\server.toml` and
-`config\state.toml` there, the client its own `config\config.toml`, peers and grants - instead of
+`vht.exe` from there. Configuration and state stay next to the binaries, because the
+folder contains `portable.marker`: the server reads and writes `server.toml` and
+`state.toml` there, the client its own `config.toml`, peers and grants - instead of
 `%ProgramData%` and `%LOCALAPPDATA%`. Two copies unzipped to two places therefore cannot share one
 configuration file, and deleting the folder removes the configuration, state and anything else it
 wrote there. The marker governs that one directory, not every path the product can write: the
@@ -158,7 +158,7 @@ vht service-status
 
 The service reads `%ProgramData%\VirtualThere\server.toml` by default. Override with
 `--config <path>` or the `VHT_CONFIG` environment variable. In a portable folder - one containing
-`portable.marker` beside the executables - that default is `<folder>\config\server.toml` instead, so
+`portable.marker` beside the executables - that default is `<folder>\server.toml` instead, so
 `vht config-template` with no `--out` writes the starter file exactly where the shipped
 `dist/portable/vht-server.exe` will read it. See the portable-folder paragraph at the top of this
 document.

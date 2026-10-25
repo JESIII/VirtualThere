@@ -57,20 +57,20 @@ needed for it. The full window semantics - including the notification-area affor
 
 Default path: `%ProgramData%\VirtualThere\server.toml` - that is the **installed** default, and the
 MSI/service case is unchanged by the rule below. In a **portable** folder (one containing
-`portable.marker` beside the executables) it is `config\server.toml` **in that folder** instead, so
+`portable.marker` beside the executables) it is `server.toml` **in that folder** instead, so
 the shipped `dist/portable/vht-server.exe` keeps its configuration and state beside itself rather
 than machine-wide. Precedence, highest first:
 
 1. `--config <path>` (a file, or a directory),
 2. `VHT_CONFIG`,
-3. `portable.marker` beside the executable -> `<folder>\config\server.toml`,
+3. `portable.marker` beside the executable -> `<folder>\server.toml`,
 4. the installed default `%ProgramData%\VirtualThere\server.toml`.
 
 The marker's **presence** is the whole test: remove the file and the installed default applies again.
 `vht-client` and the rest of the product resolve the same directory by the same rule, so a portable
-folder holds the whole of what the marker governs - the client's `config\config.toml`, `state.toml`,
-peers, grants and any log it writes into `config\`, beside the server's `config\server.toml` and
-`config\state.toml`.
+folder holds the whole of what the marker governs - the client's `config.toml`, `state.toml`,
+peers, grants and any log it writes into the same folder, beside the server's `server.toml` and
+`state.toml`.
 
 **What the marker does not govern.** It redirects the config/state directory, not every path the
 product can write. Three privileged paths stay machine-wide even in a portable folder, because they
@@ -95,7 +95,7 @@ vht config-template --out C:\ProgramData\VirtualThere\server.toml
 ```
 
 With no `--out`, `vht config-template` writes to the same path the server will read - the portable
-`.\config\server.toml` in a portable folder, `%ProgramData%\VirtualThere\server.toml` otherwise. The
+`.\server.toml` in a portable folder, `%ProgramData%\VirtualThere\server.toml` otherwise. The
 server creates that directory at start-up when it is missing.
 
 The server parses a documented subset of TOML: comments (`#`), `[section]` headers, dotted keys,

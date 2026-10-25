@@ -14,7 +14,7 @@ public enum ConfigSourceKind
     CommandLine = 4,
 
     /// <summary>A <c>portable.marker</c> beside the executable - config and state stay in
-    /// <c>./config</c> in that folder. A location, not a precedence layer: it loses to
+    /// that folder. A location, not a precedence layer: it loses to
     /// <see cref="CommandLine"/> and <see cref="Environment"/>.</summary>
     Portable = 5,
 }

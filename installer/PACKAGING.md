@@ -42,7 +42,7 @@ dist/
     vht-server.exe            server (and the VirtualThere Server window; self-contained single file)
     vht-client.exe            client (and the VirtualThere Client window)
     vht.exe                   operator command line
-    portable.marker           config and state stay in ./config in this folder
+    portable.marker           config and state stay in this folder
     driver/                   pinned third-party driver package + its licence + its SHA256SUMS
     scripts/                  the privileged setup scripts (see section 3 and 5)
     Setup-Portable.ps1        makes a portable folder fully functional (wrapper over scripts/)
@@ -327,7 +327,7 @@ step above is skipped. Logs: `%ProgramData%\VirtualThere\logs\driver-uninstall.l
    uninstall acceptance test only requires the service, driver, firewall rules and binaries to go.
    A **portable** folder is the exception that makes the "delete the folder" story true for its own
    files: while `portable.marker` is present, both executables keep their **configuration and state**
-   in `<folder>\config` (`server.toml` and `state.toml` for the server, `config.toml`, peers and
+   in `<folder>` (`server.toml` and `state.toml` for the server, `config.toml`, peers and
    grants for the client) instead of `%ProgramData%\VirtualThere` / `%LOCALAPPDATA%\VirtualThere\client`,
    so deleting the folder removes them. The marker governs that one directory and nothing else. The
    **privileged paths stay machine-wide** in a portable folder too, because they need elevation and

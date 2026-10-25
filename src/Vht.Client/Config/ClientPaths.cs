@@ -35,7 +35,7 @@ internal static class ClientPaths
             string? portableMarker = AppContext.BaseDirectory;
             if (portableMarker is not null && File.Exists(Path.Combine(portableMarker, "portable.marker")))
             {
-                return Path.Combine(AppContext.BaseDirectory, "config");
+                return AppContext.BaseDirectory;
             }
 
             string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);

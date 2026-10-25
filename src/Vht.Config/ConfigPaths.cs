@@ -9,7 +9,7 @@ namespace Vht.Config;
 /// <item><c>--config &lt;path&gt;</c> (this always wins - explicit beats implicit);</item>
 /// <item><c>VHT_CONFIG</c> environment variable;</item>
 /// <item>a <c>portable.marker</c> file next to the executable - portable builds keep their config
-/// in <c>./config</c> next to the binary so they can be run from a USB stick, and two copies
+/// in the executable's own folder so they can be run from a USB stick, and two copies
 /// unzipped to different places cannot share one machine-wide file;</item>
 /// <item>the per-user / per-machine default for the role.</item>
 /// </list>
@@ -55,8 +55,6 @@ public static class ConfigPathResolver
     public const string StateFileName = "state.toml";
     public const string PortableMarkerFileName = "portable.marker";
 
-    /// <summary>The sub-directory a portable build keeps its files in, beside the executables.</summary>
-    public const string PortableDirectoryName = "config";
     public const string EnvironmentVariable = "VHT_CONFIG";
     public const string DataDirectoryVariable = "VHT_DATA_DIR";
     public const string AppFolderName = "VirtualThere";
@@ -85,7 +83,7 @@ public static class ConfigPathResolver
         executableDirectory ??= AppContext.BaseDirectory;
         configFileName = string.IsNullOrWhiteSpace(configFileName) ? ConfigFileName : configFileName!;
 
-        // 3. portable marker next to the binary. The marker redirects the directory to ./config, which
+        // 3. portable marker next to the binary. The marker redirects the directory to the executable's own folder, which
         //    is what keeps a portable build's config and state out of %ProgramData%/%LOCALAPPDATA%. What
         //    it governs is the directory and nothing else - the privileged paths (staged rebind INFs,
         //    TLS keys, the setup scripts' log) are not resolved here and stay machine-wide; see
@@ -99,7 +97,7 @@ public static class ConfigPathResolver
             if (System.IO.File.Exists(marker))
             {
                 portableMarker = marker;
-                portableDirectory = Path.Combine(executableDirectory, PortableDirectoryName);
+                portableDirectory = executableDirectory;
             }
         }
 

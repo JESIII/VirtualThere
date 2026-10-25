@@ -35,9 +35,9 @@ public sealed class ServerConfigPathTests
 
             ConfigPaths paths = ServerConfigLoader.Resolve(executableDirectory: root, environmentValue: null);
 
-            Assert.Equal(Path.Combine(root, "config", "server.toml"), paths.ConfigFile);
-            Assert.Equal(Path.Combine(root, "config"), paths.Directory);
-            Assert.Equal(Path.Combine(root, "config", ConfigPathResolver.StateFileName), paths.StateFile);
+            Assert.Equal(Path.Combine(root, "server.toml"), paths.ConfigFile);
+            Assert.Equal(root, paths.Directory);
+            Assert.Equal(Path.Combine(root, ConfigPathResolver.StateFileName), paths.StateFile);
             Assert.Equal(ConfigSourceKind.Portable, paths.Source);
             Assert.Equal(Path.Combine(root, ConfigPathResolver.PortableMarkerFileName), paths.PortableMarker);
 
@@ -66,7 +66,7 @@ public sealed class ServerConfigPathTests
                 executableDirectory: root,
                 environmentValue: null,
                 programDataDirectory: programData);
-            Assert.Equal(Path.Combine(root, "config", "server.toml"), portable.ConfigFile);
+            Assert.Equal(Path.Combine(root, "server.toml"), portable.ConfigFile);
 
             File.Delete(marker);
             ConfigPaths installed = ServerConfigLoader.Resolve(

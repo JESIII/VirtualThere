@@ -66,7 +66,7 @@ been run on a clean machine yet - the packaging document says exactly what was a
 
 The **portable folder** is used in place: copy `dist/portable/` anywhere and run `vht-server.exe`,
 `vht-client.exe` or `vht.exe` from it. That folder contains `portable.marker`, so both executables
-keep their **configuration and state** in `config\` beside themselves - `server.toml` and `state.toml`
+keep their **configuration and state** beside themselves - `server.toml` and `state.toml`
 for the server, `config.toml`, peers and grants for the client - instead of `%ProgramData%` or
 `%LOCALAPPDATA%`. Two portable copies therefore cannot share one configuration file, and deleting the
 folder removes its configuration, state and anything else it wrote there. The marker governs that one
@@ -118,7 +118,7 @@ to `PATH`, or use full paths.
 
 ```bash
 vht config-template --out C:\ProgramData\VirtualThere\server.toml   # writes a commented starter file
-# no --out: writes to the path the server will read (%ProgramData%, or .\config in a portable folder)
+# no --out: writes to the path the server will read (%ProgramData%, or the executable's own folder in a portable build)
 vht serve                                                          # foreground; Ctrl+C to stop
 ```
 

@@ -61,7 +61,7 @@ public sealed class ServerRuntimeLogTests
                 programDataDirectory: programData);
 
             Assert.Equal(
-                Path.Combine(root, "config", "logs", "server.log"),
+                Path.Combine(root, "logs", "server.log"),
                 ServerConfigLoader.DefaultLogFile(portable));
 
             // The rule is "the resolved directory", not a second copy of the rule: whatever the

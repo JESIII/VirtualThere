@@ -38,8 +38,8 @@ public static class ServerConfigLoader
 
     /// <summary>
     /// Where the server writes its runtime log when nothing names a file: the same resolved
-    /// directory the configuration came from, in <c>logs/server.log</c> - <c>./config/logs</c> in a
-    /// portable folder, <c>%ProgramData%\VirtualThere\logs</c> otherwise.
+    /// directory the configuration came from, in <c>logs/server.log</c> - <c>logs\</c> beside the
+    /// executables in a portable folder, <c>%ProgramData%\VirtualThere\logs</c> otherwise.
     /// </summary>
     /// <remarks>
     /// Derived from <see cref="Resolve"/> rather than assembled, so the log cannot end up somewhere
@@ -61,8 +61,7 @@ public static class ServerConfigLoader
     /// <summary>
     /// Resolves where <c>server.toml</c> lives, through the product-wide rule
     /// (<see cref="ConfigPathResolver"/>): <c>--config</c>, then <c>VHT_CONFIG</c>, then a
-    /// <c>portable.marker</c> beside the executable (which puts the file in <c>./config</c> in that
-    /// folder), then the installed default <c>%ProgramData%\VirtualThere\server.toml</c>.
+    /// <c>portable.marker</c> beside the executable (which puts the file in that folder), then the installed default <c>%ProgramData%\VirtualThere\server.toml</c>.
     /// </summary>
     /// <remarks>
     /// The server used to assemble the <c>%ProgramData%</c> path itself, which made a portable
@@ -412,7 +411,7 @@ public static class ServerConfigLoader
         [logging]
         level = "Info"
         # "" means the default location, which is not optional: <config dir>\logs\server.log,
-        # i.e. ./config/logs/server.log in a portable folder. Naming a file adds a second
+        # i.e. logs\server.log beside the executables in a portable folder. Naming a file adds a second
         # destination; the default is always kept, because the lines the worker writes before it
         # reads this file only exist there.
         file = ""

@@ -32,7 +32,7 @@ default location**, not "no file":
 
 where `<resolved config directory>` is the one rule the whole product uses to find its
 configuration (`--config`, then `VHT_CONFIG`, then a `portable.marker` beside the executable, then
-the installed default): `.\config\logs\server.log` in a portable folder, and
+the installed default): `.\logs\server.log` in a portable folder, and
 `%ProgramData%\VirtualThere\logs\server.log` otherwise. A portable build therefore logs inside its
 own folder and never touches the machine-wide directory. The file is JSON lines, capped at 8 MiB,
 rolling one generation to `server.log.1`. `vht status` prints it, whether or not a server is
@@ -47,7 +47,7 @@ A portable folder prints its own directory instead - that is the marker's whole 
 reason a portable copy neither reads nor writes the machine-wide one:
 
 ```
-runtime log:   G:\Tools\VirtualThere\config\logs\server.log
+runtime log:   G:\Tools\VirtualThere\logs\server.log
 log written:   never (no server has started from this configuration yet)
 ```
 
@@ -239,7 +239,7 @@ Options, in order of preference:
 3. Accept it as a documented limitation (README "Known limitations" 8). A server-side filter driver
    is future work.
 
-For a portable folder, put these settings in `<portable folder>\config\server.toml` and restart the
+For a portable folder, put these settings in `<portable folder>\server.toml` and restart the
 server worker:
 
 ```toml

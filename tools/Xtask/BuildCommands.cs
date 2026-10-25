@@ -162,7 +162,7 @@ internal static class PortableCommand
         BuildContext.EnsureDirectory(target);
 
         // portable.marker: Vht.Config/Vht.Client/Vht.Server look for this file next to the executable
-        // and resolve their config/state directory to ./config instead of %ProgramData% (the server's
+        // and resolve their config/state directory to the executable's own folder instead of %ProgramData% (the server's
         // server.toml and state.toml) or %LOCALAPPDATA% (the client's config.toml, peers.json, grants
         // and logs). The server resolves server.toml through the same rule, which is what makes a
         // portable folder self-contained and keeps two copies unzipped to two places from sharing one
@@ -172,7 +172,7 @@ internal static class PortableCommand
         // stay machine-wide even here; docs/SERVER.md section 2 lists them.
         File.WriteAllText(
             Path.Combine(target, "portable.marker"),
-            "VirtualThere portable build marker: config lives in ./config next to these executables.\n",
+            "VirtualThere portable build marker: config and logs live in this folder, next to these executables.\n",
             Encoding.ASCII);
 
         // The driver payload, verbatim, with the hash list the install script pins.

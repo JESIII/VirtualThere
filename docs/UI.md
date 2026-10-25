@@ -33,8 +33,8 @@ Both role executables are portable by construction: copy them anywhere and start
 Run one from a folder and nothing is registered - no registry key, no Start-menu entry, no service -
 and nothing elevates at launch: the window opens unelevated from whatever folder the executable sits
 in. Configuration and state follow the folder. When `portable.marker` is beside the executables the
-server reads and writes `.\config\server.toml` and `.\config\state.toml`, and the client
-`.\config\config.toml`, its peers and its grants; without the marker they fall back to
+server reads and writes `.\server.toml` and `.\state.toml`, and the client
+`.\config.toml`, its peers and its grants; without the marker they fall back to
 `%ProgramData%\VirtualThere` and `%LOCALAPPDATA%\VirtualThere\client`. The paths that need elevation
 belong to the machine, not to the folder, and stay under `%ProgramData%\VirtualThere` either way
 (staged rebind INFs, TLS keys, the setup scripts' log - `docs/SERVER.md` section 2 lists them).

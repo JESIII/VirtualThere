@@ -232,7 +232,7 @@ public static class Program
             ServerCommands.WriteConfigTemplate(Console.Out, configPath);
 
         // One location rule for the whole product: --config, then VHT_CONFIG, then a portable.marker
-        // beside the executable (./config in that folder), then %ProgramData%. The server used to
+        // beside the executable (that folder itself), then %ProgramData%. The server used to
         // hardcode the last one, so a portable build wrote its configuration outside the folder it
         // was unzipped into.
         ConfigPaths paths = ServerConfigLoader.Resolve(configPath);

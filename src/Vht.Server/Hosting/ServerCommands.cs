@@ -261,7 +261,7 @@ public static class ServerCommands
 
     /// <summary>
     /// Writes the commented configuration template, creating the directory it lands in - the default
-    /// path is <c>./config/server.toml</c> in a portable build (where nothing has created that
+    /// path is <c>server.toml</c> beside the executables in a portable build (where nothing has created that
     /// directory yet) and <c>%ProgramData%\VirtualThere\server.toml</c> on an installed machine.
     /// </summary>
     public static int WriteConfigTemplate(TextWriter output, string path)
