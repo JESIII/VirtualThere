@@ -117,12 +117,35 @@ public sealed class ServerViewModel : ObservableObject, IServerDeviceActions, ID
                 Raise(nameof(CanControl));
                 Raise(nameof(StateText));
                 Raise(nameof(ConnectionText));
+                RaiseLifecycle();
                 RaiseCanExecute();
             }
         }
     }
 
     public bool IsRunning => _status.Running;
+
+    /// <summary>
+    /// The window shows exactly <b>one</b> server-lifecycle button, and this decides which: Stop
+    /// while the server is up (or while this window owns a worker it started), Start otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Two buttons toggled by visibility rather than one button whose command flips, because the
+    /// automation driver (<c>Vht.Ui.UiDriver</c>) and the acceptance run address these controls by
+    /// <c>AutomationProperties.AutomationId</c> - <c>start-server</c> and <c>stop-server</c> - and
+    /// a collapsed element is absent from the automation tree, so each id stays reachable exactly
+    /// when the action it names is the one on offer.
+    /// <para>
+    /// A reachable-but-stopped server shows <b>Start</b>, not Stop, even though this window still
+    /// owns the worker process it launched: the worker is the pipe server, and it stays up after
+    /// <c>server.stop</c> so the window can bring the server back. Reading ownership as "there is
+    /// something to stop" would leave the button reading Stop after a stop, with no way back.
+    /// </para>
+    /// </remarks>
+    public bool ShowStopButton => IsRunning || (!ServiceReachable && (_workers?.OwnsWorker ?? false));
+
+    /// <summary>True when the single visible lifecycle button is Start. See <see cref="ShowStopButton"/>.</summary>
+    public bool ShowStartButton => !ShowStopButton;
 
     public string StateText => !ServiceReachable
         ? "Not running"
@@ -200,8 +223,7 @@ public sealed class ServerViewModel : ObservableObject, IServerDeviceActions, ID
 
             ConnectionText = "Connected to \\\\.\\pipe\\" + _client.PipeName + " - updated " +
                 DateTime.Now.ToString("HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
-            Raise(nameof(IsRunning));
-            Raise(nameof(StateText));
+            RaiseLifecycle();
             Raise(nameof(DeviceSummary));
             RaiseStateCounters();
             RaiseCanExecute();
@@ -243,8 +265,7 @@ public sealed class ServerViewModel : ObservableObject, IServerDeviceActions, ID
         ConnectionText = "No answer from \\\\.\\pipe\\" + _client.PipeName + " - " +
             (string.IsNullOrWhiteSpace(reason) ? "the service is not running." : reason);
         Devices.Clear();
-        Raise(nameof(IsRunning));
-        Raise(nameof(StateText));
+        RaiseLifecycle();
         Raise(nameof(DeviceSummary));
         RaiseStateCounters();
         RaiseCanExecute();
@@ -255,6 +276,19 @@ public sealed class ServerViewModel : ObservableObject, IServerDeviceActions, ID
         Raise(nameof(HasDevices));
         Raise(nameof(EmptyStateVisible));
         Raise(nameof(EmptyStateText));
+    }
+
+    /// <summary>
+    /// Everything derived from "is the server up, and does this window own the worker" - which is
+    /// what the single visible lifecycle button and the state pill are both computed from. Called
+    /// wherever either input can have changed, so the toolbar and the pill cannot disagree.
+    /// </summary>
+    private void RaiseLifecycle()
+    {
+        Raise(nameof(IsRunning));
+        Raise(nameof(ShowStartButton));
+        Raise(nameof(ShowStopButton));
+        Raise(nameof(StateText));
     }
 
     private void ApplyDevices(System.Collections.Generic.IReadOnlyList<Model.DeviceSnapshot> devices)

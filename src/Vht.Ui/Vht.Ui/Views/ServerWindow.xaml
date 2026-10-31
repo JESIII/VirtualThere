@@ -46,17 +46,20 @@
       </Border>
     </Grid>
 
-    <!-- Toolbar -->
+    <!-- Toolbar. One server-lifecycle button, not two: exactly one of Start/Stop is visible at a
+         time (ServerViewModel.ShowStartButton / ShowStopButton), so the operator sees a single
+         Start/Stop control. Both keep their automation ids - a collapsed element is absent from the
+         automation tree, so the UI driver still addresses "start-server" precisely when Start is
+         the action on offer. -->
     <WrapPanel Grid.Row="1" Margin="0,0,0,8" KeyboardNavigation.TabNavigation="Continue">
-      <Button x:Name="StartButton" Content="_Start" Style="{StaticResource ToolbarButton}"
+      <Button x:Name="StartButton" Content="_Start" Style="{StaticResource ToolbarButton}" MinWidth="90"
               Command="{Binding StartCommand}" AutomationProperties.AutomationId="start-server"
-              AutomationProperties.Name="Start server" />
-      <Button x:Name="StopButton" Content="Sto_p" Style="{StaticResource ToolbarButton}"
+              AutomationProperties.Name="Start server"
+              Visibility="{Binding ShowStartButton, Converter={StaticResource BoolToVis}}" />
+      <Button x:Name="StopButton" Content="Sto_p" Style="{StaticResource ToolbarButton}" MinWidth="90"
               Command="{Binding StopCommand}" AutomationProperties.AutomationId="stop-server"
-              AutomationProperties.Name="Stop server" />
-      <Button x:Name="RefreshButton" Content="Re_fresh" Style="{StaticResource ToolbarButton}"
-              Command="{Binding RefreshCommand}" AutomationProperties.AutomationId="refresh"
-              AutomationProperties.Name="Refresh device list" />
+              AutomationProperties.Name="Stop server"
+              Visibility="{Binding ShowStopButton, Converter={StaticResource BoolToVis}}" />
       <Button x:Name="MinimizeButton" Content="Minimi_ze to tray" Style="{StaticResource ToolbarButton}" MinWidth="120"
               Command="{Binding MinimizeCommand}" AutomationProperties.AutomationId="minimize"
               AutomationProperties.Name="Minimize to notification area" />
