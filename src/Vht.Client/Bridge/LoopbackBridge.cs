@@ -122,7 +122,11 @@ internal sealed class LoopbackBridge : IAsyncDisposable
 
     internal IReadOnlyCollection<RelaySessionInfo> Sessions => _sessions.Values.Select(s => s.Info).ToArray();
 
-    /// <summary>Starts listening. Throws if the port is taken — the caller reports that, it does not retry blindly.</summary>
+    /// <summary>
+    /// Starts listening. The configured port is preferred; if it is taken the bridge falls back to
+    /// an ephemeral one rather than failing, because the port is a convenience and not a contract -
+    /// see <see cref="ListenOnPreferredPort"/>.
+    /// </summary>
     internal void Start()
     {
         if (_listener is not null) throw new InvalidOperationException("bridge already started");
@@ -136,12 +140,61 @@ internal sealed class LoopbackBridge : IAsyncDisposable
                 $"the loopback bridge may only bind a loopback address, not {_options.Address}.");
         }
 
-        var listener = new TcpListener(address, _options.Port);
-        listener.Start();
-        _listener = listener;
+        _listener = ListenOnPreferredPort(address, out int? preferredPortWasTaken);
         _acceptLoop = Task.Run(() => AcceptLoopAsync(_shutdown.Token));
+
+        if (preferredPortWasTaken is { } taken)
+        {
+            _log.Warn("bridge",
+                $"port {taken} on {address} is already in use, so the loopback bridge is on " +
+                $"{LocalEndpoint!.Port} instead. Attaches this client performs are unaffected - each " +
+                "one names the port it actually bound - but a stand-alone `usbip.exe attach` pointed " +
+                "at this machine would still look for port " + taken + ". The usual cause is a VirtualThere " +
+                "server (or another USB/IP server) already listening on 0.0.0.0:" + taken + " on this machine.");
+        }
+
         _log.Info("bridge", $"listening on {address}:{LocalEndpoint!.Port} (plaintext USB/IP, loopback only); " +
                             $"server leg via {_transportFactory.Description}");
+    }
+
+    /// <summary>
+    /// Binds the loopback listener, preferring <see cref="BridgeOptions.Port"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The default port is 3240 because that is what the upstream <c>usbip.exe</c> debug client
+    /// assumes, and it is what makes <c>usbip attach -r 127.0.0.1 -b &lt;busid&gt;</c> work as a
+    /// cross-check. It is <b>not</b> a contract: <see cref="Attach.AttachManager"/> passes
+    /// <see cref="LocalEndpoint"/>'s port to the driver in every <c>plugin_hardware</c> request, so
+    /// the product's own attach path works on whatever port was actually bound.
+    /// </para>
+    /// <para>
+    /// Falling back matters in a case that is otherwise impossible to set up: a server and a client
+    /// on the same machine. The server listens on <c>0.0.0.0:3240</c>, and Windows then refuses a
+    /// second bind to the specific loopback address <c>127.0.0.1:3240</c> with
+    /// <c>WSAEACCES</c> (10013) rather than the more obvious "address in use". Refusing to start the
+    /// bridge there would make the local case unfixable by configuration, for no benefit - nothing
+    /// downstream needs the port number to be 3240.
+    /// </para>
+    /// </remarks>
+    private TcpListener ListenOnPreferredPort(IPAddress address, out int? fellBackFrom)
+    {
+        fellBackFrom = null;
+        var preferred = new TcpListener(address, _options.Port);
+        try
+        {
+            preferred.Start();
+            return preferred;
+        }
+        catch (SocketException)
+        {
+            preferred.Stop();
+        }
+
+        fellBackFrom = _options.Port;
+        var ephemeral = new TcpListener(address, 0);
+        ephemeral.Start();
+        return ephemeral;
     }
 
     private async Task AcceptLoopAsync(CancellationToken ct)
