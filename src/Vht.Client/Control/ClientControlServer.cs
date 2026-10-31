@@ -223,27 +223,39 @@ internal sealed class ClientControlServer : IAsyncDisposable
     };
 
     private object Devices() => new
-    {
-        devices = _catalog.Snapshot.Select(e => new
         {
-            busid = e.RoutingKey,
-            remoteBusId = e.Device.BusId,
-            peer = e.Peer.Name,
-            endpoint = e.Peer.Endpoint,
-            vid = $"0x{e.Device.VendorId:x4}",
-            pid = $"0x{e.Device.ProductId:x4}",
-            deviceClass = $"0x{e.Device.DeviceClass:x2}",
-            className = e.Device.ClassName,
-            // The operator's nickname, when the peer implements VirtualThere's device-info
-            // extension (docs/SERVER.md §8). Absent for a stock usbipd peer, which has no field
-            // to carry one — the UI then falls back to the vendor/product pair.
-            nickname = e.Nickname,
-            speed = e.Device.Speed.ToString(),
-            attached = _attachments.AttachedDevices.ContainsKey(e.DeviceKey),
-            autoAttach = _policy.Evaluate(e).ShouldAutoAttach,
-            policy = _policy.Evaluate(e).Reason,
-        }).ToArray(),
-    };
+            devices = _catalog.Snapshot.Select(DevicePayload).ToArray(),
+        };
+
+        /// <summary>
+        /// One device, as the client's control plane publishes it. Shared by <c>devices.list</c> and by
+        /// the per-peer <c>devices</c> array inside <c>peers.list</c>, so the two cannot drift: the UI
+        /// parses both with the same reader.
+        /// </summary>
+        private object DevicePayload(InventoryEntry entry)
+        {
+            var policy = _policy.Evaluate(entry);
+
+            return new
+            {
+                busid = entry.RoutingKey,
+                remoteBusId = entry.Device.BusId,
+                peer = entry.Peer.Name,
+                endpoint = entry.Peer.Endpoint,
+                vid = $"0x{entry.Device.VendorId:x4}",
+                pid = $"0x{entry.Device.ProductId:x4}",
+                deviceClass = $"0x{entry.Device.DeviceClass:x2}",
+                className = entry.Device.ClassName,
+                // The operator's nickname, when the peer implements VirtualThere's device-info
+                // extension (docs/SERVER.md §8). Absent for a stock usbipd peer, which has no field
+                // to carry one — the UI then falls back to the vendor/product pair.
+                nickname = entry.Nickname,
+                speed = entry.Device.Speed.ToString(),
+                attached = _attachments.AttachedDevices.ContainsKey(entry.DeviceKey),
+                autoAttach = policy.ShouldAutoAttach,
+                policy = policy.Reason,
+            };
+        }
 
     private object AttachedDevices() => new
     {
@@ -298,19 +310,70 @@ internal sealed class ClientControlServer : IAsyncDisposable
         return new { detached = _attachments.Detach(deviceKey), busid };
     }
 
-    private object Peers() => new
-    {
-        peers = _peers.Peers.Select(p => new
+    /// <summary>
+        /// The configured peers, each with what the client window needs to draw its server list and its
+        /// device list.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This used to send only the peer's name, endpoint and TLS flags. The window's server list is
+        /// specified to show online/offline from this verb (docs/UI.md), and its device list is the
+        /// selected peer's devices — so with nothing here to read, every server showed as <b>offline</b>
+        /// and the device list was always empty, however well the peers actually answered. The UI tests
+        /// did not catch it because the mock service implements this verb in full; the recorded
+        /// transcripts under docs/ui-shots show that complete shape.
+        /// </para>
+        /// <para>
+        /// <c>online</c>/<c>status</c> come from the last catalog refresh, so they describe the last
+        /// query rather than a live probe. A peer that has not been queried yet reads as online - the
+        /// optimistic default, corrected by the next refresh, which the window polls every 2 s.
+        /// </para>
+        /// </remarks>
+        private object Peers()
         {
-            name = p.Name,
-            host = p.Host,
-            port = p.Port,
-            useTls = p.UseTls,
-            pinned = p.SpkiPin is not null,
-            source = p.Manual ? "manual" : "discovery",
-        }).ToArray(),
-        discovery = NullPeerDiscovery.Instance.Description,
-    };
+            PeerUnavailable[] failures = _catalog.UnavailablePeers.ToArray();
+            InventoryEntry[] inventory = _catalog.Snapshot.ToArray();
+
+            return new
+            {
+                peers = _peers.Peers.Select(peer => DescribePeer(peer, failures, inventory)).ToArray(),
+                discovery = NullPeerDiscovery.Instance.Description,
+            };
+        }
+
+        private object DescribePeer(Peer peer, PeerUnavailable[] failures, InventoryEntry[] inventory)
+        {
+            string? failure = null;
+            foreach (PeerUnavailable unavailable in failures)
+            {
+                if (string.Equals(unavailable.Peer.Name, peer.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    failure = unavailable.Reason;
+                    break;
+                }
+            }
+
+            return new
+            {
+                // The peer's NAME is the identity the window keys its rows on. It is unique in the store
+                // (Add replaces by name) and it is what peers.remove takes; the address is not unique
+                // enough, since two peers may differ only by port.
+                id = peer.Name,
+                name = peer.Name,
+                host = peer.Host,
+                port = peer.Port,
+                useTls = peer.UseTls,
+                pinned = peer.SpkiPin is not null,
+                source = peer.Manual ? "manual" : "discovery",
+                manual = peer.Manual,
+                online = failure is null,
+                status = failure ?? "online",
+                devices = inventory
+                    .Where(e => string.Equals(e.Peer.Name, peer.Name, StringComparison.OrdinalIgnoreCase))
+                    .Select(DevicePayload)
+                    .ToArray(),
+            };
+        }
 
     private object AddPeer(JsonElement request)
     {
