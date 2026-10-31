@@ -21,7 +21,15 @@ cd "$root"
 # Files allowed to name the third-party product: the recon record (which documents what it does and
 # what its licence model is) and the legal/attribution documents (the project brief is the origin
 # statement of that same recon effort).
-allowed_re='^(README\.md|LEGAL\.md|NOTICE|THIRD_PARTY_NOTICES\.md|IDEA\.md|docs/RECON_AND_SPEC\.md)$'
+#
+# docs/wire is the same class of evidence and belongs here for the same reason. It documents the
+# reference product's proprietary frame layout and message catalog, learned by analysis, so that
+# this project can state what it does NOT implement. Its hits are the document titles and the
+# protocol's own literal error strings ("VirtualHere USB Server Trial Edition"), which are quoted
+# verbatim because a paraphrase of a wire string is worthless as evidence. This is a documentation
+# allowance only: nothing here reaches a build output, and check 2 below still scans the shipped
+# assemblies for licence-gate vocabulary.
+allowed_re='^(README\.md|LEGAL\.md|NOTICE|THIRD_PARTY_NOTICES\.md|IDEA\.md|docs/RECON_AND_SPEC\.md|docs/wire/.*\.md)$'
 # This script itself is excluded: it names the product in the pattern it searches for. The packaging
 # verifier (tools/Xtask/VerifyCommand.cs) is excluded for exactly the same reason: the name is one of
 # the forbidden tokens it scans a built MSI for, so it has to be spelled out there.

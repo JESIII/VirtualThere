@@ -77,6 +77,14 @@ therefore belong to the machine rather than to the folder, stay machine-wide in 
 `docs/SERVER.md` section 2 lists them). Delete `portable.marker` and the installed defaults apply
 again (server `%ProgramData%\VirtualThere\server.toml`, client `%LOCALAPPDATA%\VirtualThere\client`).
 
+The folder also ships a commented `server.toml` with the P2 capture path already enabled
+(`capture.rebind.enabled = true`). It is there because the built-in default is `false`, and with
+it false every device Windows already owns is classified as driver-held, so the server starts,
+reports healthy and offers a client an empty device list. The file grants nothing on its own:
+the rebind runs per device and only when a client claims one, and it still needs the elevated
+worker (the one consent prompt for one process). Set the key to `false` to export only devices
+no other driver has claimed.
+
 Nothing in that folder is registered, and **no service is required**: both windows run from wherever
 the folder sits, unelevated, and reach their privileged worker over a named pipe. The machine-wide
 parts are optional and come from one elevated command, `Setup-Portable.ps1 -Action Install` - the
@@ -119,7 +127,9 @@ to `PATH`, or use full paths.
 ```bash
 vht config-template --out C:\ProgramData\VirtualThere\server.toml   # writes a commented starter file
 # no --out: writes to the path the server will read (%ProgramData%, or the executable's own folder in a portable build)
+# --rebind: write it with the P2 capture path already enabled (see "Known limitations" item 8 below)
 vht serve                                                          # foreground; Ctrl+C to stop
+vht serve --rebind                                                 # same, without editing the config file
 ```
 
 Run it as a Windows service instead (elevated shell):
