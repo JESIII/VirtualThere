@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -50,7 +51,8 @@ public sealed class WorkerOutputLogTests
             Assert.True(
                 WaitForLine(worker.OutputLogFile!, "hello-from-the-durable-log", worker),
                 "the worker's output never reached " + worker.OutputLogFile + ": " +
-                SafeRead(worker.OutputLogFile!));
+                SafeRead(worker.OutputLogFile!) + " || " +
+                ControlRun(Command(), ["/c", "echo hello-from-the-durable-log"]));
 
             string[] lines = ReadShared(worker.OutputLogFile!);
 
@@ -192,7 +194,8 @@ public sealed class WorkerOutputLogTests
             Assert.NotNull(worker.OutputLogFile);
             Assert.True(
                 WaitForLine(worker.OutputLogFile!, "went-wrong", worker),
-                "stderr never reached the durable file: " + SafeRead(worker.OutputLogFile!));
+                "stderr never reached the durable file: " + SafeRead(worker.OutputLogFile!) +
+                " || " + ControlRun(command, spec.Arguments));
 
             string[] stderrLines = ReadShared(worker.OutputLogFile!);
             Assert.True(
@@ -366,8 +369,18 @@ public sealed class WorkerOutputLogTests
             line.TrimEnd().Contains(expected, StringComparison.Ordinal));
 
     /// <summary>Waits for a line the worker wrote to appear in the durable file itself.</summary>
+    /// <remarks>
+    /// Process exit is <b>not</b> a reason to stop waiting. The callbacks that write this file run on
+    /// the thread pool and deliver the last lines after the process is gone - the drain point is the
+    /// parameterless <c>Process.WaitForExit</c>, which <c>WorkerProcess.Dispose</c> calls, and these
+    /// tests assert before that. An earlier version gave the readers a fixed 200 ms once the process
+    /// had exited and then gave up, which turned a slow delivery on a loaded machine into a failure:
+    /// the tests report a 20 s deadline and then abandon it at 300 ms. The condition is what is being
+    /// waited for, and the deadline already bounds it, so keep polling.
+    /// </remarks>
     private static bool WaitForLine(string file, string expected, IWorkerProcess worker)
     {
+        _ = worker;
         DateTime deadline = DateTime.UtcNow.AddSeconds(20);
 
         while (DateTime.UtcNow < deadline)
@@ -375,13 +388,6 @@ public sealed class WorkerOutputLogTests
             if (File.Exists(file) && HasWorkerLine(ReadShared(file), expected))
             {
                 return true;
-            }
-
-            if (worker.HasExited)
-            {
-                // The readers flush on their own schedule; give them a moment, then look again.
-                Thread.Sleep(200);
-                return File.Exists(file) && HasWorkerLine(ReadShared(file), expected);
             }
 
             Thread.Sleep(50);
@@ -401,16 +407,50 @@ public sealed class WorkerOutputLogTests
                 return true;
             }
 
-            if (worker.HasExited)
-            {
-                Thread.Sleep(200);
-                return worker.OutputTail.Any(line => line.Contains(expected, StringComparison.Ordinal));
-            }
-
             Thread.Sleep(50);
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Runs the very command the worker was launched with, directly, and reports what it wrote.
+    /// The launcher and this run hand the same child the same arguments, so on a failure the two
+    /// results separate the possible causes: matching output means the launcher lost it, empty
+    /// output from both means the host ran the command and it produced nothing.
+    /// </summary>
+    private static string ControlRun(string executable, IReadOnlyList<string> arguments)
+    {
+        try
+        {
+            var info = new ProcessStartInfo
+            {
+                FileName = executable,
+                WorkingDirectory = Environment.CurrentDirectory,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+
+            foreach (string argument in arguments)
+            {
+                info.ArgumentList.Add(argument);
+            }
+
+            using Process process = Process.Start(info)!;
+            string stdout = process.StandardOutput.ReadToEnd();
+            string stderr = process.StandardError.ReadToEnd();
+            process.WaitForExit(5000);
+
+            return "control run: comspec=" + executable + " exit=" +
+                process.ExitCode.ToString(CultureInfo.InvariantCulture) +
+                " stdout='" + stdout.Trim() + "' stderr='" + stderr.Trim() + "'";
+        }
+        catch (Exception ex)
+        {
+            return "control run failed: " + ex.GetType().Name + ": " + ex.Message;
+        }
     }
 
     private static string SafeRead(string file)

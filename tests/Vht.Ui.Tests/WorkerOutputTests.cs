@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -43,7 +44,8 @@ public sealed class WorkerOutputTests
 
         Assert.True(
             WaitForOutput(worker, "hello-from-the-worker"),
-            "the worker's stdout was not retained: " + string.Join(" | ", worker.OutputTail));
+            "the worker's stdout was not retained: " + string.Join(" | ", worker.OutputTail) +
+            " || " + ControlRun(command, spec.Arguments));
     }
 
     [Fact]
@@ -113,6 +115,15 @@ public sealed class WorkerOutputTests
         Assert.Contains("runtime log", supervisor.LastError!, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Waits for the worker's output to appear in the retained tail.
+    /// </summary>
+    /// <remarks>
+    /// Process exit is not a reason to stop waiting: the callbacks that fill this buffer run on the
+    /// thread pool and can deliver the last lines after the process is gone. An earlier version gave
+    /// them a fixed 200 ms once the process had exited and then gave up, so on a loaded machine the
+    /// test failed in 300 ms with an empty tail - reporting a 20 s deadline it never used.
+    /// </remarks>
     private static bool WaitForOutput(IWorkerProcess worker, string expected)
     {
         DateTime deadline = DateTime.UtcNow.AddSeconds(20);
@@ -127,16 +138,48 @@ public sealed class WorkerOutputTests
                 }
             }
 
-            if (worker.HasExited)
-            {
-                // One more read after exit: the async readers flush on their own schedule.
-                Thread.Sleep(200);
-                return worker.OutputTail.Any(line => line.Contains(expected, StringComparison.Ordinal));
-            }
-
             Thread.Sleep(50);
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Runs the very command the worker was launched with, directly, and reports what it wrote - so a
+    /// failure says whether the host produced output at all, rather than only that the launcher did
+    /// not retain it.
+    /// </summary>
+    private static string ControlRun(string executable, IReadOnlyList<string> arguments)
+    {
+        try
+        {
+            var info = new ProcessStartInfo
+            {
+                FileName = executable,
+                WorkingDirectory = Environment.CurrentDirectory,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+
+            foreach (string argument in arguments)
+            {
+                info.ArgumentList.Add(argument);
+            }
+
+            using Process process = Process.Start(info)!;
+            string stdout = process.StandardOutput.ReadToEnd();
+            string stderr = process.StandardError.ReadToEnd();
+            process.WaitForExit(5000);
+
+            return "control run: comspec=" + executable + " exit=" +
+                process.ExitCode.ToString(CultureInfo.InvariantCulture) +
+                " stdout='" + stdout.Trim() + "' stderr='" + stderr.Trim() + "'";
+        }
+        catch (Exception ex)
+        {
+            return "control run failed: " + ex.GetType().Name + ": " + ex.Message;
+        }
     }
 }

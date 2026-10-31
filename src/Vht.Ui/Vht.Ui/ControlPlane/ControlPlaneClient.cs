@@ -44,9 +44,23 @@ public sealed class ControlPlaneClient : IControlPlane
         }
 
         PipeName = pipeName;
-        _connectTimeout = connectTimeout ?? TimeSpan.FromMilliseconds(700);
+        _connectTimeout = connectTimeout ?? DefaultConnectTimeout;
         _exchangeTimeout = exchangeTimeout ?? TimeSpan.FromSeconds(5);
     }
+
+    /// <summary>
+    /// How long a connect may take before the service is reported as unavailable.
+    /// </summary>
+    /// <remarks>
+    /// Generous on purpose. The server keeps ONE pipe instance pending and creates the next only
+    /// after handing the accepted one off, so a connection arriving in that gap is refused with
+    /// ERROR_PIPE_BUSY and retried by <c>ConnectAsync</c> until this expires. The former 700 ms
+    /// turned that routine window into "the service is not running" on a loaded machine, and the
+    /// window paints its whole state from this one answer - polling every 2 s, three connections
+    /// at a time. The larger value is not paid when nothing is listening at all: a pipe with no
+    /// listener fails immediately with FILE_NOT_FOUND rather than timing out.
+    /// </remarks>
+    private static readonly TimeSpan DefaultConnectTimeout = TimeSpan.FromSeconds(5);
 
     public string PipeName { get; }
 
