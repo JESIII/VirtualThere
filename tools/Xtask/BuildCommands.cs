@@ -197,6 +197,40 @@ internal static class PortableCommand
         BuildContext.CopyFile(
             Path.Combine(context.InstallerSourceDir, "PACKAGING.md"),
             target);
+
+        // server.toml: a portable folder has to arrive able to serve a device.
+        //
+        // Without this file the server starts on built-in defaults, where capture.rebind.enabled is
+        // false, so every device Windows already owns is classified as driver-held and the server
+        // exports nothing. The symptom is a healthy-looking server with an empty device list and
+        // nothing in the log that reads as an error, which is not something an operator can act on.
+        //
+        // It is written by the product's own command rather than duplicated here, so the template
+        // cannot drift from the loader that has to read it back;
+        // tests/Vht.Acceptance.Tests/ServerConfigTemplateRoundTripTests.cs is the guard on that.
+        //
+        // --rebind only selects the variant with the capture path switched on. Shipping the file
+        // grants nothing by itself: the rebind still runs per device, only when a client claims one,
+        // and still needs an elevated server - which is where the consent prompt lives.
+        // Run the copy in the publish tree, never the one just staged into `target`.
+        //
+        // Launching an executable that lives inside a directory and then moving that directory fails
+        // intermittently with "Access is denied" while the image handle is still being released - the
+        // stage is assembled and then swapped immediately, so there is no delay to absorb it. The
+        // publish tree is not moved, so a lingering handle there costs nothing, and this command runs
+        // before the finally-block that clears it.
+        string serverExe = Path.Combine(context.PublishDir, "vht-server", "vht-server.exe");
+        if (!File.Exists(serverExe))
+        {
+            throw new InvalidOperationException(
+                $"a portable folder needs {serverExe} to write its server.toml; " +
+                "this command must run after the products are published.");
+        }
+
+        context.RunChecked(
+            serverExe,
+            ["config-template", "--out", Path.Combine(target, "server.toml"), "--rebind"],
+            workingDirectory: target);
     }
 
     /// <summary>

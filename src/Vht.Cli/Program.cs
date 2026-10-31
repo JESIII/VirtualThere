@@ -112,7 +112,8 @@ public static class Program
 
             case "config-template":
                 return ServerCommands.WriteConfigTemplate(output,
-                    FlagValue(rest, "--out") ?? ServerConfigLoader.DefaultPath);
+                    FlagValue(rest, "--out") ?? ServerConfigLoader.DefaultPath,
+                    rebindEnabled: HasFlag(rest, "--rebind"));
 
             default:
                 output.WriteLine($"unknown verb '{verb}'");
@@ -211,7 +212,7 @@ public static class Program
         output.WriteLine("service lifecycle (needs an elevated shell for install/uninstall)");
         output.WriteLine("  install | uninstall | start | stop-service | service-status");
         output.WriteLine("  stop-server           ask a running server to shut down");
-        output.WriteLine("  config-template [--out <path>]");
+        output.WriteLine("  config-template [--out <path>] [--rebind]");
         output.WriteLine();
         output.WriteLine("common options: --pipe <name>  --service <name>  --config <path>");
         output.WriteLine("                --capture-mode auto|winusb-only|prebound-only  --rebind");

@@ -264,14 +264,21 @@ public static class ServerCommands
     /// path is <c>server.toml</c> beside the executables in a portable build (where nothing has created that
     /// directory yet) and <c>%ProgramData%\VirtualThere\server.toml</c> on an installed machine.
     /// </summary>
-    public static int WriteConfigTemplate(TextWriter output, string path)
+    /// <param name="rebindEnabled">
+    /// Write the template with the P2 capture path already switched on. A portable build ships that
+    /// variant, so a freshly unzipped server exports devices instead of running on defaults that
+    /// offer a client nothing.
+    /// </param>
+    public static int WriteConfigTemplate(TextWriter output, string path, bool rebindEnabled = false)
     {
         try
         {
             if (Path.GetDirectoryName(Path.GetFullPath(path)) is { Length: > 0 } directory)
                 Directory.CreateDirectory(directory);
 
-            File.WriteAllText(path, ServerConfigLoader.Template);
+            File.WriteAllText(path, rebindEnabled
+                ? ServerConfigLoader.TemplateWithCaptureRebind
+                : ServerConfigLoader.Template);
             output.WriteLine($"wrote configuration template to {path}");
             return 0;
         }

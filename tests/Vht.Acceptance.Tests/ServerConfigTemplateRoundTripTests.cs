@@ -165,6 +165,37 @@ public sealed class ServerConfigTemplateRoundTripTests
         }
     }
 
+    [Fact]
+    public void The_portable_template_loads_back_with_the_capture_path_already_on()
+    {
+        // What `vht-server config-template --rebind` writes, and therefore what a portable build
+        // ships. It must load with zero problems *and* actually turn the rebind path on: a portable
+        // server started on the plain template classifies every device Windows already owns as
+        // driver-held and exports nothing, so a client sees no devices at all.
+        string directory = NewDirectory("portable-template");
+        try
+        {
+            string path = Path.Combine(directory, "server.toml");
+
+            File.WriteAllText(path, ServerConfigLoader.TemplateWithCaptureRebind);
+            var portable = new ServerOptions();
+            Assert.Empty(ServerConfigLoader.Apply(path, portable));
+            Assert.True(portable.RebindEnabled,
+                "ServerConfigLoader.TemplateWithCaptureRebind did not turn the rebind path on");
+
+            // The variants must genuinely differ, or a portable build ships the same config as an
+            // installed one and the fix is vacuous.
+            File.WriteAllText(path, ServerConfigLoader.Template);
+            var plain = new ServerOptions();
+            Assert.Empty(ServerConfigLoader.Apply(path, plain));
+            Assert.False(plain.RebindEnabled);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static string WriteTemplate(out string directory)
     {
         directory = NewDirectory("template");

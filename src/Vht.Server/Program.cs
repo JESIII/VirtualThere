@@ -153,7 +153,8 @@ public static class Program
 
             case "config-template":
                 return ServerCommands.WriteConfigTemplate(Console.Out,
-                    FlagValue(rest, "--out") ?? ServerConfigLoader.DefaultPath);
+                    FlagValue(rest, "--out") ?? ServerConfigLoader.DefaultPath,
+                    rebindEnabled: HasFlag(rest, "--rebind"));
 
             default:
                 return Dispatch(Console.Out, verb, rest, options, configPath);
@@ -507,7 +508,9 @@ public static class Program
         output.WriteLine("  password <busid> --password <text>   (empty clears; TLS listener only)");
         output.WriteLine("  stop-server           ask a running server to shut down");
         output.WriteLine("  install | uninstall | start | stop-service | service-status");
-        output.WriteLine("  config-template [--out <path>]");
+        output.WriteLine("  config-template [--out <path>] [--rebind]");
+        output.WriteLine("                        --rebind writes it with the P2 capture path already on,");
+        output.WriteLine("                        which is what a portable build ships");
         output.WriteLine("  version");
         output.WriteLine();
         output.WriteLine("serve options: --config <path> --pipe <name> --port <n>");

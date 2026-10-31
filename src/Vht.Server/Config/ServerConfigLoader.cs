@@ -371,7 +371,18 @@ public static class ServerConfigLoader
     }
 
     /// <summary>A commented template of every key the loader accepts.</summary>
-    public static string Template => """
+    public static string Template => TemplateWithRebind(rebindEnabled: false);
+
+    /// <summary>
+    /// The same template with the P2 capture path already switched on. A portable build ships this
+    /// one: with the default, a freshly deployed portable server starts with
+    /// <c>capture.rebind.enabled = false</c>, classifies every device Windows already owns as
+    /// driver-held, and exports nothing - so it offers a client no devices at all, with no
+    /// indication that anything is missing.
+    /// </summary>
+    public static string TemplateWithCaptureRebind => TemplateWithRebind(rebindEnabled: true);
+
+    private static string TemplateWithRebind(bool rebindEnabled) => $"""
         # VirtualThere server configuration.
         # Key names are the frozen vocabulary in ARCHITECTURE.md Appendix C.
 
@@ -394,8 +405,10 @@ public static class ServerConfigLoader
         # auto | winusb-only | prebound-only
         mode = "auto"
         # P2: install an INF selecting the inbox winusb.sys for a device Windows already owns.
-        # Needs an elevated process; off by default because it changes a driver binding.
-        rebind.enabled = false
+        # Changes which driver owns the device, and needs an elevated process. A portable build ships
+        # this enabled, because without it a normal Windows machine offers almost nothing to attach;
+        # set it false to export only devices no other driver has claimed.
+        rebind.enabled = {(rebindEnabled ? "true" : "false")}
         refuse_management_nic = true
 
         [policy]
