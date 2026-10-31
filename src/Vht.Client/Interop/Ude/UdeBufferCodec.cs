@@ -80,9 +80,23 @@ internal static class UdeBufferCodec
 {
     // ---- plugin_hardware -------------------------------------------------------------------------
     // size @0 (4) | port @4 (4) | location_hash @8 (4) | busid @12 [32] | service @44 [32] |
-    // host @76 [1025] | serial @1101 [16] | wsk_events @1117 | 1118 bytes → padded to 1120.
-    // Identical under either packing, because the last member is a single byte.
-    internal const int PluginHardwareSize = 1120;
+    // host @76 [1025] | serial @1101 [16] | wsk_events @1117 | 1118 bytes of fields.
+    //
+    // The trailing size is 1124, not the 1120 that upstream `drivers/ude/vhci.h` produces, and the
+    // difference is not padding we can ignore: the handler compares the input buffer length for
+    // equality against sizeof(struct). Measured against the shipped usbip2_ude.sys by sweeping the
+    // length - 1120 returns STATUS_BUFFER_TOO_SMALL (122), 1124 passes every check and proceeds to
+    // dial host:service, and 1128 returns INVALID_BUFFER_SIZE (1784). So the installed driver's
+    // struct is 4 bytes longer than the current upstream headers describe.
+    //
+    // The field offsets above are unchanged and were confirmed independently: at 1124 the driver
+    // accepted the request, parsed the strings at service @44 and host @76 and opened a TCP
+    // connection, which it could not have done from a wrong offset. The extra 4 bytes are therefore
+    // in the tail (an enlarged serial or an added trailing member), not inside
+    // imported_device_location - which is why the location-derived sizes in this file are untouched.
+    // Keep the trailing 4 bytes zero: `serial` is written as a 16-byte NUL-terminated prefix, which
+    // stays valid whatever the driver's own SERIAL_BUFSZ is.
+    internal const int PluginHardwareSize = 1124;
     internal const int PluginPortOffset = 4;
     internal const int PluginLocationHashOffset = 8;
     internal const int PluginBusIdOffset = 12;

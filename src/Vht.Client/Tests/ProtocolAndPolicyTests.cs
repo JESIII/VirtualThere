@@ -157,11 +157,17 @@ public sealed class UdeBufferCodecTests
             wskEvents: false);
 
         Assert.Equal(UdeBufferCodec.PluginHardwareSize, buffer.Length);
-        Assert.Equal(1120, buffer.Length);
+        Assert.Equal(1124, buffer.Length);
 
         // base.size is written little-endian (native), not big-endian: this is an ABI field, not a
         // USB/IP wire field, and the distinction is exactly what this test pins down.
-        Assert.Equal(1120u, System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(0)));
+        Assert.Equal(1124u, System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(0)));
+
+        // The size field and the buffer length are separate values that happen to agree here. They
+        // must never be derived from one another: the driver compares this field for equality
+        // against sizeof(struct), so an oversized buffer carrying the length in `size` is rejected
+        // with USBIP_ERROR_ABI even though the length itself is acceptable.
+        Assert.Equal(buffer.Length, (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(0)));
         Assert.Equal("1-2.3", ReadFixed(buffer, UdeBufferCodec.PluginBusIdOffset, 32));
         Assert.Equal("3240", ReadFixed(buffer, UdeBufferCodec.PluginServiceOffset, 32));
         Assert.Equal("127.0.0.1", ReadFixed(buffer, UdeBufferCodec.PluginHostOffset, 1025));
