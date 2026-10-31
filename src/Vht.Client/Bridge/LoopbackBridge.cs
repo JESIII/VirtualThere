@@ -34,6 +34,14 @@ internal sealed record BridgeOptions
     /// <summary>3240 is what the upstream driver defaults to; 0 asks the OS for a free port (tests).</summary>
     internal int Port { get; init; } = 3240;
 
+    /// <summary>
+    /// The peers this client may open a connection to. The bridge uses this to refuse a listen port
+    /// it would otherwise reach through its own outbound leg - see
+    /// <c>LoopbackBridge.ChooseListenerPort</c>. Supplied from the configured peer list, because the
+    /// live route table is empty until the first catalog refresh, long after the bind.
+    /// </summary>
+    internal IReadOnlyCollection<Peer> DialTargets { get; init; } = [];
+
     internal static BridgeOptions LoopbackDefault { get; } = new();
 }
 
@@ -123,9 +131,9 @@ internal sealed class LoopbackBridge : IAsyncDisposable
     internal IReadOnlyCollection<RelaySessionInfo> Sessions => _sessions.Values.Select(s => s.Info).ToArray();
 
     /// <summary>
-    /// Starts listening. The configured port is preferred; if it is taken the bridge falls back to
-    /// an ephemeral one rather than failing, because the port is a convenience and not a contract -
-    /// see <see cref="ListenOnPreferredPort"/>.
+    /// Starts listening. The configured port is preferred, but the bridge will not bind a port that
+    /// another process holds or that it would reach by dialling one of its own peers; either way it
+    /// falls back to an ephemeral port and says why. See <see cref="ChooseListenerPort"/>.
     /// </summary>
     internal void Start()
     {
@@ -140,17 +148,12 @@ internal sealed class LoopbackBridge : IAsyncDisposable
                 $"the loopback bridge may only bind a loopback address, not {_options.Address}.");
         }
 
-        _listener = ListenOnPreferredPort(address, out int? preferredPortWasTaken);
+        _listener = ChooseListenerPort(address, out string? fallbackWarning);
         _acceptLoop = Task.Run(() => AcceptLoopAsync(_shutdown.Token));
 
-        if (preferredPortWasTaken is { } taken)
+        if (fallbackWarning is not null)
         {
-            _log.Warn("bridge",
-                $"port {taken} on {address} is already in use, so the loopback bridge is on " +
-                $"{LocalEndpoint!.Port} instead. Attaches this client performs are unaffected - each " +
-                "one names the port it actually bound - but a stand-alone `usbip.exe attach` pointed " +
-                "at this machine would still look for port " + taken + ". The usual cause is a VirtualThere " +
-                "server (or another USB/IP server) already listening on 0.0.0.0:" + taken + " on this machine.");
+            _log.Warn("bridge", fallbackWarning);
         }
 
         _log.Info("bridge", $"listening on {address}:{LocalEndpoint!.Port} (plaintext USB/IP, loopback only); " +
@@ -158,7 +161,7 @@ internal sealed class LoopbackBridge : IAsyncDisposable
     }
 
     /// <summary>
-    /// Binds the loopback listener, preferring <see cref="BridgeOptions.Port"/>.
+    /// Picks the loopback port to listen on, preferring <see cref="BridgeOptions.Port"/>.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -169,33 +172,109 @@ internal sealed class LoopbackBridge : IAsyncDisposable
     /// the product's own attach path works on whatever port was actually bound.
     /// </para>
     /// <para>
-    /// Falling back matters in a case that is otherwise impossible to set up: a server and a client
-    /// on the same machine. The server listens on <c>0.0.0.0:3240</c>, and Windows then refuses a
-    /// second bind to the specific loopback address <c>127.0.0.1:3240</c> with
-    /// <c>WSAEACCES</c> (10013) rather than the more obvious "address in use". Refusing to start the
-    /// bridge there would make the local case unfixable by configuration, for no benefit - nothing
-    /// downstream needs the port number to be 3240.
+    /// Two conditions override that preference, and both end in an ephemeral bind.
+    /// </para>
+    /// <para>
+    /// <b>The port is held.</b> The bind throws. Windows reports this as <c>WSAEACCES</c> (10013)
+    /// rather than "address in use", which reads as a permissions problem and is not one.
+    /// </para>
+    /// <para>
+    /// <b>The port is one this client dials.</b> This is the dangerous case, because it does not
+    /// throw. A server and a client on the same machine means a peer at <c>127.0.0.1:3240</c> while
+    /// the local server listens on <c>0.0.0.0:3240</c>; Windows accepts the bind to the more
+    /// specific address and routes connections there, so the bridge's relay to that peer reaches the
+    /// bridge itself. The relay opens, moves nothing in either direction, and dies on the driver's
+    /// timeout, with nothing logged server-side to explain it. Only a different port avoids it, and
+    /// the port is already arbitrary to everything except a human running <c>usbip.exe</c>.
     /// </para>
     /// </remarks>
-    private TcpListener ListenOnPreferredPort(IPAddress address, out int? fellBackFrom)
+    private TcpListener ChooseListenerPort(IPAddress address, out string? fallbackWarning)
     {
-        fellBackFrom = null;
-        var preferred = new TcpListener(address, _options.Port);
-        try
+        fallbackWarning = null;
+        int preferred = _options.Port;
+
+        if (preferred == 0)
         {
-            preferred.Start();
-            return preferred;
-        }
-        catch (SocketException)
-        {
-            preferred.Stop();
+            return BindEphemeral(address);
         }
 
-        fellBackFrom = _options.Port;
-        var ephemeral = new TcpListener(address, 0);
-        ephemeral.Start();
-        return ephemeral;
+        Peer? selfDialled = WouldDialItself(preferred)
+            ? DialTargets().First(p => p.Port == preferred && IsLoopbackHost(p.Host))
+            : null;
+
+        if (selfDialled is null)
+        {
+            var probe = new TcpListener(address, preferred);
+            try
+            {
+                probe.Start();
+                return probe;
+            }
+            catch (SocketException)
+            {
+                probe.Stop();
+            }
+
+            TcpListener onEphemeral = BindEphemeral(address);
+            fallbackWarning =
+                $"port {preferred} on {address} is already in use, so the loopback bridge is on " +
+                $"{Port(onEphemeral)} instead. Attaches this client performs are unaffected - each " +
+                $"one names the port it actually bound - but a stand-alone `usbip.exe attach` pointed " +
+                $"at this machine would still look for port {preferred}. The usual cause is a " +
+                $"VirtualThere server (or another USB/IP server) already listening on " +
+                $"0.0.0.0:{preferred} on this machine.";
+            return onEphemeral;
+        }
+
+        TcpListener avoidingSelf = BindEphemeral(address);
+        fallbackWarning =
+            $"the loopback bridge is on {Port(avoidingSelf)}, not port {preferred}, because port " +
+            $"{preferred} is also a peer this client dials ({selfDialled.Name} @ {selfDialled.Endpoint} " +
+            $"on loopback). Listening there would be routed to the bridge itself - Windows prefers the " +
+            $"specific address over the wildcard one - so the bridge's own relay would connect back " +
+            $"into its own listener and hang. Attaches are unaffected: each one names the port it " +
+            $"actually bound.";
+        return avoidingSelf;
     }
+
+    private TcpListener BindEphemeral(IPAddress address)
+    {
+        var listener = new TcpListener(address, 0);
+        listener.Start();
+        return listener;
+    }
+
+    private static int Port(TcpListener listener) => ((IPEndPoint)listener.LocalEndpoint).Port;
+
+    /// <summary>
+    /// True when listening on <paramref name="port"/> would leave the bridge reachable through its
+    /// own outbound leg, because some peer it dials sits on loopback at that same port.
+    /// </summary>
+    private bool WouldDialItself(int port) =>
+        DialTargets().Any(p => p.Port == port && IsLoopbackHost(p.Host));
+
+    /// <summary>
+    /// Every peer this client may open a connection to. Taken from the configured peer list rather
+    /// than <see cref="BusidRouter.Routes"/>, because the route table is not populated until the
+    /// first catalog refresh - well after this listener is bound.
+    /// </summary>
+    private IEnumerable<Peer> DialTargets()
+    {
+        foreach (Peer peer in _options.DialTargets)
+        {
+            yield return peer;
+        }
+
+        if (_router.DefaultPeer is { } fallback)
+        {
+            yield return fallback;
+        }
+    }
+
+    private static bool IsLoopbackHost(string host) =>
+        IPAddress.TryParse(host, out IPAddress? parsed)
+            ? IPAddress.IsLoopback(parsed)
+            : string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase);
 
     private async Task AcceptLoopAsync(CancellationToken ct)
     {

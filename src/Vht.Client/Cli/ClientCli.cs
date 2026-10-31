@@ -98,7 +98,14 @@ internal static class ClientCli
         var transports = PlainTcpTransportFactory.Instance;
         var catalog = new RemoteDeviceCatalog(peers, transports, router, log);
 
-        var bridgeOptions = new BridgeOptions { Port = parsed.BridgePort ?? 3240 };
+        // DialTargets is what stops the bridge from listening on a port it would then dial itself.
+        // It has to come from the configured peer list rather than the router's routes: the routes
+        // are only built after the first catalog refresh, which is after this listener binds.
+        var bridgeOptions = new BridgeOptions
+        {
+            Port = parsed.BridgePort ?? 3240,
+            DialTargets = peers.Peers,
+        };
         var bridge = new LoopbackBridge(bridgeOptions, router, transports, catalog, log)
         {
             Handshake = new CredentialHandshake(credentials, log),

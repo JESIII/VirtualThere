@@ -9,6 +9,8 @@
 // risk 1); the acceptance card (hardware-validation-workstream) is where the same paths run on real hardware.
 
 using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using Vht.Client.Attach;
 using Vht.Client.Bridge;
@@ -31,6 +33,81 @@ public sealed class LoopbackBridgeTests
         var ex = Assert.Throws<InvalidOperationException>(() => bridge.Start());
         Assert.Contains("loopback", ex.Message);
         await bridge.DisposeAsync();
+    }
+
+    [Theory]
+    [InlineData("127.0.0.1")]
+    [InlineData("localhost")]
+    public async Task TheBridgeRefusesAListenPortItWouldDialItself(string peerHost)
+    {
+        // The one-machine setup: a local server is a peer reached on loopback, at the very port the
+        // bridge would otherwise prefer. Binding there does NOT fail - Windows routes the specific
+        // address to whichever socket holds it - so without this rule the bridge ends up listening
+        // where its own relay dials, connects to itself, and hangs the attach. The port must be
+        // given up even though nothing else is holding it, which is why this test leaves it free.
+        int peerPort = ReserveFreePort();
+
+        await using var fixture = new ClientTestFixture();
+        var options = new BridgeOptions
+        {
+            Port = peerPort,
+            DialTargets = [new Peer { Name = "this-pc", Host = peerHost, Port = peerPort, UseTls = false }],
+        };
+        var bridge = new LoopbackBridge(options, fixture.Router, fixture.Transports, fixture.Catalog, fixture.Log);
+
+        bridge.Start();
+        try
+        {
+            Assert.True(bridge.IsRunning);
+            Assert.NotEqual(peerPort, bridge.LocalEndpoint!.Port);
+        }
+        finally
+        {
+            await bridge.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task TheBridgeKeepsItsPortWhenThePeerOnThatPortIsRemote()
+    {
+        // The rule is about a peer reachable through the bridge's own listener, and only a loopback
+        // peer is. A peer on another machine sharing the port number is not, so the conventional
+        // port is kept rather than given up for no reason.
+        int peerPort = ReserveFreePort();
+
+        await using var fixture = new ClientTestFixture();
+        var options = new BridgeOptions
+        {
+            // TEST-NET-3 (RFC 5737): reserved for documentation, so it is never a real peer.
+            Port = peerPort,
+            DialTargets = [new Peer { Name = "far-away", Host = "203.0.113.7", Port = peerPort, UseTls = false }],
+        };
+        var bridge = new LoopbackBridge(options, fixture.Router, fixture.Transports, fixture.Catalog, fixture.Log);
+
+        bridge.Start();
+        try
+        {
+            Assert.Equal(peerPort, bridge.LocalEndpoint!.Port);
+        }
+        finally
+        {
+            await bridge.DisposeAsync();
+        }
+    }
+
+    /// <summary>An OS-assigned port that was free when it was asked for.</summary>
+    private static int ReserveFreePort()
+    {
+        var probe = new TcpListener(IPAddress.Loopback, 0);
+        probe.Start();
+        try
+        {
+            return ((IPEndPoint)probe.LocalEndpoint!).Port;
+        }
+        finally
+        {
+            probe.Stop();
+        }
     }
 
     [Fact]
