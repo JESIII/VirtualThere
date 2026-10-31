@@ -11,6 +11,11 @@ application can use it - no per-application shim, no per-device driver of ours.
 It is licensed **Apache-2.0**, it is not affiliated with any commercial USB-over-IP product, and it
 contains no third-party product's code (`LEGAL.md`).
 
+Help me recoup the vibe coding costs:
+0x2D8BDeC4ba9FCd04340BC73bfD7d2D5dB41D0087
+<img width="197" height="197" alt="image" src="https://github.com/user-attachments/assets/7b90fe4d-3dc1-458f-ad63-fcf98ca385ef" />
+
+
 | Component | Executable | What it does |
 |---|---|---|
 | Server | `vht-server.exe`, driven by `vht.exe` or its own window | Enumerates this machine's USB devices, claims them in user mode (WinUSB), exports them over USB/IP, applies policy (nicknames, allow/ignore, per-device password, script hooks) |
