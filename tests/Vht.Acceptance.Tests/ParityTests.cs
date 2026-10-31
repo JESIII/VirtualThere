@@ -302,9 +302,18 @@ public sealed class ParityTests
         IReadOnlyDictionary<string, string> nicknames = await client.ListNicknamesAsync(CancellationToken.None);
         Assert.Equal("acceptance-stick", nicknames["1-1"]);
 
-        // Only the device that has a nickname is named; the other two exported devices are absent
-        // rather than present with an empty name.
-        Assert.Single(nicknames);
+        // Every advertised device is labelled, not only the renamed one. A client has no other
+        // channel for a device name - the stock record has no string field, as asserted above -
+        // so an unlabelled device reaches the UI as a placeholder, which is exactly what a
+        // client showing only the operator's nicknames would display for every device it owns.
+        Assert.Equal(listed.Count, nicknames.Count);
+        foreach (UsbIpDevice offered in listed)
+        {
+            Assert.True(nicknames.ContainsKey(offered.BusId),
+                $"{offered.BusId} was offered but not labelled");
+            Assert.False(string.IsNullOrWhiteSpace(nicknames[offered.BusId]),
+                $"{offered.BusId} was labelled with an empty name");
+        }
 
         // The server's own export table agrees, which is what the operator sees.
         Assert.Equal(
@@ -410,10 +419,12 @@ public sealed class ParityTests
         IReadOnlyList<UsbIpDevice> listed = await client.ListDevicesAsync(CancellationToken.None);
         Assert.DoesNotContain(listed, d => d.BusId == "1-1");
 
-        // The extension obeys the same containment rule: the client cannot learn a nickname for a
-        // device it was never offered either.
+        // The extension obeys the same containment rule: the client cannot learn a name for a
+        // device it was never offered either. The other devices are still labelled, which is what
+        // makes this a containment assertion rather than an assertion that nothing is named.
         IReadOnlyDictionary<string, string> nicknames = await client.ListNicknamesAsync(CancellationToken.None);
-        Assert.Empty(nicknames);
+        Assert.DoesNotContain("1-1", nicknames.Keys);
+        Assert.Equal(listed.Count, nicknames.Count);
 
         // Even knowing the bus id, the import is refused rather than served unprotected.
         ImportOutcome refused = await client.ImportAsync("1-1", CancellationToken.None);

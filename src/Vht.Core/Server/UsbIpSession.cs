@@ -295,16 +295,23 @@ public sealed class UsbIpSession
                 $"OP_REQ_VHT_DEVINFO carried magic 0x{magic:x8}, expected 0x{UsbIp.VhtDevInfoMagic:x8}");
         }
 
+        // DisplayName, not Nickname: this extension is the only channel by which a client can
+        // learn what a device is called. The stock usbip_usb_device record carries ids and class
+        // codes but no product string, so a client sent only the operator's nickname - which is
+        // null unless someone renamed the device - has nothing to show and falls back to a
+        // placeholder for every device. UsbDevice.DisplayName already means "nickname if set,
+        // else the product string, else the vid:pid key", which is exactly the label a client
+        // should see, and an explicit nickname still wins.
         List<UsbIpCodec.VhtDeviceInfo> entries = _state.Exports
             .Advertisable(_connection.Kind)
-            .Select(e => new UsbIpCodec.VhtDeviceInfo(e.Device.BusId, e.Device.Nickname))
+            .Select(e => new UsbIpCodec.VhtDeviceInfo(e.Device.BusId, e.Device.DisplayName))
             .ToList();
 
         await SendAsync(UsbIpCodec.EncodeVhtDeviceInfoReply(entries), ct).ConfigureAwait(false);
 
         _log.Write(LogLevel.Detail, LogEvent.DeviceEnumerated,
-            $"device info (nicknames) sent to connection {_connection.Id}: " +
-            $"{entries.Count(e => !string.IsNullOrEmpty(e.Nickname))} named of {entries.Count} device(s)",
+            $"device info (display names) sent to connection {_connection.Id}: " +
+            $"{entries.Count(e => !string.IsNullOrEmpty(e.Nickname))} labelled of {entries.Count} device(s)",
             new Dictionary<string, object?>
             {
                 ["connection_id"] = _connection.Id.Value,
