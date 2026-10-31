@@ -107,6 +107,47 @@ internal static class UdeBufferCodec
     /// <summary>sizeof(base) — the imported_device array starts right after the self-size field.</summary>
     internal const int GetImportedDevicesHeaderOffset = 4;
 
+    /// <summary>
+    /// The value the driver requires in the request's <c>base.size</c> field:
+    /// <c>sizeof(ioctl::get_imported_devices)</c>, i.e. the header plus ONE element of the natural
+    /// layout (4 + 1132 = 1136).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is an <b>ABI stamp, not a buffer length</b>, and getting it wrong is the whole reason
+    /// this call failed. The driver's handler (upstream <c>drivers/ude/vhci_ioctl.cpp</c>,
+    /// <c>get_imported_devices</c>) is:
+    /// </para>
+    /// <code>
+    /// WdfRequestRetrieveOutputBuffer(request, sizeof(*r), &amp;r, &amp;outlen);   // needs outlen >= 1136
+    /// if (NT_ERROR(st))                return st;                                // < 1136 -> 122
+    /// else if (r-&gt;size != sizeof(*r)) return USBIP_ERROR_ABI;                    // 0xE1000005
+    /// auto max_cnt = (outlen - 4) / sizeof(*r-&gt;devices);                        // capacity
+    /// </code>
+    /// <para>
+    /// So capacity comes from the <b>buffer length</b> and the <c>size</c> field must be exactly
+    /// 1136 however many devices are requested. Writing the buffer length into <c>size</c> - as
+    /// this codec's caller used to - made every request fail: too small with
+    /// <c>ERROR_INSUFFICIENT_BUFFER</c>, anything else with <c>USBIP_ERROR_ABI</c> (0xE1000005).
+    /// Measured against <c>usbip2_ude.sys</c> on Windows 11 by probing the interface directly:
+    /// 1136 OK, 4/1132 too small, 1140/2268/9060/16384 all 0xE1000005.
+    /// </para>
+    /// </remarks>
+    internal const int GetImportedDevicesAbiSize = 1136;   // == 4 + ImportedDeviceLayout.Natural.Stride
+
+    /// <summary>
+    /// The largest element array this codec will ask the driver to fill in one call. It exists only
+    /// so the caller's grow-and-retry loop has a ceiling to stop at - it is a read size, not a
+    /// device budget, and nothing is ever refused because of it.
+    /// </summary>
+    /// <remarks>
+    /// The number comes from the driver's own port model, not from VirtualThere: it allocates one
+    /// <c>UDECXUSBDEVICE</c> per port and caps the total at 254 (upstream
+    /// <c>drivers/ude/vhci.cpp</c>, <c>set_usb_ports_cnt</c>, <c>MAX_TOTAL_PORTS</c>), so a single
+    /// read at this size covers a completely full controller.
+    /// </remarks>
+    internal const int ReadCapacityCeiling = 254;
+
     internal const int DevPortOffset = 0;
     internal const int DevLocationHashOffset = 4;
     internal const int DevBusIdOffset = 8;

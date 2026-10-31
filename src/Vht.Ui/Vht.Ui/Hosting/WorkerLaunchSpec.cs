@@ -92,7 +92,16 @@ public sealed class WorkerLaunchSpec
             ExecutablePath = executable,
             Arguments = arguments,
             WorkingDirectory = Path.GetDirectoryName(executable) ?? AppContext.BaseDirectory,
-            Elevate = !options.NoElevate,
+
+            // Only the SERVER's worker needs to be elevated: it is the half that can change a driver
+            // binding (the P2 capture rebind) and that is the one consent prompt per spawn.
+            //
+            // The CLIENT's worker must NOT be: the UDE host controller's device object is created
+            // with World (Everyone) read/write access (upstream drivers/ude/vhci.cpp,
+            // initialize()), so plugin/plugout/get_imported_devices all work from a Medium-integrity
+            // process - measured on this host. Elevating it bought nothing and cost a UAC prompt at
+            // every launch, which is exactly what the client must not have.
+            Elevate = role == UiRole.Server && !options.NoElevate,
             OutputLogDirectory = options.WorkerOutputLogDirectory,
         };
     }

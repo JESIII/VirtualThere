@@ -233,6 +233,40 @@ public sealed class UdeBufferCodecTests
     }
 
     /// <summary>
+    /// The GET_IMPORTED_DEVICES request's <c>base.size</c> is the driver's ABI stamp -
+    /// <c>sizeof(ioctl::get_imported_devices)</c> - and NOT the buffer length. The driver rejects
+    /// every other value with <c>USBIP_ERROR_ABI</c> (0xE1000005), which is exactly what stopped
+    /// the client from reading its own imported devices; capacity travels in the buffer LENGTH, so
+    /// the two must be produced independently.
+    /// </summary>
+    /// <remarks>
+    /// Values measured against the shipped <c>usbip2_ude.sys</c>: 1136 is the only size field that
+    /// is accepted, with any buffer length at or above 1136.
+    /// </remarks>
+    [Fact]
+    public void ImportedDevicesRequest_CarriesTheAbiSizeNotTheBufferLength()
+    {
+        // sizeof(get_imported_devices) for one element: base(4) + imported_device(1132).
+        Assert.Equal(1136, UdeBufferCodec.GetImportedDevicesAbiSize);
+        Assert.Equal(UdeBufferCodec.GetImportedDevicesAbiSize, 4 + ImportedDeviceLayout.Natural.Stride);
+
+        // Capacity is the length, and it is not the stamp - the value the client used to send.
+        Assert.Equal(9060, UdeBufferCodec.GetImportedDevicesBufferSize(8, ImportedDeviceLayout.Natural));
+        Assert.NotEqual(
+            UdeBufferCodec.GetImportedDevicesAbiSize,
+            UdeBufferCodec.GetImportedDevicesBufferSize(8, ImportedDeviceLayout.Natural));
+
+        // Every capacity the controller can ask for must still hold the struct the driver reads
+        // before it ever looks at the array, or the call fails before it starts.
+        for (int capacity = 1; capacity <= UdeBufferCodec.ReadCapacityCeiling; capacity *= 2)
+        {
+            Assert.True(
+                UdeBufferCodec.GetImportedDevicesBufferSize(capacity, ImportedDeviceLayout.Natural)
+                    >= UdeBufferCodec.GetImportedDevicesAbiSize);
+        }
+    }
+
+    /// <summary>
     /// The candidate layouts are hand-written offset tables, and `ParseImportedDevices` builds its
     /// array from them — so a slip in one offset silently shifts every element after the first. This
     /// pins each offset to the field widths the upstream header declares (vhci.h:

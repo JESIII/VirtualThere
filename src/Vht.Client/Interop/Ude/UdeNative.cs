@@ -177,11 +177,21 @@ internal static partial class UdeNative
         {
             int error = Marshal.GetLastWin32Error();
             handle.Dispose();
+
+            // This is deliberately NOT reported as an elevation problem. The VHCI device object is
+            // created with World (Everyone) read/write access (upstream drivers/ude/vhci.cpp,
+            // initialize()), and upstream's own ioctl handler documents that unprivileged callers
+            // may issue these requests; the whole IOCTL surface - plugin, plugout and
+            // get_imported_devices - was verified working from a Medium-integrity process on this
+            // host. A failure here therefore means the driver is missing, stopped, or has a
+            // different interface path - never "the client needs Administrator", which sent
+            // operators hunting for a consent prompt that would not have helped.
             throw new Win32Exception(
                 error,
-                $"could not open the UDE driver interface '{interfacePath}'. The client needs Administrator " +
-                "to load/use the virtual host controller (ARCHITECTURE.md §10 risk 1); unelevated runs must " +
-                "fail here with a clear message, not misbehave silently.");
+                $"could not open the UDE driver interface '{interfacePath}' (Win32 {error}: " +
+                $"{new Win32Exception(error).Message}). The virtual host controller is normally usable " +
+                "without Administrator rights; check that the usbip-win2 driver is installed, started " +
+                "and enumerating (docs/INSTALL.md), and see docs/TROUBLESHOOTING.md.");
         }
 
         return handle;

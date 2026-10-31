@@ -254,6 +254,42 @@ public sealed class WorkerLaunchSpecTests
         Assert.DoesNotContain("--port", spec.Arguments);
         Assert.Contains("vht-client-test", spec.Arguments);
     }
+
+    /// <summary>
+    /// The client's worker is unelevated by default, with no consent prompt and no
+    /// <c>--no-elevate</c> needed. The UDE host controller's device object grants World read/write
+    /// (upstream <c>drivers/ude/vhci.cpp</c>, <c>initialize()</c>), so the whole IOCTL surface works
+    /// from a Medium-integrity process; elevating it bought nothing and cost a UAC prompt on every
+    /// launch.
+    /// </summary>
+    [Fact]
+    public void The_client_worker_is_unelevated_without_being_asked()
+    {
+        AppOptions options = AppOptions.Parse(["--pipe", "vht-client-default"]);
+        Assert.False(options.NoElevate);
+        options.Role = UiRole.Client;
+        options.ResolveDefaultPipe();
+
+        WorkerLaunchSpec spec = WorkerLaunchSpec.ForRole(UiRole.Client, options);
+
+        Assert.False(spec.Elevate);
+        Assert.Contains("vht-client-default", spec.Arguments);
+    }
+
+    /// <summary>
+    /// The server's worker stays elevated by default: it is the half that can change a driver
+    /// binding for the P2 capture path, and that one consent prompt per spawn is deliberate.
+    /// </summary>
+    [Fact]
+    public void The_server_worker_stays_elevated_by_default()
+    {
+        AppOptions options = AppOptions.Parse(["--pipe", "vht-server-default"]);
+        Assert.False(options.NoElevate);
+        options.Role = UiRole.Server;
+        options.ResolveDefaultPipe();
+
+        Assert.True(WorkerLaunchSpec.ForRole(UiRole.Server, options).Elevate);
+    }
 }
 
 /// <summary>The role executables' command line: the harness flags keep working, the mode does not.</summary>

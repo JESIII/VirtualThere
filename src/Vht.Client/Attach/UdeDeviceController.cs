@@ -188,11 +188,15 @@ internal sealed class UdeDeviceController : IDeviceController
         devices = Array.Empty<ImportedDeviceSnapshot>();
         if (!IsAvailable) return false;
 
+        // Capacity is expressed by the *buffer length*; the `size` field is an ABI stamp that must
+        // stay at GetImportedDevicesAbiSize whatever the capacity is (see that constant). Writing the
+        // buffer length into it is what made every call fail, so the two are set separately here.
         int capacity = InitialReadCapacity;
         for (int attempt = 0; attempt < MaxReadAttempts; attempt++)
         {
             byte[] buffer = new byte[UdeBufferCodec.GetImportedDevicesBufferSize(capacity, _layout)];
-            System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(0, 4), (uint)buffer.Length);
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(
+                buffer.AsSpan(0, 4), UdeBufferCodec.GetImportedDevicesAbiSize);
 
             int returned;
             try
@@ -202,17 +206,24 @@ internal sealed class UdeDeviceController : IDeviceController
             }
             catch (Win32Exception ex) when (ex.NativeErrorCode == ErrorInsufficientBuffer)
             {
-                // The driver's self-size field carries the size it needs; grow to fit and retry.
-                uint required = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(0, 4));
-                if (required <= (uint)buffer.Length || required > (uint)(UdeBufferCodec.GetImportedDevicesBufferSize(4096, _layout)))
+                // ERROR_INSUFFICIENT_BUFFER has two causes and the driver does not say which:
+                // a buffer under sizeof(get_imported_devices) - impossible here, the smallest one
+                // this loop allocates is 8 elements - or more live ports than the array can hold,
+                // which is the driver's STATUS_BUFFER_TOO_SMALL from inside its fill loop. The
+                // reply is not usable either way (the driver returns before writing), so grow and
+                // retry rather than trying to read a size out of it, which never worked: the driver
+                // does not write the needed size on this path.
+                int grew = capacity * 2;
+                if (grew > UdeBufferCodec.ReadCapacityCeiling)
                 {
-                    _log.Warn("ude", $"get_imported_devices asked for {required} bytes (buffer was {buffer.Length}); " +
-                                     "that is not a usable size, giving up rather than retrying blindly");
+                    _log.Warn("ude", $"get_imported_devices still reported an insufficient buffer at a " +
+                                     $"capacity of {capacity} devices (the driver allows at most " +
+                                     $"{UdeBufferCodec.ReadCapacityCeiling} ports); giving up rather than growing forever");
                     return false;
                 }
 
-                capacity = (int)((required - UdeBufferCodec.GetImportedDevicesHeaderOffset)
-                                 / (uint)ImportedDeviceLayout.Packed.Stride) + 1;
+                _log.Debug("ude", $"get_imported_devices needs room for more than {capacity} devices; retrying at {grew}");
+                capacity = grew;
                 continue;
             }
             catch (Win32Exception ex)
